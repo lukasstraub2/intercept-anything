@@ -603,19 +603,8 @@ int __open64_2(const char *filename, int flags) {
 int __xstat(int ver, const char *pathname, struct stat *buf) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __xstat(%s)\n", pathname?pathname:"NULL");
 
-    if (!pathname ||
-        !buf ||
-        /*Not handled by us?*/ 1) {
-        LOAD_XSTAT_FUNC();
-        return ___xstat(ver, pathname, buf);
-    }
-
-    if (ver != _STAT_VER) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    return stat(pathname, buf);
+    LOAD_XSTAT_FUNC();
+    return ___xstat(ver, pathname, buf);
 }
 
 #ifdef HAVE_OPEN64
@@ -623,19 +612,8 @@ int __xstat(int ver, const char *pathname, struct stat *buf) {
 int __xstat64(int ver, const char *pathname, struct stat64 *buf) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __xstat64(%s)\n", pathname?pathname:"NULL");
 
-    if (!pathname ||
-        !buf ||
-        /*Not handled by us?*/ 1) {
-        LOAD_XSTAT64_FUNC();
-        return ___xstat64(ver, pathname, buf);
-    }
-
-    if (ver != _STAT_VER) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    return stat64(pathname, buf);
+    LOAD_XSTAT64_FUNC();
+    return ___xstat64(ver, pathname, buf);
 }
 
 #endif
@@ -657,44 +635,11 @@ int statx(int dirfd, const char *restrict pathname, int flags,
 #endif
 
 FILE* fopen(const char *filename, const char *mode) {
-    FILE *f = NULL;
-    int fd;
-    mode_t m;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": fopen(%s)\n", filename?filename:"NULL");
 
-    if (!filename ||
-        !mode ||
-        /*Not handled by us?*/ 1) {
-        LOAD_FOPEN_FUNC();
-        return _fopen(filename, mode);
-    }
-
-    switch (mode[0]) {
-    case 'r':
-        m = O_RDONLY;
-        break;
-    case 'w':
-    case 'a':
-        m = O_WRONLY;
-        break;
-    default:
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if ((((mode[1] == 'b') || (mode[1] == 't')) && (mode[2] == '+')) || (mode[1] == '+'))
-        m = O_RDWR;
-
-    if ((fd = real_open(filename, m, 0)) < 0)
-        return NULL;
-
-    if (!(f = fdopen(fd, mode))) {
-        close(fd);
-        return NULL;
-    }
-
-    return f;
+    LOAD_FOPEN_FUNC();
+    return _fopen(filename, mode);
 }
 
 #ifdef HAVE_OPEN64
@@ -703,14 +648,8 @@ FILE *fopen64(const char *__restrict filename, const char *__restrict mode) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": fopen64(%s)\n", filename?filename:"NULL");
 
-    if (!filename ||
-        !mode ||
-        /*Not handled by us?*/ 1) {
-        LOAD_FOPEN64_FUNC();
-        return _fopen64(filename, mode);
-    }
-
-    return fopen(filename, mode);
+    LOAD_FOPEN64_FUNC();
+    return _fopen64(filename, mode);
 }
 
 #endif
