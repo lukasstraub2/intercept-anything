@@ -23,6 +23,7 @@
 #define HAVE_OPEN64
 //#define HAVE_OPENAT
 #define _GNU_SOURCE
+#define BUF_SIZE (64*1024)
 
 #ifdef _FILE_OFFSET_BITS
 #undef _FILE_OFFSET_BITS
@@ -70,7 +71,6 @@
 #undef openat
 #undef openat64
 
-static pthread_mutex_t fd_infos_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t func_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef int (*_ioctl_t)(int, int, void*);
@@ -144,7 +144,7 @@ static _openat_t _openat = NULL;
 static ___openat_2_t ___openat_2 = NULL;
 #endif
 #ifdef HAVE_OPEN64
-static _open64_t _open64 = NULL;
+//static _open64_t _open64 = NULL;
 static ___open64_2_t ___open64_2 = NULL;
 static _fopen64_t _fopen64 = NULL;
 static _stat64_t _stat64 = NULL;
@@ -455,18 +455,48 @@ static void install_atfork(void) {
     pthread_atfork(atfork_prepare, atfork_parent, atfork_child);
 }
 
+static void __attribute__((constructor)) initialize() {
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": disabling SIGSYS\n");
+
+    signal(SIGSYS, SIG_IGN);
+}
+
+static int handle_path(const char *path) {
+    return strncmp(path, "/bin/", 5) == 0 || strncmp(path, "/usr/", 5) == 0;
+}
+
+static void mangle_path(char *out, const char *path) {
+    const char *prefix = "/data/data/com.termux/files/home/gentoo";
+    int prefix_len = strlen(prefix);
+    int path_len = strlen(path);
+
+    out[0] = '\0';
+    if (!handle_path(path) || prefix_len + path_len + 1 > BUF_SIZE) {
+        strncpy(out, path, BUF_SIZE);
+        out[BUF_SIZE -1] = '\0';
+        return;
+    }
+
+    strcpy(out, prefix);
+    strncpy(out + prefix_len, path, BUF_SIZE - prefix_len);
+    out[BUF_SIZE -1] = '\0';
+}
+
 static int real_open(const char *filename, int flags, mode_t mode) {
     int ret;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": open(%s)\n", filename?filename:"NULL");
 
-    if (!function_enter()) {
+    if (!function_enter() || !filename) {
         LOAD_OPEN_FUNC();
         return _open(filename, flags, mode);
     }
 
+    char path_buf[BUF_SIZE];
+    mangle_path(path_buf, filename);
+
     LOAD_OPEN_FUNC();
-    ret = _open(filename, flags, mode);
+    ret = _open(path_buf, flags, mode);
 
     function_exit();
 
@@ -507,7 +537,6 @@ int ioctl(int fd, unsigned long request, ...) {
 #endif
     va_list args;
     void *argp;
-    int r, _errno = 0;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": ioctl()\n");
 
@@ -532,13 +561,16 @@ int access(const char *pathname, int mode) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": access(%s)\n", pathname?pathname:"NULL");
 
-    if (!function_enter()) {
+    if (!function_enter() || !pathname) {
         LOAD_ACCESS_FUNC();
         return _access(pathname, mode);
     }
 
+    char path_buf[BUF_SIZE];
+    mangle_path(path_buf, pathname);
+
     LOAD_ACCESS_FUNC();
-    ret = _access(pathname, mode);
+    ret = _access(path_buf, mode);
 
     function_exit();
 
@@ -549,8 +581,16 @@ int stat(const char *pathname, struct stat *buf) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": stat(%s)\n", pathname?pathname:"NULL");
 
+    if (!pathname) {
+        LOAD_STAT_FUNC();
+        return _stat(pathname, buf);
+    }
+
+    char path_buf[BUF_SIZE];
+    mangle_path(path_buf, pathname);
+
     LOAD_STAT_FUNC();
-    return _stat(pathname, buf);
+    return _stat(path_buf, buf);
 }
 #ifdef HAVE_OPEN64
 #undef stat64
@@ -562,8 +602,16 @@ int stat64(const char *pathname, struct stat *buf) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": stat64(%s)\n", pathname?pathname:"NULL");
 
+    if (!pathname) {
+        LOAD_STAT64_FUNC();
+        return _stat64(pathname, buf);
+    }
+
+    char path_buf[BUF_SIZE];
+    mangle_path(path_buf, pathname);
+
     LOAD_STAT64_FUNC();
-    return _stat64(pathname, buf);
+    return _stat64(path_buf, buf);
 }
 #undef open64
 int open64(const char *filename, int flags, ...) {
@@ -603,8 +651,16 @@ int __open64_2(const char *filename, int flags) {
 int __xstat(int ver, const char *pathname, struct stat *buf) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __xstat(%s)\n", pathname?pathname:"NULL");
 
+    if (!pathname) {
+        LOAD_XSTAT_FUNC();
+        return ___xstat(ver, pathname, buf);
+    }
+
+    char path_buf[BUF_SIZE];
+    mangle_path(path_buf, pathname);
+
     LOAD_XSTAT_FUNC();
-    return ___xstat(ver, pathname, buf);
+    return ___xstat(ver, path_buf, buf);
 }
 
 #ifdef HAVE_OPEN64
@@ -612,8 +668,16 @@ int __xstat(int ver, const char *pathname, struct stat *buf) {
 int __xstat64(int ver, const char *pathname, struct stat64 *buf) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __xstat64(%s)\n", pathname?pathname:"NULL");
 
+    if (!pathname) {
+        LOAD_XSTAT64_FUNC();
+        return ___xstat64(ver, pathname, buf);
+    }
+
+    char path_buf[BUF_SIZE];
+    mangle_path(path_buf, pathname);
+
     LOAD_XSTAT64_FUNC();
-    return ___xstat64(ver, pathname, buf);
+    return ___xstat64(ver, path_buf, buf);
 }
 
 #endif
@@ -628,8 +692,16 @@ int statx(int dirfd, const char *restrict pathname, int flags,
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": statx(%s)\n", pathname?pathname:"NULL");
 
+    if (!pathname) {
+        LOAD_STATX_FUNC();
+        return _statx(dirfd, pathname, flags, mask, statxbuf);
+    }
+
+    char path_buf[BUF_SIZE];
+    mangle_path(path_buf, pathname);
+
     LOAD_STATX_FUNC();
-    return _statx(dirfd, pathname, flags, mask, statxbuf);
+    return _statx(dirfd, path_buf, flags, mask, statxbuf);
 }
 
 #endif
@@ -638,8 +710,16 @@ FILE* fopen(const char *filename, const char *mode) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": fopen(%s)\n", filename?filename:"NULL");
 
+    if (!filename) {
+        LOAD_FOPEN_FUNC();
+        return _fopen(filename, mode);
+    }
+
+    char path_buf[BUF_SIZE];
+    mangle_path(path_buf, filename);
+
     LOAD_FOPEN_FUNC();
-    return _fopen(filename, mode);
+    return _fopen(path_buf, mode);
 }
 
 #ifdef HAVE_OPEN64
@@ -648,8 +728,16 @@ FILE *fopen64(const char *__restrict filename, const char *__restrict mode) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": fopen64(%s)\n", filename?filename:"NULL");
 
+    if (!filename) {
+        LOAD_FOPEN64_FUNC();
+        return _fopen64(filename, mode);
+    }
+
+    char path_buf[BUF_SIZE];
+    mangle_path(path_buf, filename);
+
     LOAD_FOPEN64_FUNC();
-    return _fopen64(filename, mode);
+    return _fopen64(path_buf, mode);
 }
 
 #endif
@@ -739,8 +827,8 @@ static void cmdline_extract(char *buf, ssize_t size, char **dest) {
     return;
 }
 
-static int debug_exec(const char *pathname, char *const argv[],
-                      char *const envp[]) {
+static void debug_exec(const char *pathname, char *const argv[],
+                       char *const envp[]) {
     int64_t i;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": recurse execve(%s, [ ", pathname?pathname:"NULL");
@@ -752,7 +840,7 @@ static int debug_exec(const char *pathname, char *const argv[],
     debug(DEBUG_LEVEL_VERBOSE, "], envp)\n");
 }
 
-static ssize_t read_full(int fd, uint8_t *buf, size_t count)
+static ssize_t read_full(int fd, char *buf, size_t count)
 {
     ssize_t ret = 0;
     ssize_t total = 0;
@@ -775,7 +863,6 @@ static ssize_t read_full(int fd, uint8_t *buf, size_t count)
     return total;
 }
 
-#define BUF_SIZE (64*1024)
 static int handle_execve(const char *pathname, char *const exec_argv[],
                          char *const envp[]) {
     int fd;
@@ -783,22 +870,31 @@ static int handle_execve(const char *pathname, char *const exec_argv[],
     int64_t exec_argc;
     char buf[BUF_SIZE];
 
+    if (!function_enter() || !pathname) {
+        LOAD_EXECVE_FUNC();
+        return _execve(pathname, exec_argv, envp);
+    }
+
+    char path_buf[BUF_SIZE];
+    mangle_path(path_buf, pathname);
+    pathname = path_buf;
+
     exec_argc = array_len(exec_argv);
     if (exec_argc < 0) {
         errno = E2BIG;
-        return -1;
+        goto err;
     }
 
     LOAD_ACCESS_FUNC();
     ret = _access(pathname, X_OK);
     if (ret < 0) {
-        return -1;
+        goto err;
     }
 
     LOAD_OPEN_FUNC();
     fd = _open(pathname, O_RDONLY | O_CLOEXEC, 0);
     if (fd < 0) {
-        return -1;
+        goto err;
     }
 
     ret = read_full(fd, buf, BUF_SIZE);
@@ -807,20 +903,20 @@ static int handle_execve(const char *pathname, char *const exec_argv[],
     _close(fd);
     if (ret < 0) {
         errno = errno_bak;
-        return -1;
+        goto err;
     }
     size = ret;
 
     if (size < 2) {
         errno = ENOEXEC;
-        return -1;
+        goto err;
     }
 
     if (buf[0] == '#' && buf[1] == '!') {
         int sh_argc = cmdline_argc(buf, size);
         if (sh_argc == 0) {
             errno = ENOEXEC;
-            return -1;
+            goto err;
         }
 
         int64_t argc = exec_argc + sh_argc;
@@ -833,12 +929,22 @@ static int handle_execve(const char *pathname, char *const exec_argv[],
         argv[argc] = NULL;
         pathname = argv[0];
 
+        function_exit();
+
         debug_exec(pathname, argv, envp);
         return handle_execve(pathname, argv, envp);
     }
 
     LOAD_EXECVE_FUNC();
-    return _execve(pathname, exec_argv, envp);
+    ret = _execve(pathname, exec_argv, envp);
+
+    function_exit();
+
+    return ret;
+
+ err:
+    function_exit();
+    return -1;
 }
 
 /* The file is accessible but it is not an executable file.  Invoke
@@ -864,7 +970,7 @@ static void maybe_script_execute(const char *file, char *const argv[],
     new_argv[0] = (char *) "/bin/sh";
     new_argv[1] = (char *) file;
     if (argc > 1) {
-        array_copy(new_argv + 2, argv + 1, argc);
+        array_copy(new_argv + 2, (char **) argv + 1, argc);
     } else {
         new_argv[2] = NULL;
     }
