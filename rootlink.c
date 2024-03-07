@@ -21,7 +21,7 @@
 ***/
 
 #define HAVE_OPEN64
-//#define HAVE_OPENAT
+#define HAVE_OPENAT
 #define _GNU_SOURCE
 #define BUF_SIZE (64*1024)
 
@@ -78,17 +78,18 @@ typedef int (*_close_t)(int);
 typedef int (*_open_t)(const char *, int, mode_t);
 typedef int (*___open_2_t)(const char *, int);
 typedef FILE* (*_fopen_t)(const char *path, const char *mode);
+#ifdef HAVE_OPENAT
+typedef int (*_openat_t)(int, const char *, int, mode_t);
+typedef int (*___openat_2_t)(int, const char *, int);
+//typedef int (*_openat2_t)(int dirfd, const char *pathname, const struct open_how *how, size_t size);
+#endif
 typedef int (*_stat_t)(const char *, struct stat *);
 #ifdef _STAT_VER
 typedef int (*___xstat_t)(int, const char *, struct stat *);
 #endif
 #ifdef _GNU_SOURCE
 typedef int (*_statx_t)(int dirfd, const char *restrict pathname, int flags,
-                     unsigned int mask, struct statx *restrict statxbuf);
-#endif
-#ifdef HAVE_OPENAT
-typedef int (*_openat_t)(int, const char *, int, mode_t);
-typedef int (*___openat_2_t)(int, const char *, int);
+                        unsigned int mask, struct statx *restrict statxbuf);
 #endif
 #ifdef HAVE_OPEN64
 typedef int (*_open64_t)(const char *, int, mode_t);
@@ -107,6 +108,7 @@ typedef int (*_fclose_t)(FILE *f);
 typedef int (*_access_t)(const char *, int);
 
 typedef int (*_execve_t)(const char *pathname, char *const argv[], char *const envp[]);
+typedef int (*_execveat_t)(int dirfd, const char *pathname, char *const argv[], char *const envp[], int flags);
 typedef int (*_execl_t)(const char *pathname, const char *arg, ... /*, (char *) NULL */);
 typedef int (*_execlp_t)(const char *file, const char *arg, ... /*, (char *) NULL */);
 typedef int (*_execle_t)(const char *pathname, const char *arg, ... /*, (char *) NULL, char *const envp[] */);
@@ -142,6 +144,7 @@ static _statx_t _statx = NULL;
 #ifdef HAVE_OPENAT
 static _openat_t _openat = NULL;
 static ___openat_2_t ___openat_2 = NULL;
+//static _openat2_t _openat2 = NULL;
 #endif
 #ifdef HAVE_OPEN64
 //static _open64_t _open64 = NULL;
@@ -160,6 +163,7 @@ static _fclose_t _fclose = NULL;
 static _access_t _access = NULL;
 
 static _execve_t _execve = NULL;
+static _execveat_t _execveat = NULL;
 //static _execl_t _execl = NULL;
 //static _execlp_t _execlp = NULL;
 //static _execle_t _execle = NULL;
@@ -203,6 +207,22 @@ do { \
     pthread_mutex_unlock(&func_mutex); \
 } while(0)
 
+#define LOAD_OPENAT_FUNC() \
+do { \
+    pthread_mutex_lock(&func_mutex); \
+    if (!_openat) \
+        _openat = (_openat_t) dlsym_fn(RTLD_NEXT, "openat"); \
+    pthread_mutex_unlock(&func_mutex); \
+} while(0)
+
+#define LOAD___OPENAT_2_FUNC() \
+do { \
+    pthread_mutex_lock(&func_mutex); \
+    if (!___openat_2) \
+        ___openat_2 = (___openat_2_t) dlsym_fn(RTLD_NEXT, "__openat_2"); \
+    pthread_mutex_unlock(&func_mutex); \
+} while(0)
+
 #define LOAD_OPEN64_FUNC() \
 do { \
     pthread_mutex_lock(&func_mutex); \
@@ -216,6 +236,22 @@ do { \
     pthread_mutex_lock(&func_mutex); \
     if (!___open64_2) \
         ___open64_2 = (___open64_2_t) dlsym_fn(RTLD_NEXT, "__open64_2"); \
+    pthread_mutex_unlock(&func_mutex); \
+} while(0)
+
+#define LOAD_OPENAT64_FUNC() \
+do { \
+    pthread_mutex_lock(&func_mutex); \
+    if (!_openat64) \
+        _openat64 = (_openat64_t) dlsym_fn(RTLD_NEXT, "openat64"); \
+    pthread_mutex_unlock(&func_mutex); \
+} while(0)
+
+#define LOAD___OPENAT64_2_FUNC() \
+do { \
+    pthread_mutex_lock(&func_mutex); \
+    if (!___openat64_2) \
+        ___openat64_2 = (___openat64_2_t) dlsym_fn(RTLD_NEXT, "__openat64_2"); \
     pthread_mutex_unlock(&func_mutex); \
 } while(0)
 
@@ -304,6 +340,14 @@ do { \
     pthread_mutex_lock(&func_mutex); \
     if (!_execve) \
         _execve = (_execve_t) dlsym_fn(RTLD_NEXT, "execve"); \
+    pthread_mutex_unlock(&func_mutex); \
+} while(0)
+
+#define LOAD_EXECVEAT_FUNC() \
+do { \
+    pthread_mutex_lock(&func_mutex); \
+    if (!_execveat) \
+        _execveat = (_execveat_t) dlsym_fn(RTLD_NEXT, "execveat"); \
     pthread_mutex_unlock(&func_mutex); \
 } while(0)
 
@@ -530,6 +574,37 @@ int __open_2(const char *filename, int flags) {
     return real_open(filename, flags, 0);
 }
 
+#ifdef HAVE_OPENAT
+
+int openat(int dirfd, const char *pathname, int flags, ...) {
+    va_list args;
+    mode_t mode = 0;
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": openat(%s)\n", pathname?pathname:"NULL");
+
+    if (OPEN_NEEDS_MODE(flags)) {
+        va_start(args, flags);
+        if (sizeof(mode_t) < sizeof(int))
+            mode = (mode_t) va_arg(args, int);
+        else
+            mode = va_arg(args, mode_t);
+        va_end(args);
+    }
+
+    LOAD_OPENAT_FUNC();
+    return _openat(dirfd, pathname, flags, mode);
+}
+
+int __openat_2(int dirfd, const char *pathname, int flags) {
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat_2(%s)\n", pathname?pathname:"NULL");
+
+    LOAD___OPENAT_2_FUNC();
+    return ___openat_2(dirfd, pathname, flags);
+}
+
+#endif
+
 #if !defined(__GLIBC__) && !defined(__FreeBSD__)
 int ioctl(int fd, int request, ...) {
 #else
@@ -643,6 +718,37 @@ int __open64_2(const char *filename, int flags) {
 
     return real_open(filename, flags, 0);
 }
+
+#ifdef HAVE_OPENAT
+
+int openat64(int dirfd, const char *pathname, int flags, ...) {
+    va_list args;
+    mode_t mode = 0;
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": openat64(%s)\n", pathname?pathname:"NULL");
+
+    if (OPEN_NEEDS_MODE(flags)) {
+        va_start(args, flags);
+        if (sizeof(mode_t) < sizeof(int))
+            mode = (mode_t) va_arg(args, int);
+        else
+            mode = va_arg(args, mode_t);
+        va_end(args);
+    }
+
+    LOAD_OPENAT64_FUNC();
+    return _openat64(dirfd, pathname, flags, mode);
+}
+
+int __openat64_2(int dirfd, const char *pathname, int flags) {
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat64_2(%s)\n", pathname?pathname:"NULL");
+
+    LOAD___OPENAT64_2_FUNC();
+    return ___openat64_2(dirfd, pathname, flags);
+}
+
+#endif
 
 #endif
 
@@ -866,6 +972,7 @@ static ssize_t read_full(int fd, char *buf, size_t count)
 static int handle_execve(const char *pathname, char *const exec_argv[],
                          char *const envp[]) {
     int fd;
+    int _errno = 0;
     ssize_t ret, size;
     int64_t exec_argc;
     char buf[BUF_SIZE];
@@ -898,11 +1005,11 @@ static int handle_execve(const char *pathname, char *const exec_argv[],
     }
 
     ret = read_full(fd, buf, BUF_SIZE);
-    int errno_bak = errno;
+    _errno = errno;
     LOAD_CLOSE_FUNC();
     _close(fd);
     if (ret < 0) {
-        errno = errno_bak;
+        errno = _errno;
         goto err;
     }
     size = ret;
@@ -1116,6 +1223,14 @@ int execve(const char *pathname, char *const argv[], char *const envp[]) {
     function_exit();
 
     return ret;
+}
+
+int execveat(int dirfd, const char *pathname, char *const argv[], char *const envp[], int flags) {
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": execveat(%s)\n", pathname?pathname:"NULL");
+
+    LOAD_EXECVEAT_FUNC();
+    return _execveat(dirfd, pathname, argv, envp, flags);
 }
 
 int execl(const char *pathname, const char *arg, ... /*, (char *) NULL */) {
