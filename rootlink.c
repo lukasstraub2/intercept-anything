@@ -57,6 +57,13 @@
 # define SIOCINQ FIONREAD
 #endif
 
+#ifdef O_TMPFILE
+# define OPEN_NEEDS_MODE(oflag) \
+  (((oflag) & O_CREAT) != 0 || ((oflag) & O_TMPFILE) == O_TMPFILE)
+#else
+# define OPEN_NEEDS_MODE(oflag) (((oflag) & O_CREAT) != 0)
+#endif
+
 /* make sure gcc doesn't redefine open and friends as macros */
 #undef open
 #undef open64
@@ -153,14 +160,14 @@ static _fclose_t _fclose = NULL;
 static _access_t _access = NULL;
 
 static _execve_t _execve = NULL;
-static _execl_t _execl = NULL;
-static _execlp_t _execlp = NULL;
-static _execle_t _execle = NULL;
-static _execv_t _execv = NULL;
-static _execvp_t _execvp = NULL;
-#ifdef _GNU_SOURCE
-static _execvpe_t _execvpe = NULL;
-#endif
+//static _execl_t _execl = NULL;
+//static _execlp_t _execlp = NULL;
+//static _execle_t _execle = NULL;
+//static _execv_t _execv = NULL;
+//static _execvp_t _execvp = NULL;
+//#ifdef _GNU_SOURCE
+//static _execvpe_t _execvpe = NULL;
+//#endif
 static _posix_spawn_t _posix_spawn = NULL;
 static _posix_spawnp_t _posix_spawnp = NULL;
 
@@ -300,53 +307,53 @@ do { \
     pthread_mutex_unlock(&func_mutex); \
 } while(0)
 
-#define LOAD_EXECL_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_execl) \
-        _execl = (_execl_t) dlsym_fn(RTLD_NEXT, "execl"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
+//#define LOAD_EXECL_FUNC() \
+//do { \
+    //pthread_mutex_lock(&func_mutex); \
+    //if (!_execl) \
+        //_execl = (_execl_t) dlsym_fn(RTLD_NEXT, "execl"); \
+    //pthread_mutex_unlock(&func_mutex); \
+//} while(0)
 
-#define LOAD_EXECLP_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_execlp) \
-        _execlp = (_execlp_t) dlsym_fn(RTLD_NEXT, "execlp"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
+//#define LOAD_EXECLP_FUNC() \
+//do { \
+    //pthread_mutex_lock(&func_mutex); \
+    //if (!_execlp) \
+        //_execlp = (_execlp_t) dlsym_fn(RTLD_NEXT, "execlp"); \
+    //pthread_mutex_unlock(&func_mutex); \
+//} while(0)
 
-#define LOAD_EXECLE_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_execle) \
-        _execle = (_execle_t) dlsym_fn(RTLD_NEXT, "execle"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
+//#define LOAD_EXECLE_FUNC() \
+//do { \
+    //pthread_mutex_lock(&func_mutex); \
+    //if (!_execle) \
+        //_execle = (_execle_t) dlsym_fn(RTLD_NEXT, "execle"); \
+    //pthread_mutex_unlock(&func_mutex); \
+//} while(0)
 
-#define LOAD_EXECV_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_execv) \
-        _execv = (_execv_t) dlsym_fn(RTLD_NEXT, "execv"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
+//#define LOAD_EXECV_FUNC() \
+//do { \
+    //pthread_mutex_lock(&func_mutex); \
+    //if (!_execv) \
+        //_execv = (_execv_t) dlsym_fn(RTLD_NEXT, "execv"); \
+    //pthread_mutex_unlock(&func_mutex); \
+//} while(0)
 
-#define LOAD_EXECVP_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_execvp) \
-        _execvp = (_execvp_t) dlsym_fn(RTLD_NEXT, "execvp"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
+//#define LOAD_EXECVP_FUNC() \
+//do { \
+    //pthread_mutex_lock(&func_mutex); \
+    //if (!_execvp) \
+        //_execvp = (_execvp_t) dlsym_fn(RTLD_NEXT, "execvp"); \
+    //pthread_mutex_unlock(&func_mutex); \
+//} while(0)
 
-#define LOAD_EXECVPE_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_execvpe) \
-        _execvpe = (_execvpe_t) dlsym_fn(RTLD_NEXT, "execvpe"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
+//#define LOAD_EXECVPE_FUNC() \
+//do { \
+    //pthread_mutex_lock(&func_mutex); \
+    //if (!_execvpe) \
+        //_execvpe = (_execvpe_t) dlsym_fn(RTLD_NEXT, "execvpe"); \
+    //pthread_mutex_unlock(&func_mutex); \
+//} while(0)
 
 #define LOAD_POSIX_SPAWN_FUNC() \
 do { \
@@ -449,7 +456,7 @@ static void install_atfork(void) {
 }
 
 static int real_open(const char *filename, int flags, mode_t mode) {
-    int r, _errno = 0;
+    int ret;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": open(%s)\n", filename?filename:"NULL");
 
@@ -458,25 +465,19 @@ static int real_open(const char *filename, int flags, mode_t mode) {
         return _open(filename, flags, mode);
     }
 
-    if (/*Not handled by us?*/ 1) {
-        function_exit();
-        LOAD_OPEN_FUNC();
-        return _open(filename, flags, mode);
-    }
+    LOAD_OPEN_FUNC();
+    ret = _open(filename, flags, mode);
 
     function_exit();
 
-    if (_errno)
-        errno = _errno;
-
-    return r;
+    return ret;
 }
 
 int open(const char *filename, int flags, ...) {
     va_list args;
     mode_t mode = 0;
 
-    if (flags & O_CREAT) {
+    if (OPEN_NEEDS_MODE(flags)) {
         va_start(args, flags);
         if (sizeof(mode_t) < sizeof(int))
             mode = (mode_t) va_arg(args, int);
@@ -491,12 +492,11 @@ int open(const char *filename, int flags, ...) {
 int __open_2(const char *filename, int flags) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __open_2(%s)\n", filename?filename:"NULL");
 
-    if ((flags & O_CREAT) ||
-        !filename ||
-        /*Not handled by us?*/ 1) {
+    if (OPEN_NEEDS_MODE(flags)) {
         LOAD___OPEN_2_FUNC();
         return ___open_2(filename, flags);
     }
+
     return real_open(filename, flags, 0);
 }
 
@@ -515,118 +515,42 @@ int ioctl(int fd, unsigned long request, ...) {
     argp = va_arg(args, void *);
     va_end(args);
 
-    if (!function_enter()) {
-        LOAD_IOCTL_FUNC();
-        return _ioctl(fd, request, argp);
-    }
-
-    if (/*Not our fd?*/ 1) {
-        function_exit();
-        LOAD_IOCTL_FUNC();
-        return _ioctl(fd, request, argp);
-    }
-
-    if (_errno)
-        errno = _errno;
-
-    function_exit();
-
-    return r;
+    LOAD_IOCTL_FUNC();
+    return _ioctl(fd, request, argp);
 }
 
 int close(int fd) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": close()\n");
 
-    if (!function_enter()) {
-        LOAD_CLOSE_FUNC();
-        return _close(fd);
-    }
-
-    if (/*Not our fd?*/ 1) {
-        function_exit();
-        LOAD_CLOSE_FUNC();
-        return _close(fd);
-    }
-
-    function_exit();
-
-    return 0;
+    LOAD_CLOSE_FUNC();
+    return _close(fd);
 }
 
 int access(const char *pathname, int mode) {
+    int ret;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": access(%s)\n", pathname?pathname:"NULL");
 
-    if (!pathname ||
-        /*Not handled by us?*/ 1) {
+    if (!function_enter()) {
         LOAD_ACCESS_FUNC();
         return _access(pathname, mode);
     }
 
-    if (mode & X_OK) {
-        debug(DEBUG_LEVEL_NORMAL, __FILE__": access(%s, %x) = EACCESS\n", pathname, mode);
-        errno = EACCES;
-        return -1;
-    }
+    LOAD_ACCESS_FUNC();
+    ret = _access(pathname, mode);
 
-    debug(DEBUG_LEVEL_NORMAL, __FILE__": access(%s, %x) = OK\n", pathname, mode);
+    function_exit();
 
-    return 0;
+    return ret;
 }
 
 int stat(const char *pathname, struct stat *buf) {
-#ifdef HAVE_OPEN64
-    struct stat64 parent;
-#else
-    struct stat parent;
-#endif
-    int ret;
 
-    if (!pathname ||
-        !buf ||
-        /*Not handled by us?*/ 1) {
-        debug(DEBUG_LEVEL_VERBOSE, __FILE__": stat(%s)\n", pathname?pathname:"NULL");
-        LOAD_STAT_FUNC();
-        return _stat(pathname, buf);
-    }
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": stat(%s)\n", pathname?pathname:"NULL");
 
-    debug(DEBUG_LEVEL_NORMAL, __FILE__": stat(%s)\n", pathname);
-
-#ifdef _STAT_VER
-#ifdef HAVE_OPEN64
-    ret = __xstat64(_STAT_VER, "/dev", &parent);
-#else
-    ret = __xstat(_STAT_VER, "/dev", &parent);
-#endif
-#else
-#ifdef HAVE_OPEN64
-    ret = stat64("/dev", &parent);
-#else
-    ret = stat("/dev", &parent);
-#endif
-#endif
-
-    if (ret) {
-        debug(DEBUG_LEVEL_NORMAL, __FILE__": unable to stat \"/dev\"\n");
-        return -1;
-    }
-
-    buf->st_dev = parent.st_dev;
-    buf->st_ino = 0xDEADBEEF;   /* FIXME: Can we do this in a safe way? */
-    buf->st_mode = S_IFCHR | S_IRUSR | S_IWUSR;
-    buf->st_nlink = 1;
-    buf->st_uid = getuid();
-    buf->st_gid = getgid();
-    buf->st_rdev = 0x0E03;      /* FIXME: Linux specific */
-    buf->st_size = 0;
-    buf->st_atime = 1181557705;
-    buf->st_mtime = 1181557705;
-    buf->st_ctime = 1181557705;
-    buf->st_blksize = 1;
-    buf->st_blocks = 0;
-
-    return 0;
+    LOAD_STAT_FUNC();
+    return _stat(pathname, buf);
 }
 #ifdef HAVE_OPEN64
 #undef stat64
@@ -635,37 +559,11 @@ int stat64(const char *pathname, struct stat64 *buf) {
 #else
 int stat64(const char *pathname, struct stat *buf) {
 #endif
-    struct stat oldbuf;
-    int ret;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": stat64(%s)\n", pathname?pathname:"NULL");
 
-    if (!pathname ||
-        !buf ||
-        /*Not handled by us?*/ 1) {
-        LOAD_STAT64_FUNC();
-        return _stat64(pathname, buf);
-    }
-
-    ret = stat(pathname, &oldbuf);
-    if (ret)
-        return ret;
-
-    buf->st_dev = oldbuf.st_dev;
-    buf->st_ino = oldbuf.st_ino;
-    buf->st_mode = oldbuf.st_mode;
-    buf->st_nlink = oldbuf.st_nlink;
-    buf->st_uid = oldbuf.st_uid;
-    buf->st_gid = oldbuf.st_gid;
-    buf->st_rdev = oldbuf.st_rdev;
-    buf->st_size = oldbuf.st_size;
-    buf->st_atime = oldbuf.st_atime;
-    buf->st_mtime = oldbuf.st_mtime;
-    buf->st_ctime = oldbuf.st_ctime;
-    buf->st_blksize = oldbuf.st_blksize;
-    buf->st_blocks = oldbuf.st_blocks;
-
-    return 0;
+    LOAD_STAT64_FUNC();
+    return _stat64(pathname, buf);
 }
 #undef open64
 int open64(const char *filename, int flags, ...) {
@@ -674,7 +572,7 @@ int open64(const char *filename, int flags, ...) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": open64(%s)\n", filename?filename:"NULL");
 
-    if (flags & O_CREAT) {
+    if (OPEN_NEEDS_MODE(flags)) {
         va_start(args, flags);
         if (sizeof(mode_t) < sizeof(int))
             mode = va_arg(args, int);
@@ -683,21 +581,14 @@ int open64(const char *filename, int flags, ...) {
         va_end(args);
     }
 
-    if (!filename ||
-        /*Not handled by us?*/ 1) {
-        LOAD_OPEN64_FUNC();
-        return _open64(filename, flags, mode);
-    }
-
     return real_open(filename, flags, mode);
 }
 
 int __open64_2(const char *filename, int flags) {
+
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __open64_2(%s)\n", filename?filename:"NULL");
 
-    if ((flags & O_CREAT) ||
-        !filename ||
-        /*Not handled by us?*/ 1) {
+    if (OPEN_NEEDS_MODE(flags)) {
         LOAD___OPEN64_2_FUNC();
         return ___open64_2(filename, flags);
     }
@@ -759,12 +650,8 @@ int statx(int dirfd, const char *restrict pathname, int flags,
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": statx(%s)\n", pathname?pathname:"NULL");
 
-    if (/*Not handled by us?*/ 1) {
-        LOAD_STATX_FUNC();
-        return _statx(dirfd, pathname, flags, mask, statxbuf);
-    }
-
-    return -1;
+    LOAD_STATX_FUNC();
+    return _statx(dirfd, pathname, flags, mask, statxbuf);
 }
 
 #endif
@@ -832,29 +719,358 @@ int fclose(FILE *f) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": fclose()\n");
 
-    if (!function_enter()) {
-        LOAD_FCLOSE_FUNC();
-        return _fclose(f);
-    }
-
-    if (/*Not our fd?*/ 1) {
-        function_exit();
-        LOAD_FCLOSE_FUNC();
-        return _fclose(f);
-    }
-
-    function_exit();
-
     LOAD_FCLOSE_FUNC();
     return _fclose(f);
 }
 
+static int64_t array_len(char *const array[]) {
+    int64_t len;
+
+    for (len = 0; array[len]; len++) {
+        if (len == INT_MAX) {
+            return -1;
+        }
+    }
+
+    return len;
+}
+
+static void array_copy(char *const source[], char *dest[], int64_t len) {
+    memcpy((char **)source, dest, len * sizeof(char *));
+}
+
+static void array_insert_front(
+        char *insert[], int64_t insert_len,
+        char *const source[], int64_t source_len,
+        char *dest[]) {
+    int64_t i;
+
+    for (i = 0; i < insert_len; i++) {
+        dest[i] = insert[i];
+    }
+
+    for (i = insert_len; i < source_len + insert_len; i++) {
+        dest[i] = source[i - insert_len];
+    }
+}
+
+static int cmdline_argc(char *buf, ssize_t size) {
+    int argc = 0;
+    int whitespace = 1;
+
+    int i;
+    for (i = 2; i < size; i++) {
+        if (buf[i] == '\r' || buf[i] == '\n') {
+            return argc;
+        } else if (buf[i] != ' ' && buf[i] != '\t') {
+            if (whitespace) {
+                argc++;
+                whitespace = 0;
+            }
+        } else {
+            whitespace = 1;
+        }
+    }
+
+    return argc;
+}
+
+static void cmdline_extract(char *buf, ssize_t size, char **dest) {
+    int argc = 0;
+    int whitespace = 1;
+
+    int i;
+    for (i = 2; i < size; i++) {
+        if (buf[i] == '\r' || buf[i] == '\n') {
+            buf[i] = '\0';
+            return;
+        } else if (buf[i] != ' ' && buf[i] != '\t') {
+            if (whitespace) {
+                dest[argc] = buf + i;
+                argc++;
+                whitespace = 0;
+            }
+        } else {
+            buf[i] = '\0';
+            whitespace = 1;
+        }
+    }
+
+    buf[size -1] = '\0';
+    return;
+}
+
+static int debug_exec(const char *pathname, char *const argv[],
+                      char *const envp[]) {
+    int64_t i;
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": recurse execve(%s, [ ", pathname?pathname:"NULL");
+
+    for (i = 0; argv[i]; i++) {
+        debug(DEBUG_LEVEL_VERBOSE, "%s, ", argv[i]);
+    }
+
+    debug(DEBUG_LEVEL_VERBOSE, "], envp)\n");
+}
+
+static ssize_t read_full(int fd, uint8_t *buf, size_t count)
+{
+    ssize_t ret = 0;
+    ssize_t total = 0;
+
+    while (count) {
+        ret = read(fd, buf, count);
+        if (ret < 0) {
+            if (errno == EINTR)
+                continue;
+            return -1;
+        } else if (ret == 0) {
+            break;
+        }
+
+        count -= ret;
+        buf += ret;
+        total += ret;
+    }
+
+    return total;
+}
+
+#define BUF_SIZE (64*1024)
+static int handle_execve(const char *pathname, char *const exec_argv[],
+                         char *const envp[]) {
+    int fd;
+    ssize_t ret, size;
+    int64_t exec_argc;
+    char buf[BUF_SIZE];
+
+    exec_argc = array_len(exec_argv);
+    if (exec_argc < 0) {
+        errno = E2BIG;
+        return -1;
+    }
+
+    LOAD_ACCESS_FUNC();
+    ret = _access(pathname, X_OK);
+    if (ret < 0) {
+        return -1;
+    }
+
+    LOAD_OPEN_FUNC();
+    fd = _open(pathname, O_RDONLY | O_CLOEXEC, 0);
+    if (fd < 0) {
+        return -1;
+    }
+
+    ret = read_full(fd, buf, BUF_SIZE);
+    int errno_bak = errno;
+    LOAD_CLOSE_FUNC();
+    _close(fd);
+    if (ret < 0) {
+        errno = errno_bak;
+        return -1;
+    }
+    size = ret;
+
+    if (size < 2) {
+        errno = ENOEXEC;
+        return -1;
+    }
+
+    if (buf[0] == '#' && buf[1] == '!') {
+        int sh_argc = cmdline_argc(buf, size);
+        if (sh_argc == 0) {
+            errno = ENOEXEC;
+            return -1;
+        }
+
+        int64_t argc = exec_argc + sh_argc;
+        char *_argv[argc +1];
+        char **argv = _argv;
+
+        cmdline_extract(buf, size, argv);
+        array_copy(exec_argv, argv + sh_argc, exec_argc);
+        argv[sh_argc] = (char *) pathname;
+        argv[argc] = NULL;
+        pathname = argv[0];
+
+        debug_exec(pathname, argv, envp);
+        return handle_execve(pathname, argv, envp);
+    }
+
+    LOAD_EXECVE_FUNC();
+    return _execve(pathname, exec_argv, envp);
+}
+
+/* The file is accessible but it is not an executable file.  Invoke
+   the shell to interpret it as a script.  */
+static void maybe_script_execute(const char *file, char *const argv[],
+                                 char *const envp[]) {
+    int64_t argc;
+
+    argc = array_len(argv);
+    if (argc >= INT_MAX -1) {
+        errno = E2BIG;
+        return;
+    }
+
+    /* Construct an argument list for the shell based on original arguments:
+     1. Empty list (argv = { NULL }, argc = 1 }: new argv will contain 3
+    arguments - default shell, script to execute, and ending NULL.
+     2. Non empty argument list (argc = { ..., NULL }, argc > 1}: new argv
+    will contain also the default shell and the script to execute.  It
+    will also skip the script name in arguments and only copy script
+    arguments.  */
+    char *new_argv[argc > 1 ? 2 + argc : 3];
+    new_argv[0] = (char *) "/bin/sh";
+    new_argv[1] = (char *) file;
+    if (argc > 1) {
+        array_copy(new_argv + 2, argv + 1, argc);
+    } else {
+        new_argv[2] = NULL;
+    }
+
+    /* Execute the shell.  */
+    handle_execve(new_argv[0], new_argv, envp);
+}
+
+static int _handle_execvpe(const char *file, char *const argv[], char *const envp[],
+                           int exec_script) {
+    /* We check the simple case first. */
+    if (*file == '\0') {
+        errno = ENOENT;
+        return -1;
+    }
+
+    /* Don't search when it contains a slash.  */
+    if (strchr(file, '/') != NULL) {
+        handle_execve(file, argv, envp);
+
+        if (errno == ENOEXEC && exec_script) {
+            maybe_script_execute(file, argv, envp);
+        }
+
+        return -1;
+    }
+
+    size_t path_buf_size = confstr(_CS_PATH, NULL, 0);
+    if (path_buf_size == 0 || path_buf_size > (64*1024)) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    char path_buf[path_buf_size];
+    const char *path = getenv("PATH");
+    if (!path) {
+        confstr(_CS_PATH, path_buf, path_buf_size);
+        path = path_buf;
+    }
+    /* Although GLIBC does not enforce NAME_MAX, we set it as the maximum
+     size to avoid unbounded stack allocation.  Same applies for
+     PATH_MAX.  */
+    size_t file_len = strnlen(file, NAME_MAX) + 1;
+    size_t path_len = strnlen(path, PATH_MAX - 1) + 1;
+
+    /* NAME_MAX does not include the terminating null character.  */
+    if ((file_len - 1 > NAME_MAX) || path_len + file_len + 1 > (64*1024)) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    const char *subp;
+    int got_eacces = 0;
+    /* The resulting string maximum size would be potentially a entry
+     in PATH plus '/' (path_len + 1) and then the the resulting file name
+     plus '\0' (file_len since it already accounts for the '\0').  */
+    char buffer[path_len + file_len + 1];
+    for (const char *p = path; ; p = subp) {
+        subp = strchrnul(p, ':');
+
+        /* PATH is larger than PATH_MAX and thus potentially larger than
+        the stack allocation.  */
+        if (subp - p >= path_len) {
+            /* If there is only one path, bail out.  */
+            if (*subp == '\0') break;
+            /* Otherwise skip to next one.  */
+            continue;
+        }
+
+        /* Use the current path entry, plus a '/' if nonempty, plus the file to
+         execute.  */
+        char *pend = mempcpy(buffer, p, subp - p);
+        *pend = '/';
+        memcpy(pend + (p < subp), file, file_len);
+
+        handle_execve(buffer, argv, envp);
+
+        if (errno == ENOEXEC && exec_script) {
+            /* This has O(P*C) behavior, where P is the length of the path and C
+               is the argument count.  A better strategy would be allocate the
+               substitute argv and reuse it each time through the loop (so it
+               behaves as O(P+C) instead.  */
+            maybe_script_execute(buffer, argv, envp);
+        }
+
+        switch (errno)
+        {
+            case EACCES:
+                /* Record that we got a 'Permission denied' error.  If we end
+                 up finding no executable we can use, we want to diagnose
+                 that we did find one but were denied access.  */
+                got_eacces = 1;
+            case ENOENT:
+            case ESTALE:
+            case ENOTDIR:
+                /* Those errors indicate the file is missing or not executable
+                 by us, in which case we want to just try the next path
+                 directory.  */
+            case ENODEV:
+            case ETIMEDOUT:
+                /* Some strange filesystems like AFS return even
+                 stranger error numbers.  They cannot reasonably mean
+                 anything else so ignore those, too.  */
+                break;
+
+            default:
+                /* Some other error means we found an executable file, but
+                 something went wrong executing it; return the error to our
+                 caller.  */
+                return -1;
+        }
+
+        if (*subp++ == '\0') break;
+    }
+
+    /* We tried every element and none of them worked.  */
+    if (got_eacces) {
+        /* At least one failure was due to permissions, so report that
+           error.  */
+        errno = EACCES;
+    }
+
+    return -1;
+}
+
+static int handle_execvpe(const char *pathname, char *const argv[],
+                          char *const envp[]) {
+    return _handle_execvpe(pathname, argv, envp, 1);
+}
+
 int execve(const char *pathname, char *const argv[], char *const envp[]) {
+    int ret;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": execve(%s)\n", pathname?pathname:"NULL");
 
-    LOAD_EXECVE_FUNC();
-    return _execve(pathname, argv, envp);
+    if (!function_enter()) {
+        LOAD_EXECVE_FUNC();
+        return _execve(pathname, argv, envp);
+    }
+
+    ret = handle_execve(pathname, argv, envp);
+
+    function_exit();
+
+    return ret;
 }
 
 int execl(const char *pathname, const char *arg, ... /*, (char *) NULL */) {
@@ -882,8 +1098,7 @@ int execl(const char *pathname, const char *arg, ... /*, (char *) NULL */) {
     }
     va_end(args);
 
-    LOAD_EXECVE_FUNC();
-    return _execve(pathname, argv, environ);
+    return handle_execve(pathname, argv, environ);
 }
 
 int execlp(const char *file, const char *arg, ... /*, (char *) NULL */) {
@@ -911,8 +1126,7 @@ int execlp(const char *file, const char *arg, ... /*, (char *) NULL */) {
     }
     va_end(args);
 
-    LOAD_EXECVPE_FUNC();
-    return _execvpe(file, argv, environ);
+    return handle_execvpe(file, argv, environ);
 }
 
 int execle(const char *pathname, const char *arg, ... /*, (char *) NULL, char *const envp[] */) {
@@ -942,24 +1156,21 @@ int execle(const char *pathname, const char *arg, ... /*, (char *) NULL, char *c
     envp = va_arg(args, char **);
     va_end(args);
 
-    LOAD_EXECVE_FUNC();
-    return _execve(pathname, argv, envp);
+    return handle_execve(pathname, argv, envp);
 }
 
 int execv(const char *pathname, char *const argv[]) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": execv(%s)\n", pathname?pathname:"NULL");
 
-    LOAD_EXECV_FUNC();
-    return _execv(pathname, argv);
+    return handle_execve(pathname, argv, environ);
 }
 
 int execvp(const char *pathname, char *const argv[]) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": execvp(%s)\n", pathname?pathname:"NULL");
 
-    LOAD_EXECVP_FUNC();
-    return _execvp(pathname, argv);
+    return handle_execvpe(pathname, argv, environ);
 }
 
 #ifdef _GNU_SOURCE
@@ -967,8 +1178,7 @@ int execvpe(const char *file, char *const argv[], char *const envp[]) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": execvpe(%s)\n", file?file:"NULL");
 
-    LOAD_EXECVPE_FUNC();
-    return _execvpe(file, argv, envp);
+    return handle_execvpe(file, argv, envp);
 }
 #endif
 

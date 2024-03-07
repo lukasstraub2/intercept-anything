@@ -1,4 +1,5 @@
 a.out
 rootlink.so
 print
-
+confstr
+test.sh
