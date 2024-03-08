@@ -1240,6 +1240,11 @@ int execveat(int dirfd, const char *pathname, char *const argv[], char *const en
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": execveat(%s)\n", pathname?pathname:"NULL");
 
     LOAD_EXECVEAT_FUNC();
+    if (!pathname || pathname[0] != '/') {
+        return _execveat(dirfd, pathname, argv, envp, flags);
+    }
+
+    MANGLE_PATH(pathname);
     return _execveat(dirfd, pathname, argv, envp, flags);
 }
 
