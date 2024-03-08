@@ -1,5 +1,6 @@
 /***
   rootlink. Copied from PluseAudio's padsp.c
+  Some code copied from glibc.
 
   This file is part of PulseAudio.
 
@@ -83,6 +84,7 @@ typedef int (*_openat_t)(int, const char *, int, mode_t);
 typedef int (*___openat_2_t)(int, const char *, int);
 //typedef int (*_openat2_t)(int dirfd, const char *pathname, const struct open_how *how, size_t size);
 #endif
+typedef int (*_opendir_t)(const char *);
 typedef int (*_stat_t)(const char *, struct stat *);
 #ifdef _STAT_VER
 typedef int (*___xstat_t)(int, const char *, struct stat *);
@@ -134,6 +136,12 @@ static _close_t _close = NULL;
 static _open_t _open = NULL;
 static ___open_2_t ___open_2 = NULL;
 static _fopen_t _fopen = NULL;
+#ifdef HAVE_OPENAT
+static _openat_t _openat = NULL;
+static ___openat_2_t ___openat_2 = NULL;
+//static _openat2_t _openat2 = NULL;
+#endif
+static _opendir_t _opendir = NULL;
 static _stat_t _stat = NULL;
 #ifdef _STAT_VER
 static ___xstat_t ___xstat = NULL;
@@ -141,13 +149,8 @@ static ___xstat_t ___xstat = NULL;
 #ifdef _GNU_SOURCE
 static _statx_t _statx = NULL;
 #endif
-#ifdef HAVE_OPENAT
-static _openat_t _openat = NULL;
-static ___openat_2_t ___openat_2 = NULL;
-//static _openat2_t _openat2 = NULL;
-#endif
 #ifdef HAVE_OPEN64
-//static _open64_t _open64 = NULL;
+static _open64_t _open64 = NULL;
 static ___open64_2_t ___open64_2 = NULL;
 static _fopen64_t _fopen64 = NULL;
 static _stat64_t _stat64 = NULL;
@@ -252,6 +255,14 @@ do { \
     pthread_mutex_lock(&func_mutex); \
     if (!___openat64_2) \
         ___openat64_2 = (___openat64_2_t) dlsym_fn(RTLD_NEXT, "__openat64_2"); \
+    pthread_mutex_unlock(&func_mutex); \
+} while(0)
+
+#define LOAD_OPENDIR_FUNC() \
+do { \
+    pthread_mutex_lock(&func_mutex); \
+    if (!_opendir) \
+        _opendir = (_opendir_t) dlsym_fn(RTLD_NEXT, "opendir"); \
     pthread_mutex_unlock(&func_mutex); \
 } while(0)
 
@@ -506,10 +517,11 @@ static void __attribute__((constructor)) initialize() {
 }
 
 static int handle_path(const char *path) {
-    return strncmp(path, "/bin/", 5) == 0 || strncmp(path, "/usr/", 5) == 0;
+    return strcmp(path, "/bin") == 0 || strcmp(path, "/usr") == 0 ||
+            strncmp(path, "/bin/", 5) == 0 || strncmp(path, "/usr/", 5) == 0;
 }
 
-static void mangle_path(char *out, const char *path) {
+static void _mangle_path(char *out, const char *path) {
     const char *prefix = "/data/data/com.termux/files/home/gentoo";
     int prefix_len = strlen(prefix);
     int path_len = strlen(path);
@@ -526,30 +538,16 @@ static void mangle_path(char *out, const char *path) {
     out[BUF_SIZE -1] = '\0';
 }
 
-static int real_open(const char *filename, int flags, mode_t mode) {
-    int ret;
-
-    debug(DEBUG_LEVEL_VERBOSE, __FILE__": open(%s)\n", filename?filename:"NULL");
-
-    if (!function_enter() || !filename) {
-        LOAD_OPEN_FUNC();
-        return _open(filename, flags, mode);
-    }
-
-    char path_buf[BUF_SIZE];
-    mangle_path(path_buf, filename);
-
-    LOAD_OPEN_FUNC();
-    ret = _open(path_buf, flags, mode);
-
-    function_exit();
-
-    return ret;
-}
+#define MANGLE_PATH(__path) \
+    char path_buf[PATH_MAX]; \
+    _mangle_path(path_buf, (__path)); \
+    (__path) = path_buf;
 
 int open(const char *filename, int flags, ...) {
     va_list args;
     mode_t mode = 0;
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": open(%s)\n", filename?filename:"NULL");
 
     if (OPEN_NEEDS_MODE(flags)) {
         va_start(args, flags);
@@ -560,18 +558,26 @@ int open(const char *filename, int flags, ...) {
         va_end(args);
     }
 
-    return real_open(filename, flags, mode);
+    LOAD_OPEN_FUNC();
+    if (!filename) {
+        return _open(filename, flags, mode);
+    }
+
+    MANGLE_PATH(filename);
+    return _open(filename, flags, mode);
 }
 
 int __open_2(const char *filename, int flags) {
+
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __open_2(%s)\n", filename?filename:"NULL");
 
-    if (OPEN_NEEDS_MODE(flags)) {
-        LOAD___OPEN_2_FUNC();
+    LOAD___OPEN_2_FUNC();
+    if (OPEN_NEEDS_MODE(flags) || !filename) {
         return ___open_2(filename, flags);
     }
 
-    return real_open(filename, flags, 0);
+    MANGLE_PATH(filename);
+    return ___open_2(filename, flags);
 }
 
 #ifdef HAVE_OPENAT
@@ -592,6 +598,11 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
     }
 
     LOAD_OPENAT_FUNC();
+    if (!pathname || pathname[0] != '/') {
+        return _openat(dirfd, pathname, flags, mode);
+    }
+
+    MANGLE_PATH(pathname);
     return _openat(dirfd, pathname, flags, mode);
 }
 
@@ -600,10 +611,28 @@ int __openat_2(int dirfd, const char *pathname, int flags) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat_2(%s)\n", pathname?pathname:"NULL");
 
     LOAD___OPENAT_2_FUNC();
+    if (OPEN_NEEDS_MODE(flags) || !pathname || pathname[0] != '/') {
+        return ___openat_2(dirfd, pathname, flags);
+    }
+
+    MANGLE_PATH(pathname);
     return ___openat_2(dirfd, pathname, flags);
 }
 
 #endif
+
+int opendir(const char *pathname) {
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": opendir(%s)\n", pathname?pathname:"NULL");
+
+    LOAD_OPENDIR_FUNC();
+    if (!pathname) {
+        return _opendir(pathname);
+    }
+
+    MANGLE_PATH(pathname);
+    return _opendir(pathname);
+}
 
 #if !defined(__GLIBC__) && !defined(__FreeBSD__)
 int ioctl(int fd, int request, ...) {
@@ -636,16 +665,13 @@ int access(const char *pathname, int mode) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": access(%s)\n", pathname?pathname:"NULL");
 
+    LOAD_ACCESS_FUNC();
     if (!function_enter() || !pathname) {
-        LOAD_ACCESS_FUNC();
         return _access(pathname, mode);
     }
 
-    char path_buf[BUF_SIZE];
-    mangle_path(path_buf, pathname);
-
-    LOAD_ACCESS_FUNC();
-    ret = _access(path_buf, mode);
+    MANGLE_PATH(pathname);
+    ret = _access(pathname, mode);
 
     function_exit();
 
@@ -656,16 +682,13 @@ int stat(const char *pathname, struct stat *buf) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": stat(%s)\n", pathname?pathname:"NULL");
 
+    LOAD_STAT_FUNC();
     if (!pathname) {
-        LOAD_STAT_FUNC();
         return _stat(pathname, buf);
     }
 
-    char path_buf[BUF_SIZE];
-    mangle_path(path_buf, pathname);
-
-    LOAD_STAT_FUNC();
-    return _stat(path_buf, buf);
+    MANGLE_PATH(pathname);
+    return _stat(pathname, buf);
 }
 #ifdef HAVE_OPEN64
 #undef stat64
@@ -677,16 +700,13 @@ int stat64(const char *pathname, struct stat *buf) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": stat64(%s)\n", pathname?pathname:"NULL");
 
+    LOAD_STAT64_FUNC();
     if (!pathname) {
-        LOAD_STAT64_FUNC();
         return _stat64(pathname, buf);
     }
 
-    char path_buf[BUF_SIZE];
-    mangle_path(path_buf, pathname);
-
-    LOAD_STAT64_FUNC();
-    return _stat64(path_buf, buf);
+    MANGLE_PATH(pathname);
+    return _stat64(pathname, buf);
 }
 #undef open64
 int open64(const char *filename, int flags, ...) {
@@ -704,19 +724,26 @@ int open64(const char *filename, int flags, ...) {
         va_end(args);
     }
 
-    return real_open(filename, flags, mode);
+    LOAD_OPEN64_FUNC();
+    if (!filename) {
+        return _open64(filename, flags, mode);
+    }
+
+    MANGLE_PATH(filename);
+    return _open64(filename, flags, mode);
 }
 
 int __open64_2(const char *filename, int flags) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __open64_2(%s)\n", filename?filename:"NULL");
 
-    if (OPEN_NEEDS_MODE(flags)) {
-        LOAD___OPEN64_2_FUNC();
+    LOAD___OPEN64_2_FUNC();
+    if (OPEN_NEEDS_MODE(flags) || !filename) {
         return ___open64_2(filename, flags);
     }
 
-    return real_open(filename, flags, 0);
+    MANGLE_PATH(filename);
+    return ___open64_2(filename, flags);
 }
 
 #ifdef HAVE_OPENAT
@@ -737,6 +764,11 @@ int openat64(int dirfd, const char *pathname, int flags, ...) {
     }
 
     LOAD_OPENAT64_FUNC();
+    if (!pathname || pathname[0] != '/') {
+        return _openat64(dirfd, pathname, flags, mode);
+    }
+
+    MANGLE_PATH(pathname);
     return _openat64(dirfd, pathname, flags, mode);
 }
 
@@ -745,6 +777,11 @@ int __openat64_2(int dirfd, const char *pathname, int flags) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat64_2(%s)\n", pathname?pathname:"NULL");
 
     LOAD___OPENAT64_2_FUNC();
+    if (OPEN_NEEDS_MODE(flags) || !pathname || pathname[0] != '/') {
+        return ___openat64_2(dirfd, pathname, flags);
+    }
+
+    MANGLE_PATH(pathname);
     return ___openat64_2(dirfd, pathname, flags);
 }
 
@@ -757,16 +794,13 @@ int __openat64_2(int dirfd, const char *pathname, int flags) {
 int __xstat(int ver, const char *pathname, struct stat *buf) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __xstat(%s)\n", pathname?pathname:"NULL");
 
+    LOAD_XSTAT_FUNC();
     if (!pathname) {
-        LOAD_XSTAT_FUNC();
         return ___xstat(ver, pathname, buf);
     }
 
-    char path_buf[BUF_SIZE];
-    mangle_path(path_buf, pathname);
-
-    LOAD_XSTAT_FUNC();
-    return ___xstat(ver, path_buf, buf);
+    MANGLE_PATH(pathname);
+    return ___xstat(ver, pathname, buf);
 }
 
 #ifdef HAVE_OPEN64
@@ -774,16 +808,13 @@ int __xstat(int ver, const char *pathname, struct stat *buf) {
 int __xstat64(int ver, const char *pathname, struct stat64 *buf) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __xstat64(%s)\n", pathname?pathname:"NULL");
 
+    LOAD_XSTAT64_FUNC();
     if (!pathname) {
-        LOAD_XSTAT64_FUNC();
         return ___xstat64(ver, pathname, buf);
     }
 
-    char path_buf[BUF_SIZE];
-    mangle_path(path_buf, pathname);
-
-    LOAD_XSTAT64_FUNC();
-    return ___xstat64(ver, path_buf, buf);
+    MANGLE_PATH(pathname);
+    return ___xstat64(ver, pathname, buf);
 }
 
 #endif
@@ -798,16 +829,13 @@ int statx(int dirfd, const char *restrict pathname, int flags,
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": statx(%s)\n", pathname?pathname:"NULL");
 
-    if (!pathname) {
-        LOAD_STATX_FUNC();
+    LOAD_STATX_FUNC();
+    if (!pathname || pathname[0] != '/') {
         return _statx(dirfd, pathname, flags, mask, statxbuf);
     }
 
-    char path_buf[BUF_SIZE];
-    mangle_path(path_buf, pathname);
-
-    LOAD_STATX_FUNC();
-    return _statx(dirfd, path_buf, flags, mask, statxbuf);
+    MANGLE_PATH(pathname);
+    return _statx(dirfd, pathname, flags, mask, statxbuf);
 }
 
 #endif
@@ -816,16 +844,13 @@ FILE* fopen(const char *filename, const char *mode) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": fopen(%s)\n", filename?filename:"NULL");
 
+    LOAD_FOPEN_FUNC();
     if (!filename) {
-        LOAD_FOPEN_FUNC();
         return _fopen(filename, mode);
     }
 
-    char path_buf[BUF_SIZE];
-    mangle_path(path_buf, filename);
-
-    LOAD_FOPEN_FUNC();
-    return _fopen(path_buf, mode);
+    MANGLE_PATH(filename);
+    return _fopen(filename, mode);
 }
 
 #ifdef HAVE_OPEN64
@@ -834,16 +859,13 @@ FILE *fopen64(const char *__restrict filename, const char *__restrict mode) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": fopen64(%s)\n", filename?filename:"NULL");
 
+    LOAD_FOPEN64_FUNC();
     if (!filename) {
-        LOAD_FOPEN64_FUNC();
         return _fopen64(filename, mode);
     }
 
-    char path_buf[BUF_SIZE];
-    mangle_path(path_buf, filename);
-
-    LOAD_FOPEN64_FUNC();
-    return _fopen64(path_buf, mode);
+    MANGLE_PATH(filename);
+    return _fopen64(filename, mode);
 }
 
 #endif
@@ -982,9 +1004,7 @@ static int handle_execve(const char *pathname, char *const exec_argv[],
         return _execve(pathname, exec_argv, envp);
     }
 
-    char path_buf[BUF_SIZE];
-    mangle_path(path_buf, pathname);
-    pathname = path_buf;
+    MANGLE_PATH(pathname);
 
     exec_argc = array_len(exec_argv);
     if (exec_argc < 0) {
@@ -1209,20 +1229,10 @@ static int handle_execvpe(const char *pathname, char *const argv[],
 }
 
 int execve(const char *pathname, char *const argv[], char *const envp[]) {
-    int ret;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": execve(%s)\n", pathname?pathname:"NULL");
 
-    if (!function_enter()) {
-        LOAD_EXECVE_FUNC();
-        return _execve(pathname, argv, envp);
-    }
-
-    ret = handle_execve(pathname, argv, envp);
-
-    function_exit();
-
-    return ret;
+    return handle_execve(pathname, argv, envp);
 }
 
 int execveat(int dirfd, const char *pathname, char *const argv[], char *const envp[], int flags) {
@@ -1351,6 +1361,7 @@ int posix_spawn(pid_t *restrict pid, const char *restrict path,
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": posix_spawn(%s)\n", path?path:"NULL");
 
     LOAD_POSIX_SPAWN_FUNC();
+    MANGLE_PATH(path);
     return _posix_spawn(pid, path, file_actions, attrp, argv, envp);
 }
 
@@ -1363,5 +1374,6 @@ int posix_spawnp(pid_t *restrict pid, const char *restrict file,
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": posix_spawnp(%s)\n", file?file:"NULL");
 
     LOAD_POSIX_SPAWNP_FUNC();
+    MANGLE_PATH(file);
     return _posix_spawnp(pid, file, file_actions, attrp, argv, envp);
 }
