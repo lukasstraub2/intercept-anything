@@ -890,8 +890,8 @@ static int64_t array_len(char *const array[]) {
     return len;
 }
 
-static void array_copy(char *const source[], char *dest[], int64_t len) {
-    memcpy((char **)source, dest, len * sizeof(char *));
+static void array_copy(char *dest[], char *const source[], int64_t len) {
+    memcpy(dest, source, len * sizeof(char *));
 }
 
 static void array_insert_front(
@@ -1051,7 +1051,7 @@ static int handle_execve(const char *pathname, char *const exec_argv[],
         char **argv = _argv;
 
         cmdline_extract(buf, size, argv);
-        array_copy(exec_argv, argv + sh_argc, exec_argc);
+        array_copy(argv + sh_argc, exec_argv, exec_argc);
         argv[sh_argc] = (char *) pathname;
         argv[argc] = NULL;
         pathname = argv[0];
@@ -1097,7 +1097,7 @@ static void maybe_script_execute(const char *file, char *const argv[],
     new_argv[0] = (char *) "/bin/sh";
     new_argv[1] = (char *) file;
     if (argc > 1) {
-        array_copy(new_argv + 2, (char **) argv + 1, argc);
+        array_copy(new_argv + 2, argv + 1, argc);
     } else {
         new_argv[2] = NULL;
     }
