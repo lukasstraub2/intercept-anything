@@ -539,7 +539,7 @@ static void _mangle_path(char *out, const char *path) {
 }
 
 #define MANGLE_PATH(__path) \
-    char path_buf[PATH_MAX]; \
+    char path_buf[BUF_SIZE]; \
     _mangle_path(path_buf, (__path)); \
     (__path) = path_buf;
 
