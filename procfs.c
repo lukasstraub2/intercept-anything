@@ -406,7 +406,8 @@ static int handle_uptime() {
     return fd;
 
 fail:
-    close(fd);
+    LOAD_CLOSE_FUNC();
+    _close(fd);
     free(filename);
     errno = _errno;
     return -1;
