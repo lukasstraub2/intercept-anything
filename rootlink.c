@@ -516,9 +516,15 @@ static void __attribute__((constructor)) initialize() {
     signal(SIGSYS, SIG_IGN);
 }
 
+static int strcmp_prefix(const char *a, const char *b) {
+    return strncmp(a, b, strlen(b));
+}
+
 static int handle_path(const char *path) {
-    return strcmp(path, "/bin") == 0 || strcmp(path, "/usr") == 0 ||
-            strncmp(path, "/bin/", 5) == 0 || strncmp(path, "/usr/", 5) == 0;
+    // Android does have /bin/sh
+    return !strcmp(path, "/bin/bash") || !strcmp(path, "/usr/bin/env") ||
+            !strcmp(path, "/bin/pwd") || !strcmp(path, "/bin/ln") ||
+            !strcmp_prefix(path, "/usr/include");
 }
 
 static void _mangle_path(char *out, const char *path) {
