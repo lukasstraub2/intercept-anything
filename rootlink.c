@@ -34,6 +34,8 @@
 #define _LARGEFILE64_SOURCE 1
 #endif
 
+#include "config.h"
+
 #include <pthread.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
@@ -510,12 +512,6 @@ static void install_atfork(void) {
     pthread_atfork(atfork_prepare, atfork_parent, atfork_child);
 }
 
-static void __attribute__((constructor)) initialize() {
-    debug(DEBUG_LEVEL_VERBOSE, __FILE__": disabling SIGSYS\n");
-
-    signal(SIGSYS, SIG_IGN);
-}
-
 static int strcmp_prefix(const char *a, const char *b) {
     return strncmp(a, b, strlen(b));
 }
@@ -528,8 +524,7 @@ static int handle_path(const char *path) {
 }
 
 static void _mangle_path(char *out, const char *path) {
-    const char *prefix = "/data/data/com.termux/files/home/gentoo";
-    int prefix_len = strlen(prefix);
+    int prefix_len = strlen(PREFIX);
     int path_len = strlen(path);
 
     out[0] = '\0';
@@ -539,7 +534,7 @@ static void _mangle_path(char *out, const char *path) {
         return;
     }
 
-    strcpy(out, prefix);
+    strcpy(out, PREFIX);
     strncpy(out + prefix_len, path, BUF_SIZE - prefix_len);
     out[BUF_SIZE -1] = '\0';
 }

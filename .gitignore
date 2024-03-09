@@ -1,5 +1,7 @@
 a.out
 rootlink.so
+noxattrs.so
+procfs.so
 print
 confstr
 test.sh

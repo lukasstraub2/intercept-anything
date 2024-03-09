@@ -31,6 +31,8 @@
 #define _LARGEFILE64_SOURCE 1
 #endif
 
+#include "config.h"
+
 #include <pthread.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
