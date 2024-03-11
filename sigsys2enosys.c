@@ -59,7 +59,7 @@ static void handler(int sig, siginfo_t *info, void *ucontext) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": caught SIGSYS by syscall no. %u\n", info->si_syscall);
 
 #ifdef __aarch64__
-    ctx->uc_mcontext.gregs[REG_X0] = (greg_t) -ENOSYS;
+    ctx->uc_mcontext.regs[0] = (greg_t) -ENOSYS;
 #elifdef __amd64__
     ctx->uc_mcontext.gregs[REG_RAX] = (greg_t) -ENOSYS;
 #else
