@@ -53,10 +53,20 @@ static void debug(int level, const char *format, ...) {
 }
 
 static void handler(int sig, siginfo_t *info, void *ucontext) {
+    ucontext_t* ctx = (ucontext_t*)ucontext;
+    int old_errno = errno;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": caught SIGSYS by syscall no. %u\n", info->si_syscall);
 
-    info->si_errno = ENOSYS;
+#ifdef __aarch64__
+    ctx->uc_mcontext.gregs[REG_X0] = (greg_t) -ENOSYS;
+#elifdef __amd64__
+    ctx->uc_mcontext.gregs[REG_RAX] = (greg_t) -ENOSYS;
+#else
+#error "No architecture-specific code for your plattform"
+#endif
+
+    errno = old_errno;
 }
 
 static void __attribute__((constructor)) initialize() {
