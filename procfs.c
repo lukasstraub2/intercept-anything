@@ -324,7 +324,7 @@ static void debug(int level, const char *format, ...) {
     const char *dlevel_s;
     int dlevel;
 
-    dlevel_s = getenv("PADSP_DEBUG");
+    dlevel_s = getenv("PROCFS_DEBUG");
     if (!dlevel_s)
         return;
 

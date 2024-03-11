@@ -2,6 +2,7 @@ a.out
 rootlink.so
 noxattrs.so
 procfs.so
+sigsys2enosys.so
 print
 confstr
 test.sh
