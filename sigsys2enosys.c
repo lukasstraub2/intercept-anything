@@ -1,10 +1,6 @@
 #define _GNU_SOURCE
 #define BUF_SIZE (64*1024)
 
-#define DEBUG_ENV "SIGSYS_DEBUG"
-#include "config.h"
-#include "debug.h"
-
 #ifdef _FILE_OFFSET_BITS
 #undef _FILE_OFFSET_BITS
 #endif
@@ -13,20 +9,12 @@
 #define _LARGEFILE64_SOURCE 1
 #endif
 
-#include <pthread.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <dlfcn.h>
+#define DEBUG_ENV "SIGSYS_DEBUG"
+#include "config.h"
+#include "debug.h"
+
 #include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-#include <stdarg.h>
 #include <signal.h>
-#include <stdlib.h>
-#include <spawn.h>
-#include <stdint.h>
-#include <limits.h>
 
 static void handler(int sig, siginfo_t *info, void *ucontext) {
     ucontext_t* ctx = (ucontext_t*)ucontext;

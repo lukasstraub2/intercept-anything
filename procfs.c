@@ -26,10 +26,6 @@
 #define _GNU_SOURCE
 #define BUF_SIZE (64*1024)
 
-#define DEBUG_ENV "PROCFS_DEBUG"
-#include "config.h"
-#include "debug.h"
-
 #ifdef _FILE_OFFSET_BITS
 #undef _FILE_OFFSET_BITS
 #endif
@@ -38,30 +34,19 @@
 #define _LARGEFILE64_SOURCE 1
 #endif
 
-#include <pthread.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <dlfcn.h>
-#include <errno.h>
-#include <fcntl.h>
+#define DEBUG_ENV "PROCFS_DEBUG"
+#include "config.h"
+#include "debug.h"
+#include "parent_open.h"
+#include "parent_close.h"
+#include "parent_stat.h"
+
 #include <string.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <spawn.h>
-#include <stdint.h>
+#include <unistd.h>
+#include <errno.h>
 #include <limits.h>
 
-#ifdef __linux__
-#include <linux/sockios.h>
-#endif
-
-/* On some systems SIOCINQ isn't defined, but FIONREAD is just an alias */
-#if !defined(SIOCINQ) && defined(FIONREAD)
-# define SIOCINQ FIONREAD
-#endif
+#include <fcntl.h>
 
 #ifdef O_TMPFILE
 # define OPEN_NEEDS_MODE(oflag) \
@@ -69,251 +54,6 @@
 #else
 # define OPEN_NEEDS_MODE(oflag) (((oflag) & O_CREAT) != 0)
 #endif
-
-/* make sure gcc doesn't redefine open and friends as macros */
-#undef open
-#undef open64
-#undef openat
-#undef openat64
-
-static pthread_mutex_t func_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-typedef int (*_ioctl_t)(int, int, void*);
-typedef int (*_close_t)(int);
-typedef int (*_open_t)(const char *, int, mode_t);
-typedef int (*___open_2_t)(const char *, int);
-typedef FILE* (*_fopen_t)(const char *path, const char *mode);
-#ifdef HAVE_OPENAT
-typedef int (*_openat_t)(int, const char *, int, mode_t);
-typedef int (*___openat_2_t)(int, const char *, int);
-//typedef int (*_openat2_t)(int dirfd, const char *pathname, const struct open_how *how, size_t size);
-#endif
-typedef int (*_opendir_t)(const char *);
-typedef int (*_stat_t)(const char *, struct stat *);
-#ifdef _STAT_VER
-typedef int (*___xstat_t)(int, const char *, struct stat *);
-#endif
-#ifdef _GNU_SOURCE
-typedef int (*_statx_t)(int dirfd, const char *restrict pathname, int flags,
-                        unsigned int mask, struct statx *restrict statxbuf);
-#endif
-#ifdef HAVE_OPEN64
-typedef int (*_open64_t)(const char *, int, mode_t);
-typedef int (*___open64_2_t)(const char *, int);
-typedef FILE* (*_fopen64_t)(const char *path, const char *mode);
-typedef int (*_stat64_t)(const char *, struct stat64 *);
-#ifdef _STAT_VER
-typedef int (*___xstat64_t)(int, const char *, struct stat64 *);
-#endif
-#ifdef HAVE_OPENAT
-typedef int (*_openat64_t)(int, const char *, int, mode_t);
-typedef int (*___openat64_2_t)(int, const char *, int);
-#endif
-#endif
-typedef int (*_fclose_t)(FILE *f);
-typedef int (*_access_t)(const char *, int);
-
-static _ioctl_t _ioctl = NULL;
-static _close_t _close = NULL;
-static _open_t _open = NULL;
-static ___open_2_t ___open_2 = NULL;
-static _fopen_t _fopen = NULL;
-#ifdef HAVE_OPENAT
-static _openat_t _openat = NULL;
-static ___openat_2_t ___openat_2 = NULL;
-//static _openat2_t _openat2 = NULL;
-#endif
-static _opendir_t _opendir = NULL;
-static _stat_t _stat = NULL;
-#ifdef _STAT_VER
-static ___xstat_t ___xstat = NULL;
-#endif
-#ifdef _GNU_SOURCE
-static _statx_t _statx = NULL;
-#endif
-#ifdef HAVE_OPEN64
-static _open64_t _open64 = NULL;
-static ___open64_2_t ___open64_2 = NULL;
-static _fopen64_t _fopen64 = NULL;
-static _stat64_t _stat64 = NULL;
-#ifdef _STAT_VER
-static ___xstat64_t ___xstat64 = NULL;
-#endif
-#ifdef HAVE_OPENAT
-static _openat64_t _openat64 = NULL;
-static ___openat64_2_t ___openat64_2 = NULL;
-#endif
-#endif
-static _fclose_t _fclose = NULL;
-static _access_t _access = NULL;
-
-
-/* dlsym() violates ISO C, so confide the breakage into this function to
- * avoid warnings. */
-typedef void (*fnptr)(void);
-static inline fnptr dlsym_fn(void *handle, const char *symbol) {
-    return (fnptr) (long) dlsym(handle, symbol);
-}
-
-#define LOAD_IOCTL_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_ioctl)  \
-        _ioctl = (_ioctl_t) dlsym_fn(RTLD_NEXT, "ioctl"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_OPEN_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_open) \
-        _open = (_open_t) dlsym_fn(RTLD_NEXT, "open"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD___OPEN_2_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!___open_2) \
-        ___open_2 = (___open_2_t) dlsym_fn(RTLD_NEXT, "__open_2"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_OPENAT_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_openat) \
-        _openat = (_openat_t) dlsym_fn(RTLD_NEXT, "openat"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD___OPENAT_2_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!___openat_2) \
-        ___openat_2 = (___openat_2_t) dlsym_fn(RTLD_NEXT, "__openat_2"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_OPEN64_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_open64) \
-        _open64 = (_open64_t) dlsym_fn(RTLD_NEXT, "open64"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD___OPEN64_2_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!___open64_2) \
-        ___open64_2 = (___open64_2_t) dlsym_fn(RTLD_NEXT, "__open64_2"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_OPENAT64_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_openat64) \
-        _openat64 = (_openat64_t) dlsym_fn(RTLD_NEXT, "openat64"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD___OPENAT64_2_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!___openat64_2) \
-        ___openat64_2 = (___openat64_2_t) dlsym_fn(RTLD_NEXT, "__openat64_2"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_OPENDIR_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_opendir) \
-        _opendir = (_opendir_t) dlsym_fn(RTLD_NEXT, "opendir"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_CLOSE_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_close) \
-        _close = (_close_t) dlsym_fn(RTLD_NEXT, "close"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_ACCESS_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_access) \
-        _access = (_access_t) dlsym_fn(RTLD_NEXT, "access"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_STAT_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_stat) \
-        _stat = (_stat_t) dlsym_fn(RTLD_NEXT, "stat"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_STAT64_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_stat64) \
-        _stat64 = (_stat64_t) dlsym_fn(RTLD_NEXT, "stat64"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_XSTAT_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!___xstat) \
-        ___xstat = (___xstat_t) dlsym_fn(RTLD_NEXT, "__xstat"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_STATX_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_statx) \
-        _statx = (_statx_t) dlsym_fn(RTLD_NEXT, "statx"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_XSTAT64_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!___xstat64) \
-        ___xstat64 = (___xstat64_t) dlsym_fn(RTLD_NEXT, "__xstat64"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_FOPEN_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_fopen) \
-        _fopen = (_fopen_t) dlsym_fn(RTLD_NEXT, "fopen"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_FOPEN64_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_fopen64) \
-        _fopen64 = (_fopen64_t) dlsym_fn(RTLD_NEXT, "fopen64"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
-
-#define LOAD_FCLOSE_FUNC() \
-do { \
-    pthread_mutex_lock(&func_mutex); \
-    if (!_fclose) \
-        _fclose = (_fclose_t) dlsym_fn(RTLD_NEXT, "fclose"); \
-    pthread_mutex_unlock(&func_mutex); \
-} while(0)
 
 static pthread_key_t recursion_key;
 
@@ -383,7 +123,7 @@ static int handle_uptime() {
     return fd;
 
 fail:
-    LOAD_CLOSE_FUNC();
+    load_close_func();
     _close(fd);
     free(filename);
     errno = _errno;
@@ -429,7 +169,7 @@ int open(const char *filename, int flags, ...) {
         va_end(args);
     }
 
-    LOAD_OPEN_FUNC();
+    load_open_func();
     if (!filename) {
         return _open(filename, flags, mode);
     }
@@ -447,7 +187,7 @@ int __open_2(const char *filename, int flags) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __open_2(%s)\n", filename?filename:"NULL");
 
-    LOAD___OPEN_2_FUNC();
+    load___open_2_func();
     if (OPEN_NEEDS_MODE(flags) || !filename) {
         return ___open_2(filename, flags);
     }
@@ -478,7 +218,7 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
         va_end(args);
     }
 
-    LOAD_OPENAT_FUNC();
+    load_openat_func();
     if (!pathname || pathname[0] != '/') {
         return _openat(dirfd, pathname, flags, mode);
     }
@@ -496,7 +236,7 @@ int __openat_2(int dirfd, const char *pathname, int flags) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat_2(%s)\n", pathname?pathname:"NULL");
 
-    LOAD___OPENAT_2_FUNC();
+    load___openat_2_func();
     if (OPEN_NEEDS_MODE(flags) || !pathname || pathname[0] != '/') {
         return ___openat_2(dirfd, pathname, flags);
     }
@@ -511,56 +251,12 @@ int __openat_2(int dirfd, const char *pathname, int flags) {
 
 #endif
 
-int opendir(const char *pathname) {
-    int ret;
-
-    debug(DEBUG_LEVEL_VERBOSE, __FILE__": opendir(%s)\n", pathname?pathname:"NULL");
-
-    LOAD_OPENDIR_FUNC();
-    if (!pathname) {
-        return _opendir(pathname);
-    }
-
-    ret = handle_path(pathname);
-    if (ret) {
-        return ret;
-    }
-
-    return _opendir(pathname);
-}
-
-#if !defined(__GLIBC__) && !defined(__FreeBSD__)
-int ioctl(int fd, int request, ...) {
-#else
-int ioctl(int fd, unsigned long request, ...) {
-#endif
-    va_list args;
-    void *argp;
-
-    debug(DEBUG_LEVEL_VERBOSE, __FILE__": ioctl()\n");
-
-    va_start(args, request);
-    argp = va_arg(args, void *);
-    va_end(args);
-
-    LOAD_IOCTL_FUNC();
-    return _ioctl(fd, request, argp);
-}
-
-int close(int fd) {
-
-    debug(DEBUG_LEVEL_VERBOSE, __FILE__": close()\n");
-
-    LOAD_CLOSE_FUNC();
-    return _close(fd);
-}
-
 int access(const char *pathname, int mode) {
     int ret;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": access(%s)\n", pathname?pathname:"NULL");
 
-    LOAD_ACCESS_FUNC();
+    load_access_func();
     if (!function_enter() || !pathname) {
         return _access(pathname, mode);
     }
@@ -576,7 +272,7 @@ int stat(const char *pathname, struct stat *buf) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": stat(%s)\n", pathname?pathname:"NULL");
 
-    LOAD_STAT_FUNC();
+    load_stat_func();
     if (!pathname) {
         return _stat(pathname, buf);
     }
@@ -593,7 +289,7 @@ int stat64(const char *pathname, struct stat *buf) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": stat64(%s)\n", pathname?pathname:"NULL");
 
-    LOAD_STAT64_FUNC();
+    load_stat64_func();
     if (!pathname) {
         return _stat64(pathname, buf);
     }
@@ -617,7 +313,7 @@ int open64(const char *filename, int flags, ...) {
         va_end(args);
     }
 
-    LOAD_OPEN64_FUNC();
+    load_open64_func();
     if (!filename) {
         return _open64(filename, flags, mode);
     }
@@ -635,7 +331,7 @@ int __open64_2(const char *filename, int flags) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __open64_2(%s)\n", filename?filename:"NULL");
 
-    LOAD___OPEN64_2_FUNC();
+    load___open64_2_func();
     if (OPEN_NEEDS_MODE(flags) || !filename) {
         return ___open64_2(filename, flags);
     }
@@ -666,7 +362,7 @@ int openat64(int dirfd, const char *pathname, int flags, ...) {
         va_end(args);
     }
 
-    LOAD_OPENAT64_FUNC();
+    load_openat64_func();
     if (!pathname || pathname[0] != '/') {
         return _openat64(dirfd, pathname, flags, mode);
     }
@@ -684,7 +380,7 @@ int __openat64_2(int dirfd, const char *pathname, int flags) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat64_2(%s)\n", pathname?pathname:"NULL");
 
-    LOAD___OPENAT64_2_FUNC();
+    load___openat64_2_func();
     if (OPEN_NEEDS_MODE(flags) || !pathname || pathname[0] != '/') {
         return ___openat64_2(dirfd, pathname, flags);
     }
@@ -706,7 +402,7 @@ int __openat64_2(int dirfd, const char *pathname, int flags) {
 int __xstat(int ver, const char *pathname, struct stat *buf) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __xstat(%s)\n", pathname?pathname:"NULL");
 
-    LOAD_XSTAT_FUNC();
+    load_xstat_func();
     if (!pathname) {
         return ___xstat(ver, pathname, buf);
     }
@@ -719,7 +415,7 @@ int __xstat(int ver, const char *pathname, struct stat *buf) {
 int __xstat64(int ver, const char *pathname, struct stat64 *buf) {
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __xstat64(%s)\n", pathname?pathname:"NULL");
 
-    LOAD_XSTAT64_FUNC();
+    load_xstat64_func();
     if (!pathname) {
         return ___xstat64(ver, pathname, buf);
     }
@@ -739,7 +435,7 @@ int statx(int dirfd, const char *restrict pathname, int flags,
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": statx(%s)\n", pathname?pathname:"NULL");
 
-    LOAD_STATX_FUNC();
+    load_statx_func();
     if (!pathname || pathname[0] != '/') {
         return _statx(dirfd, pathname, flags, mask, statxbuf);
     }
@@ -754,7 +450,7 @@ FILE* fopen(const char *filename, const char *mode) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": fopen(%s)\n", filename?filename:"NULL");
 
-    LOAD_FOPEN_FUNC();
+    load_fopen_func();
     if (!filename) {
         return _fopen(filename, mode);
     }
@@ -776,7 +472,7 @@ FILE *fopen64(const char *__restrict filename, const char *__restrict mode) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": fopen64(%s)\n", filename?filename:"NULL");
 
-    LOAD_FOPEN64_FUNC();
+    load_fopen64_func();
     if (!filename) {
         return _fopen64(filename, mode);
     }
@@ -792,11 +488,3 @@ FILE *fopen64(const char *__restrict filename, const char *__restrict mode) {
 }
 
 #endif
-
-int fclose(FILE *f) {
-
-    debug(DEBUG_LEVEL_VERBOSE, __FILE__": fclose()\n");
-
-    LOAD_FCLOSE_FUNC();
-    return _fclose(f);
-}
