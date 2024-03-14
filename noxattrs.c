@@ -1,5 +1,5 @@
 /***
-  l2s. Copied from PluseAudio's padsp.c
+  noxattrs. Copied from PluseAudio's padsp.c
 
   This file is part of PulseAudio.
 
@@ -33,21 +33,8 @@
 
 #include "config.h"
 
-#include <pthread.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <dlfcn.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <spawn.h>
 #include <stdint.h>
-#include <limits.h>
 #include <sys/xattr.h>
 
 ssize_t listxattr(const char *path, char *list, size_t size) {

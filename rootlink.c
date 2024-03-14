@@ -34,7 +34,9 @@
 #define _LARGEFILE64_SOURCE 1
 #endif
 
+#define DEBUG_ENV "ROOTLINK_DEBUG"
 #include "config.h"
+#include "debug.h"
 
 #include <pthread.h>
 #include <sys/ioctl.h>
@@ -427,31 +429,6 @@ do { \
         _posix_spawnp = (_posix_spawnp_t) dlsym_fn(RTLD_NEXT, "posix_spawnp"); \
     pthread_mutex_unlock(&func_mutex); \
 } while(0)
-
-static void debug(int level, const char *format, ...) __attribute__((format (printf, 2, 3)));
-
-#define DEBUG_LEVEL_ALWAYS                0
-#define DEBUG_LEVEL_NORMAL                1
-#define DEBUG_LEVEL_VERBOSE               2
-
-static void debug(int level, const char *format, ...) {
-    va_list ap;
-    const char *dlevel_s;
-    int dlevel;
-
-    dlevel_s = getenv("ROOTLINK_DEBUG");
-    if (!dlevel_s)
-        return;
-
-    dlevel = atoi(dlevel_s);
-
-    if (dlevel < level)
-        return;
-
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
-}
 
 static pthread_key_t recursion_key;
 
