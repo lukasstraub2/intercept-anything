@@ -383,7 +383,7 @@ FILE *fopen64(const char *__restrict pathname, const char *__restrict mode) {
 }
 #endif
 
-int opendir(const char *pathname) {
+DIR *opendir(const char *pathname) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": opendir(%s)\n", pathname?pathname:"NULL");
 
@@ -392,8 +392,11 @@ int opendir(const char *pathname) {
         return _opendir(pathname);
     }
 
-    MANGLE_PATH(pathname);
-    return _opendir(pathname);
+    char path_buf[BUF_SIZE];
+    if (mangle_path(path_buf, BUF_SIZE, pathname) < 0) {
+        return NULL;
+    }
+    return _opendir(path_buf);
 }
 
 int stat(const char *pathname, struct stat *buf) {
