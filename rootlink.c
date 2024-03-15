@@ -545,6 +545,7 @@ ssize_t readlink(const char *restrict pathname,
 
 ssize_t readlinkat(int dirfd, const char *restrict pathname,
                    char *restrict buf, size_t bufsiz) {
+
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": readlinkat(%s)\n", pathname?pathname:"NULL");
 
     load_readlinkat_func();
@@ -555,6 +556,41 @@ ssize_t readlinkat(int dirfd, const char *restrict pathname,
     MANGLE_PATH(pathname);
     return _readlinkat(dirfd, pathname, buf, bufsiz);
 }
+
+char *realpath(const char *restrict pathname, char *restrict resolved_path) {
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": realpath(%s)\n", pathname?pathname:"NULL");
+
+    load_realpath_func();
+    if (!pathname) {
+        return _realpath(pathname, resolved_path);
+    }
+
+    char path_buf[BUF_SIZE];
+    if (mangle_path(path_buf, BUF_SIZE, pathname) < 0) {
+        return NULL;
+    }
+    return _realpath(path_buf, resolved_path);
+}
+
+#ifdef _GNU_SOURCE
+char *canonicalize_file_name(const char *pathname) {
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": canonicalize_file_name(%s)\n", pathname?pathname:"NULL");
+
+    load_canonicalize_file_name_func();
+    if (!pathname) {
+        return _canonicalize_file_name(pathname);
+    }
+
+    char path_buf[BUF_SIZE];
+    if (mangle_path(path_buf, BUF_SIZE, pathname) < 0) {
+        return NULL;
+    }
+    return _canonicalize_file_name(pathname);
+}
+#endif
+
 
 int access(const char *pathname, int mode) {
     int ret;

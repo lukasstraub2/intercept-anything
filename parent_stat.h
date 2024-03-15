@@ -40,4 +40,10 @@ def_parent(ssize_t, readlink, const char *restrict pathname,
 def_parent(ssize_t, readlinkat, int dirfd, const char *restrict pathname,
                                 char *restrict buf, size_t bufsiz)
 
+def_parent(char *, realpath, const char *restrict path,
+                              char *restrict resolved_path)
+#ifdef _GNU_SOURCE
+def_parent(char *, canonicalize_file_name, const char *path)
+#endif
+
 def_parent(int, access, const char *, int)
