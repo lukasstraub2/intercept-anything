@@ -148,11 +148,7 @@ static int mkfakelink(char *linkpath, size_t linkpath_len, const char *path) {
         return 0;
     }
 
-    char *dir_end = strrchr(linkpath, '/');
-    *dir_end = '\0';
-    ret = mkpath(linkpath, 7777);
-    *dir_end = '/';
-
+    ret = mkpath(linkpath, 0777);
     if (ret < 0) {
         return -1;
     }
