@@ -1114,3 +1114,11 @@ int posix_spawnp(pid_t *restrict pid, const char *restrict filename,
     load_posix_spawnp_func();
     return _posix_spawnp(pid, filename, file_actions, attrp, argv, envp);
 }
+
+int system(const char* command) {
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": system(%s)\n", command?command:"NULL");
+
+    load_system_func();
+    return _system(command);
+}
