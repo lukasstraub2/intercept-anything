@@ -587,7 +587,7 @@ char *canonicalize_file_name(const char *pathname) {
     if (mangle_path(path_buf, BUF_SIZE, pathname) < 0) {
         return NULL;
     }
-    return _canonicalize_file_name(pathname);
+    return _canonicalize_file_name(path_buf);
 }
 #endif
 
