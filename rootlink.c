@@ -118,7 +118,7 @@ static int strcmp_prefix(const char *a, const char *b) {
     return strncmp(a, b, strlen(b));
 }
 
-int mkpath(char* file_path, mode_t mode) {
+static int mkpath(char* file_path, mode_t mode) {
     for (char* p = strchr(file_path + 1, '/'); p; p = strchr(p + 1, '/')) {
         *p = '\0';
         if (mkdir(file_path, mode) == -1) {
@@ -613,6 +613,47 @@ int access(const char *pathname, int mode) {
 
     return ret;
 }
+
+int faccessat(int dirfd, const char *pathname, int mode, int flags) {
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": faccessat(%s)\n", pathname?pathname:"NULL");
+
+    load_faccessat_func();
+    if (!pathname || pathname[0] != '/') {
+        return _faccessat(dirfd, pathname, mode, flags);
+    }
+
+    MANGLE_PATH(pathname);
+    return _faccessat(dirfd, pathname, mode, flags);
+}
+
+#ifdef _GNU_SOURCE
+int euidaccess(const char *pathname, int mode) {
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": euidaccess(%s)\n", pathname?pathname:"NULL");
+
+    load_euidaccess_func();
+    if (!pathname) {
+        return _euidaccess(pathname, mode);
+    }
+
+    MANGLE_PATH(pathname);
+    return _euidaccess(pathname, mode);
+}
+
+int eaccess(const char *pathname, int mode) {
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": eaccess(%s)\n", pathname?pathname:"NULL");
+
+    load_eaccess_func();
+    if (!pathname) {
+        return _eaccess(pathname, mode);
+    }
+
+    MANGLE_PATH(pathname);
+    return _eaccess(pathname, mode);
+}
+#endif
 
 static int64_t array_len(char *const array[]) {
     int64_t len;

@@ -47,3 +47,8 @@ def_parent(char *, canonicalize_file_name, const char *path)
 #endif
 
 def_parent(int, access, const char *, int)
+def_parent(int, faccessat, int dirfd, const char *pathname, int mode, int flags)
+#ifdef _GNU_SOURCE
+def_parent(int, euidaccess, const char *pathname, int mode)
+def_parent(int, eaccess, const char *pathname, int mode)
+#endif
