@@ -219,6 +219,8 @@ int open(const char *pathname, int flags, ...) {
     return _open(pathname, flags, mode);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
 int __open_2(const char *pathname, int flags) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __open_2(%s)\n", pathname?pathname:"NULL");
@@ -231,6 +233,7 @@ int __open_2(const char *pathname, int flags) {
     MANGLE_PATH(pathname);
     return ___open_2(pathname, flags);
 }
+#pragma GCC diagnostic pop
 
 #ifdef HAVE_OPEN64
 int open64(const char *pathname, int flags, ...) {
@@ -257,6 +260,8 @@ int open64(const char *pathname, int flags, ...) {
     return _open64(pathname, flags, mode);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
 int __open64_2(const char *pathname, int flags) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __open64_2(%s)\n", pathname?pathname:"NULL");
@@ -269,6 +274,7 @@ int __open64_2(const char *pathname, int flags) {
     MANGLE_PATH(pathname);
     return ___open64_2(pathname, flags);
 }
+#pragma GCC diagnostic pop
 #endif
 
 #ifdef HAVE_OPENAT
@@ -296,6 +302,8 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
     return _openat(dirfd, pathname, flags, mode);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
 int __openat_2(int dirfd, const char *pathname, int flags) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat_2(%s)\n", pathname?pathname:"NULL");
@@ -308,6 +316,7 @@ int __openat_2(int dirfd, const char *pathname, int flags) {
     MANGLE_PATH(pathname);
     return ___openat_2(dirfd, pathname, flags);
 }
+#pragma GCC diagnostic pop
 
 #ifdef HAVE_OPEN64
 int openat64(int dirfd, const char *pathname, int flags, ...) {
@@ -334,6 +343,8 @@ int openat64(int dirfd, const char *pathname, int flags, ...) {
     return _openat64(dirfd, pathname, flags, mode);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
 int __openat64_2(int dirfd, const char *pathname, int flags) {
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat64_2(%s)\n", pathname?pathname:"NULL");
@@ -346,6 +357,7 @@ int __openat64_2(int dirfd, const char *pathname, int flags) {
     MANGLE_PATH(pathname);
     return ___openat64_2(dirfd, pathname, flags);
 }
+#pragma GCC diagnostic pop
 #endif
 #endif
 

@@ -182,6 +182,8 @@ int open(const char *filename, int flags, ...) {
     return _open(filename, flags, mode);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
 int __open_2(const char *filename, int flags) {
     int ret;
 
@@ -199,6 +201,7 @@ int __open_2(const char *filename, int flags) {
 
     return ___open_2(filename, flags);
 }
+#pragma GCC diagnostic pop
 
 #ifdef HAVE_OPENAT
 
@@ -231,6 +234,8 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
     return _openat(dirfd, pathname, flags, mode);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
 int __openat_2(int dirfd, const char *pathname, int flags) {
     int ret;
 
@@ -248,6 +253,7 @@ int __openat_2(int dirfd, const char *pathname, int flags) {
 
     return ___openat_2(dirfd, pathname, flags);
 }
+#pragma GCC diagnostic pop
 
 #endif
 
@@ -326,6 +332,8 @@ int open64(const char *filename, int flags, ...) {
     return _open64(filename, flags, mode);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
 int __open64_2(const char *filename, int flags) {
     int ret;
 
@@ -343,6 +351,7 @@ int __open64_2(const char *filename, int flags) {
 
     return ___open64_2(filename, flags);
 }
+#pragma GCC diagnostic pop
 
 #ifdef HAVE_OPENAT
 
@@ -375,6 +384,8 @@ int openat64(int dirfd, const char *pathname, int flags, ...) {
     return _openat64(dirfd, pathname, flags, mode);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
 int __openat64_2(int dirfd, const char *pathname, int flags) {
     int ret;
 
@@ -392,6 +403,7 @@ int __openat64_2(int dirfd, const char *pathname, int flags) {
 
     return ___openat64_2(dirfd, pathname, flags);
 }
+#pragma GCC diagnostic pop
 
 #endif
 
