@@ -10,6 +10,8 @@
 #define _LARGEFILE64_SOURCE 1
 #endif
 
+#define DEBUG_ENV "NOLINK_DEBUG"
+#include "debug.h"
 #include "config.h"
 
 #include <errno.h>
@@ -17,12 +19,16 @@
 #include <unistd.h>
 
 int link(const char *oldpath, const char *newpath) {
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": link(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+
     errno = ENOTSUP;
     return -1;
 }
 
 int linkat(int olddirfd, const char *oldpath,
            int newdirfd, const char *newpath, int flags) {
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": linkat(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+
     errno = ENOTSUP;
     return -1;
 }
