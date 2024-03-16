@@ -1,6 +1,7 @@
 a.out
 rootlink.so
 noxattrs.so
+nolink.so
 procfs.so
 sigsys2enosys.so
 print
