@@ -118,74 +118,30 @@ static int strcmp_prefix(const char *a, const char *b) {
     return strncmp(a, b, strlen(b));
 }
 
-static int mkpath(char* file_path, mode_t mode) {
-    for (char* p = strchr(file_path + 1, '/'); p; p = strchr(p + 1, '/')) {
-        *p = '\0';
-        if (mkdir(file_path, mode) == -1) {
-            if (errno != EEXIST) {
-                *p = '/';
-                return -1;
-            }
-        }
-        *p = '/';
-    }
-    return 0;
-}
-
-static int mkfakelink(char *linkpath, size_t linkpath_len, const char *path) {
-    int ret;
-    size_t len;
-
-    len = concat(linkpath, linkpath_len, PREFIX "/tmp/rootlink", path);
-    if (len > linkpath_len) {
-        errno = ENAMETOOLONG;
-        return -1;
-    }
-
-    ret = faccessat(-1, linkpath, F_OK, AT_SYMLINK_NOFOLLOW);
-    if (ret == 0) {
-        return 0;
-    }
-
-    ret = mkpath(linkpath, 0777);
-    if (ret < 0) {
-        return -1;
-    }
-
-    char target[linkpath_len];
-    len = concat(target, linkpath_len, PREFIX, path);
-    if (len > linkpath_len) {
-        errno = ENAMETOOLONG;
-        return -1;
-    }
-
-    ret = symlink(target, linkpath);
-    if (ret < 0) {
-        return -1;
-    }
-
-    return 0;
-}
-
 static int handle_path(const char *path) {
-    // Android does have /bin/sh
-    return !strcmp(path, "/bin/bash") || !strcmp(path, "/usr/bin/env") ||
-            !strcmp(path, "/bin/pwd") || !strcmp(path, "/bin/ln") ||
-            !strcmp_prefix(path, "/usr/include");
+    return !strcmp_prefix(path, "/usr") || !strcmp_prefix(path, "/bin");
 }
 
 static int mangle_path(char *out, size_t out_len, const char *path) {
+    size_t len;
+
     if (!handle_path(path)) {
-        size_t path_len = strlen(path);
-        if (path_len +1 > out_len) {
+        len = strlen(path);
+        if (len +1 > out_len) {
             errno = ENAMETOOLONG;
             return -1;
         }
-        memcpy(out, path, path_len +1);
+        memcpy(out, path, len +1);
         return 0;
     }
 
-    return mkfakelink(out, out_len, path);
+    len = concat(out, out_len, PREFIX "/tmp/rootlink", path);
+    if (len > out_len) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    return 0;
 }
 
 #define MANGLE_PATH(__path) \
