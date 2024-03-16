@@ -41,6 +41,7 @@
 #include "parent_close.h"
 #include "parent_stat.h"
 #include "parent_exec.h"
+#include "parent_glob.h"
 
 #include <string.h>
 #include <unistd.h>
@@ -1124,4 +1125,14 @@ int system(const char* command) {
 
     load_system_func();
     return _system(command);
+}
+
+int glob(const char *restrict pattern, int flags,
+         int (*errfunc)(const char *epath, int eerrno),
+         glob_t *restrict pglob) {
+
+    debug(DEBUG_LEVEL_VERBOSE, __FILE__": glob(%s)\n", pattern?pattern:"NULL");
+
+    load_glob_func();
+    return _glob(pattern, flags, errfunc, pglob);
 }
