@@ -1,4 +1,5 @@
 a.out
+intercept_glibc.so
 rootlink.so
 noxattrs.so
 nolink.so
@@ -7,3 +8,4 @@ sigsys2enosys.so
 print
 confstr
 test.sh
+rootlink.*

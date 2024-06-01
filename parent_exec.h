@@ -19,3 +19,11 @@ def_parent(int, posix_spawnp, pid_t *restrict pid, const char *restrict file,
                        char *const envp[restrict])
 
 def_parent(int, system, const char *)
+
+static void parent_exec_load() {
+	load_execve_func();
+	load_execveat_func();
+	load_posix_spawn_func();
+	load_posix_spawnp_func();
+	load_system_func();
+}

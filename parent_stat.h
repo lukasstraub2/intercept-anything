@@ -2,6 +2,7 @@
 
 #include "parent.h"
 
+#include <string.h>
 #include <sys/stat.h>
 
 def_parent(int, stat, const char *, struct stat *)
@@ -42,9 +43,6 @@ def_parent(ssize_t, readlinkat, int dirfd, const char *restrict pathname,
 
 def_parent(char *, realpath, const char *restrict path,
                               char *restrict resolved_path)
-#ifdef _GNU_SOURCE
-def_parent(char *, canonicalize_file_name, const char *path)
-#endif
 
 def_parent(int, access, const char *, int)
 def_parent(int, faccessat, int dirfd, const char *pathname, int mode, int flags)
@@ -52,3 +50,22 @@ def_parent(int, faccessat, int dirfd, const char *pathname, int mode, int flags)
 def_parent(int, euidaccess, const char *pathname, int mode)
 def_parent(int, eaccess, const char *pathname, int mode)
 #endif
+
+static void parent_stat_load() {
+	load_stat_func();
+	load_stat64_func();
+	load___xstat_func();
+	load___xstat64_func();
+	load_statx_func();
+	load_lstat_func();
+	load_lstat64_func();
+	load_fstatat_func();
+	load_fstatat64_func();
+	load_readlink_func();
+	load_readlinkat_func();
+	load_realpath_func();
+	load_access_func();
+	load_faccessat_func();
+	load_euidaccess_func();
+	load_eaccess_func();
+}

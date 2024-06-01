@@ -1,7 +1,11 @@
 #pragma once
 
 #include "parent.h"
+
 #include <dirent.h>
+#include <sys/types.h>
+#include <string.h>
+#include <stdio.h>
 
 /* make sure gcc doesn't redefine open and friends as macros */
 #undef open
@@ -31,3 +35,17 @@ def_parent(FILE*, fopen64, const char *path, const char *mode)
 #endif
 
 def_parent(DIR *, opendir, const char *)
+
+static void parent_open_load() {
+	load_open_func();
+	load___open_2_func();
+	load_open64_func();
+	load___open64_2_func();
+	load_openat_func();
+	load___openat_2_func();
+	load_openat64_func();
+	load___openat64_2_func();
+	load_fopen_func();
+	load_fopen64_func();
+	load_opendir_func();
+}
