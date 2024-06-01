@@ -20,6 +20,7 @@
 #include <stdarg.h>
 
 #include <fcntl.h>
+#include <sys/xattr.h>
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "config.h"
@@ -255,6 +256,47 @@ struct CallUnlink {
 	RetInt *ret;
 };
 
+typedef enum XattrType XattrType;
+enum XattrType {
+	XATTRTYPE_PLAIN,
+	XATTRTYPE_L,
+	XATTRTYPE_F
+};
+
+typedef struct CallListXattr CallListXattr;
+struct CallListXattr {
+	XattrType type;
+	int fd;
+	const char *path;
+	char *list;
+	long size;
+	RetSSize *ret;
+};
+_Static_assert(sizeof(size_t) == sizeof(long), "sizeof(size_t)");
+
+typedef struct CallSetXattr CallSetXattr;
+struct CallSetXattr {
+	XattrType type;
+	int fd;
+	const char *path;
+	const char *name;
+	const void *value;
+	long size;
+	int flags;
+	RetInt *ret;
+};
+
+typedef struct CallGetXattr CallGetXattr;
+struct CallGetXattr {
+	XattrType type;
+	int fd;
+	const char *path;
+	const char *name;
+	void *value;
+	long size;
+	RetSSize *ret;
+};
+
 typedef struct CallHandler CallHandler;
 struct CallHandler {
 	int (*open)(Context *ctx, const CallHandler *this, CallOpen *call);
@@ -268,6 +310,9 @@ struct CallHandler {
 	int (*link)(Context *ctx, const CallHandler *this, CallLink *call);
 	int (*symlink)(Context *ctx, const CallHandler *this, CallLink *call);
 	int (*unlink)(Context *ctx, const CallHandler *this, CallUnlink *call);
+	signed long (*listxattr)(Context *ctx, const CallHandler *this, CallListXattr *call);
+	int (*setxattr)(Context *ctx, const CallHandler *this, CallSetXattr *call);
+	signed long (*getxattr)(Context *ctx, const CallHandler *this, CallGetXattr *call);
 };
 
 static int initialized = 0;
@@ -278,6 +323,8 @@ static void init() {
 		return;
 	}
 	initialized = 1;
+
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": init()\n");
 
 	parent_close_load();
 	parent_exec_load();
@@ -549,6 +596,58 @@ int __openat64_2(int dirfd, const char *pathname, int flags) {
 }
 #pragma GCC diagnostic pop
 #endif
+#endif
+
+__attribute__((visibility("default")))
+int creat(const char *pathname, mode_t mode) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": creat(%s)\n", pathname?pathname:"NULL");
+
+	if (!pathname) {
+		return _open(pathname, O_CREAT | O_WRONLY | O_TRUNC, mode);
+	}
+
+	const CallHandler *next = chain();
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallOpen call = {
+		.type = OPENTYPE_PLAIN,
+		.path = pathname,
+		.flags = O_CREAT | O_WRONLY | O_TRUNC,
+		.mode = mode,
+		.ret = &ret
+	};
+	next->open(&ctx, next, &call);
+	errno = call.ret->_errno;
+	return call.ret->ret;
+}
+
+#ifdef HAVE_OPEN64
+__attribute__((visibility("default")))
+int creat64(const char *pathname, mode_t mode) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": creat64(%s)\n", pathname?pathname:"NULL");
+
+	if (!pathname) {
+		return _open64(pathname, O_CREAT | O_WRONLY | O_TRUNC, mode);
+	}
+
+	const CallHandler *next = chain();
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallOpen call = {
+		.type = OPENTYPE_64,
+		.path = pathname,
+		.flags = O_CREAT | O_WRONLY | O_TRUNC,
+		.mode = mode,
+		.ret = &ret
+	};
+	next->open(&ctx, next, &call);
+	errno = call.ret->_errno;
+	return call.ret->ret;
+}
 #endif
 
 __attribute__((visibility("default")))
@@ -1804,6 +1903,255 @@ int unlinkat(int dirfd, const char *pathname, int flags) {
 	return ret.ret;
 }
 
+__attribute__((visibility("default")))
+ssize_t listxattr(const char *pathname, char *list, size_t size) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": listxattr(%s)\n", pathname?pathname:"NULL");
+
+	if (!pathname) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	const CallHandler *next = chain();
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallListXattr call = {
+		.type = XATTRTYPE_PLAIN,
+		.path = pathname,
+		.list = list,
+		.size = size,
+		.ret = &ret
+	};
+	next->listxattr(&ctx, next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+__attribute__((visibility("default")))
+ssize_t llistxattr(const char *pathname, char *list, size_t size) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": llistxattr(%s)\n", pathname?pathname:"NULL");
+
+	if (!pathname) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	const CallHandler *next = chain();
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallListXattr call = {
+		.type = XATTRTYPE_L,
+		.path = pathname,
+		.list = list,
+		.size = size,
+		.ret = &ret
+	};
+	next->listxattr(&ctx, next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+__attribute__((visibility("default")))
+ssize_t flistxattr(int fd, char *list, size_t size) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": flistxattr(%d)\n", fd);
+
+	if (fd < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	const CallHandler *next = chain();
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallListXattr call = {
+		.type = XATTRTYPE_F,
+		.fd = fd,
+		.list = list,
+		.size = size,
+		.ret = &ret
+	};
+	next->listxattr(&ctx, next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+__attribute__((visibility("default")))
+int setxattr(const char *pathname, const char *name,
+			 const void *value, size_t size, int flags) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": setxattr(%s)\n", pathname?pathname:"NULL");
+
+	if (!pathname) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	const CallHandler *next = chain();
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallSetXattr call = {
+		.type = XATTRTYPE_PLAIN,
+		.path = pathname,
+		.name = name,
+		.value = value,
+		.size = size,
+		.flags = flags,
+		.ret = &ret
+	};
+	next->setxattr(&ctx, next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+__attribute__((visibility("default")))
+int lsetxattr(const char *pathname, const char *name,
+			  const void *value, size_t size, int flags) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": lsetxattr(%s)\n", pathname?pathname:"NULL");
+
+	if (!pathname) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	const CallHandler *next = chain();
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallSetXattr call = {
+		.type = XATTRTYPE_L,
+		.path = pathname,
+		.name = name,
+		.value = value,
+		.size = size,
+		.flags = flags,
+		.ret = &ret
+	};
+	next->setxattr(&ctx, next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+__attribute__((visibility("default")))
+int fsetxattr(int fd, const char *name,
+			  const void *value, size_t size, int flags) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": fsetxattr(%d)\n", fd);
+
+	if (fd < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	const CallHandler *next = chain();
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallSetXattr call = {
+		.type = XATTRTYPE_F,
+		.fd = fd,
+		.name = name,
+		.value = value,
+		.size = size,
+		.flags = flags,
+		.ret = &ret
+	};
+	next->setxattr(&ctx, next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+__attribute__((visibility("default")))
+ssize_t getxattr(const char *pathname, const char *name,
+				 void *value, size_t size) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": getxattr(%s)\n", pathname?pathname:"NULL");
+
+	if (!pathname) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	const CallHandler *next = chain();
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallGetXattr call = {
+		.type = XATTRTYPE_PLAIN,
+		.path = pathname,
+		.name = name,
+		.value = value,
+		.size = size,
+		.ret = &ret
+	};
+	next->getxattr(&ctx, next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+__attribute__((visibility("default")))
+ssize_t lgetxattr(const char *pathname, const char *name,
+				  void *value, size_t size) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": lgetxattr(%s)\n", pathname?pathname:"NULL");
+
+	if (!pathname) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	const CallHandler *next = chain();
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallGetXattr call = {
+		.type = XATTRTYPE_L,
+		.path = pathname,
+		.name = name,
+		.value = value,
+		.size = size,
+		.ret = &ret
+	};
+	next->getxattr(&ctx, next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+__attribute__((visibility("default")))
+ssize_t fgetxattr(int fd, const char *name,
+				  void *value, size_t size) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": fgetxattr(%d)\n", fd);
+
+	if (fd < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	const CallHandler *next = chain();
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallGetXattr call = {
+		.type = XATTRTYPE_F,
+		.fd = fd,
+		.name = name,
+		.value = value,
+		.size = size,
+		.ret = &ret
+	};
+	next->getxattr(&ctx, next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
 static int bottom_open(Context *ctx, const CallHandler *this, CallOpen *call) {
 	int ret;
 
@@ -2178,6 +2526,27 @@ static int bottom_unlink(Context *ctx, const CallHandler *this, CallUnlink *call
 	return ret;
 }
 
+static signed long bottom_listxattr(Context *ctx, const CallHandler *this,
+									CallListXattr *call) {
+	call->ret->_errno = ENOTSUP;
+	call->ret->ret = -1;
+	return -1;
+}
+
+static int bottom_setxattr(Context *ctx, const CallHandler *this,
+						   CallSetXattr *call) {
+	call->ret->_errno = ENOTSUP;
+	call->ret->ret = -1;
+	return -1;
+}
+
+static signed long bottom_getxattr(Context *ctx, const CallHandler *this,
+								   CallGetXattr *call) {
+	call->ret->_errno = ENOTSUP;
+	call->ret->ret = -1;
+	return -1;
+}
+
 static const CallHandler *chain() {
 	static const CallHandler next = {
 		bottom_open,
@@ -2190,7 +2559,10 @@ static const CallHandler *chain() {
 		bottom_realpath,
 		bottom_link,
 		bottom_symlink,
-		bottom_unlink
+		bottom_unlink,
+		bottom_listxattr,
+		bottom_setxattr,
+		bottom_getxattr
 	};
 	return &next;
 }
