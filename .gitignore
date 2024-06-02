@@ -1,4 +1,5 @@
 a.out
+main.so
 intercept_glibc.so
 rootlink.so
 noxattrs.so

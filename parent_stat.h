@@ -51,6 +51,7 @@ def_parent(int, euidaccess, const char *pathname, int mode)
 def_parent(int, eaccess, const char *pathname, int mode)
 #endif
 
+#ifdef _INTERCEPT_GLIBC
 static void parent_stat_load() {
 	load_stat_func();
 	load_stat64_func();
@@ -69,3 +70,4 @@ static void parent_stat_load() {
 	load_euidaccess_func();
 	load_eaccess_func();
 }
+#endif

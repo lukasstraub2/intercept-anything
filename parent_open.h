@@ -36,6 +36,7 @@ def_parent(FILE*, fopen64, const char *path, const char *mode)
 
 def_parent(DIR *, opendir, const char *)
 
+#ifdef _INTERCEPT_GLIBC
 static void parent_open_load() {
 	load_open_func();
 	load___open_2_func();
@@ -49,3 +50,4 @@ static void parent_open_load() {
 	load_fopen64_func();
 	load_opendir_func();
 }
+#endif

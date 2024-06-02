@@ -11,10 +11,19 @@ static inline fnptr dlsym_fn(void *handle, const char *symbol) {
 
 #define _quote(arg) #arg
 
+#ifdef _INTERCEPT_GLIBC
+
 #define def_parent(RET, FUNC, ...) \
 typedef RET (*_ ## FUNC ## _t)(__VA_ARGS__); \
-static _ ## FUNC ## _t _ ## FUNC = NULL; \
+_ ## FUNC ## _t _ ## FUNC = NULL; \
 static void load_ ## FUNC ## _func() { \
     if (!_ ## FUNC) \
         _ ## FUNC = (_ ## FUNC ## _t) dlsym_fn(RTLD_NEXT, _quote(FUNC)); \
 }
+#else
+
+#define def_parent(RET, FUNC, ...) \
+typedef RET (*_ ## FUNC ## _t)(__VA_ARGS__); \
+extern _ ## FUNC ## _t _ ## FUNC;
+
+#endif

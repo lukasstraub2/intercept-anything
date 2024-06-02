@@ -23,6 +23,7 @@ def_parent(ssize_t, lgetxattr, const char *path, const char *name,
 def_parent(ssize_t, fgetxattr, int fd, const char *name,
 		   void *value, size_t size);
 
+#ifdef _INTERCEPT_GLIBC
 static void parent_xattr_load() {
 	load_listxattr_func();
 	load_llistxattr_func();
@@ -34,3 +35,4 @@ static void parent_xattr_load() {
 	load_lgetxattr_func();
 	load_fgetxattr_func();
 }
+#endif

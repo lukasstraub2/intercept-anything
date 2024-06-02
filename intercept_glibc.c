@@ -25,6 +25,8 @@
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "config.h"
 #include "debug.h"
+
+#define _INTERCEPT_GLIBC
 #include "parent_open.h"
 #include "parent_close.h"
 #include "parent_stat.h"
@@ -33,6 +35,8 @@
 #include "parent_link.h"
 #include "parent_xattr.h"
 
+#include "intercept.h"
+
 #ifdef O_TMPFILE
 #define OPEN_NEEDS_MODE(oflag) \
   (((oflag) & O_CREAT) != 0 || ((oflag) & O_TMPFILE) == O_TMPFILE)
@@ -40,286 +44,13 @@
 #define OPEN_NEEDS_MODE(oflag) (((oflag) & O_CREAT) != 0)
 #endif
 
-#define SCRATCH_SIZE (64*1024)
-
-typedef struct Context Context;
-struct Context {
-	char scratch[SCRATCH_SIZE];
-};
-
-typedef struct RetInt RetInt;
-struct RetInt {
-	int ret;
-	int _errno;
-};
-
-typedef enum OpenType OpenType;
-enum OpenType {
-	OPENTYPE_PLAIN = 0,
-	OPENTYPE_64,
-	OPENTYPE_2,
-	OPENTYPE_64_2,
-	OPENTYPE_AT,
-	OPENTYPE_AT_64,
-	OPENTYPE_AT_2,
-	OPENTYPE_AT_64_2
-};
-
-enum OpenTypeBit {
-	OPENTYPE_BIT_64 = (1 << 0),
-	OPENTYPE_BIT_2 = (1 << 1),
-	OPENTYPE_BIT_AT = (1 << 2)
-};
-static int opentype_is_at(OpenType type) {
-	return type & OPENTYPE_BIT_AT;
-}
-
-typedef struct CallOpen CallOpen;
-struct CallOpen {
-	OpenType type;
-	int dirfd;
-	const char *path;
-	int flags;
-	unsigned int mode;
-	RetInt *ret;
-};
-_Static_assert(sizeof(mode_t) == sizeof(unsigned int), "sizeof(mode_t)");
-
-typedef struct RetPtr RetPtr;
-struct RetPtr {
-	void *ret;
-	int _errno;
-};
-
-typedef struct CallFOpen CallFOpen;
-struct CallFOpen {
-	int fopen64;
-	const char *path;
-	const char *mode;
-	RetPtr *ret;
-};
-
-typedef struct CallOpendir CallOpendir;
-struct CallOpendir {
-	const char *path;
-	RetPtr *ret;
-};
-
-typedef enum StatType StatType;
-enum StatType {
-	STATTYPE_PLAIN = 0,
-	STATTYPE_64,
-	STATTYPE___X,
-	STATTYPE___X_64,
-	STATTYPE_L,
-	STATTYPE_L_64,
-	STATTYPE_AT,
-	STATTYPE_AT_64,
-
-	STATTYPE_X = 9
-};
-static int stattype_is_at(StatType type) {
-	return type >= STATTYPE_AT;
-}
-
-typedef struct CallStat CallStat;
-struct CallStat {
-	StatType type;
-	int ver;
-	int dirfd;
-	const char *path;
-	int flags;
-	unsigned int mask;
-	void *statbuf;
-	RetInt *ret;
-};
-
-typedef struct RetSSize RetSSize;
-struct RetSSize {
-	signed long ret;
-	int _errno;
-};
-
-typedef struct CallReadlink CallReadlink;
-struct CallReadlink {
-	int at;
-	int dirfd;
-	const char *path;
-	char *buf;
-	long bufsiz;
-	RetSSize *ret;
-};
-_Static_assert(sizeof(ssize_t) == sizeof(signed long), "sizeof(ssize_t)");
-_Static_assert(sizeof(size_t) == sizeof(long), "sizeof(size_t)");
-
-typedef enum AccessType AccessType;
-enum AccessType {
-	ACCESSTYPE_PLAIN,
-	ACCESSTYPE_AT,
-	ACCESSTYPE_EUID,
-	ACCESSTYPE_E
-};
-static int accesstype_is_at(AccessType type) {
-	return type == ACCESSTYPE_AT;
-}
-
-typedef struct CallAccess CallAccess;
-struct CallAccess {
-	AccessType type;
-	int dirfd;
-	const char *path;
-	int mode;
-	int flags;
-	RetInt *ret;
-};
-
-typedef enum ExecType ExecType;
-enum ExecType {
-	EXECTYPE_EXECVE,
-	EXECTYPE_EXECVE_AT,
-	EXECTYPE_POSIX_SPAWN
-};
-static int exectype_is_at(ExecType type) {
-	return type == EXECTYPE_EXECVE_AT;
-}
-
-typedef struct CallExec CallExec;
-struct CallExec {
-	ExecType type;
-	int final;
-	union {
-		struct {
-			int dirfd;
-			int flags;
-		};
-		struct {
-			pid_t *pid;
-			const posix_spawn_file_actions_t *file_actions;
-			const posix_spawnattr_t *attrp;
-		};
-	};
-	const char *path;
-	char *const *argv;
-	char *const *envp;
-	RetInt *ret;
-};
-
-static void callexec_copy(CallExec *dst, const CallExec *call) {
-	dst->type = call->type;
-	dst->final = call->final;
-
-	switch (call->type) {
-		case EXECTYPE_EXECVE:
-		break;
-
-		case EXECTYPE_EXECVE_AT:
-			dst->dirfd = call->dirfd;
-			dst->flags = call->flags;
-		break;
-
-		case EXECTYPE_POSIX_SPAWN:
-			dst->pid = call->pid;
-			dst->file_actions = call->file_actions;
-			dst->attrp = call->attrp;
-		break;
-	}
-
-	dst->path = call->path;
-	dst->argv = call->argv;
-	dst->envp = call->envp;
-	dst->ret = call->ret;
-}
-
-typedef struct CallRealpath CallRealpath;
-struct CallRealpath {
-	const char *path;
-	char *out;
-	RetPtr *ret;
-};
-
-typedef struct CallLink CallLink;
-struct CallLink {
-	int at;
-	int olddirfd;
-	const char *oldpath;
-	int newdirfd;
-	const char *newpath;
-	int flags;
-	RetInt *ret;
-};
-
-typedef struct CallUnlink CallUnlink;
-struct CallUnlink {
-	int at;
-	int dirfd;
-	const char *path;
-	int flags;
-	RetInt *ret;
-};
-
-typedef enum XattrType XattrType;
-enum XattrType {
-	XATTRTYPE_PLAIN,
-	XATTRTYPE_L,
-	XATTRTYPE_F
-};
-
-typedef struct CallListXattr CallListXattr;
-struct CallListXattr {
-	XattrType type;
-	int fd;
-	const char *path;
-	char *list;
-	long size;
-	RetSSize *ret;
-};
-_Static_assert(sizeof(size_t) == sizeof(long), "sizeof(size_t)");
-
-typedef struct CallSetXattr CallSetXattr;
-struct CallSetXattr {
-	XattrType type;
-	int fd;
-	const char *path;
-	const char *name;
-	const void *value;
-	long size;
-	int flags;
-	RetInt *ret;
-};
-
-typedef struct CallGetXattr CallGetXattr;
-struct CallGetXattr {
-	XattrType type;
-	int fd;
-	const char *path;
-	const char *name;
-	void *value;
-	long size;
-	RetSSize *ret;
-};
-
-typedef struct CallHandler CallHandler;
-struct CallHandler {
-	int (*open)(Context *ctx, const CallHandler *this, CallOpen *call);
-	void *(*fopen)(Context *ctx, const CallHandler *this, CallFOpen *call);
-	void *(*opendir)(Context *ctx, const CallHandler *this, CallOpendir *call);
-	int (*stat)(Context *ctx, const CallHandler *this, CallStat *call);
-	signed long (*readlink)(Context *ctx, const CallHandler *this, CallReadlink *call);
-	int (*access)(Context *ctx, const CallHandler *this, CallAccess *call);
-	int (*exec)(Context *ctx, const CallHandler *this, CallExec *call);
-	void *(*realpath)(Context *ctx, const CallHandler *this, CallRealpath *call);
-	int (*link)(Context *ctx, const CallHandler *this, CallLink *call);
-	int (*symlink)(Context *ctx, const CallHandler *this, CallLink *call);
-	int (*unlink)(Context *ctx, const CallHandler *this, CallUnlink *call);
-	signed long (*listxattr)(Context *ctx, const CallHandler *this, CallListXattr *call);
-	int (*setxattr)(Context *ctx, const CallHandler *this, CallSetXattr *call);
-	signed long (*getxattr)(Context *ctx, const CallHandler *this, CallGetXattr *call);
-};
-
-static int initialized = 0;
+static const CallHandler bottom;
+static const CallHandler *_next = NULL;
 
 __attribute__((constructor))
 static void init() {
+	static int initialized = 0;
+
 	if (initialized) {
 		return;
 	}
@@ -334,10 +65,11 @@ static void init() {
 	parent_stat_load();
 	parent_link_load();
 	parent_xattr_load();
+
+	_next = main_init(&bottom);
 }
 
-static const CallHandler *chain();
-
+_Static_assert(sizeof(mode_t) >= sizeof(int), "sizeof(mode_t)");
 __attribute__((visibility("default")))
 int open(const char *pathname, int flags, ...) {
 	va_list args;
@@ -348,10 +80,7 @@ int open(const char *pathname, int flags, ...) {
 
 	if (OPEN_NEEDS_MODE(flags)) {
 		va_start(args, flags);
-		if (sizeof(mode_t) < sizeof(int))
-			mode = (mode_t) va_arg(args, int);
-		else
-			mode = va_arg(args, mode_t);
+		mode = va_arg(args, mode_t);
 		va_end(args);
 	}
 
@@ -359,7 +88,6 @@ int open(const char *pathname, int flags, ...) {
 		return _open(pathname, flags, mode);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
@@ -369,7 +97,7 @@ int open(const char *pathname, int flags, ...) {
 		.mode = mode,
 		.ret = &ret
 	};
-	next->open(&ctx, next, &call);
+	_next->open(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -386,7 +114,6 @@ int __open_2(const char *pathname, int flags) {
 		return ___open_2(pathname, flags);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
@@ -395,7 +122,7 @@ int __open_2(const char *pathname, int flags) {
 		.flags = flags,
 		.ret = &ret
 	};
-	next->open(&ctx, next, &call);
+	_next->open(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -412,10 +139,7 @@ int open64(const char *pathname, int flags, ...) {
 
 	if (OPEN_NEEDS_MODE(flags)) {
 		va_start(args, flags);
-		if (sizeof(mode_t) < sizeof(int))
-			mode = va_arg(args, int);
-		else
-			mode = va_arg(args, mode_t);
+		mode = va_arg(args, mode_t);
 		va_end(args);
 	}
 
@@ -423,7 +147,6 @@ int open64(const char *pathname, int flags, ...) {
 		return _open64(pathname, flags, mode);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
@@ -433,7 +156,7 @@ int open64(const char *pathname, int flags, ...) {
 		.mode = mode,
 		.ret = &ret
 	};
-	next->open(&ctx, next, &call);
+	_next->open(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -450,7 +173,6 @@ int __open64_2(const char *pathname, int flags) {
 		return ___open64_2(pathname, flags);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
@@ -459,7 +181,7 @@ int __open64_2(const char *pathname, int flags) {
 		.flags = flags,
 		.ret = &ret
 	};
-	next->open(&ctx, next, &call);
+	_next->open(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -477,18 +199,14 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
 
 	if (OPEN_NEEDS_MODE(flags)) {
 		va_start(args, flags);
-		if (sizeof(mode_t) < sizeof(int))
-			mode = (mode_t) va_arg(args, int);
-		else
-			mode = va_arg(args, mode_t);
+		mode = va_arg(args, mode_t);
 		va_end(args);
 	}
 
-	if (!pathname || pathname[0] != '/') {
+	if (!pathname) {
 		return _openat(dirfd, pathname, flags, mode);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
@@ -499,7 +217,7 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
 		.mode = mode,
 		.ret = &ret
 	};
-	next->open(&ctx, next, &call);
+	_next->open(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -512,11 +230,10 @@ int __openat_2(int dirfd, const char *pathname, int flags) {
 	init();
 	debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat_2(%s)\n", pathname?pathname:"NULL");
 
-	if (OPEN_NEEDS_MODE(flags) || !pathname || pathname[0] != '/') {
+	if (OPEN_NEEDS_MODE(flags) || !pathname) {
 		return ___openat_2(dirfd, pathname, flags);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
@@ -526,7 +243,7 @@ int __openat_2(int dirfd, const char *pathname, int flags) {
 		.flags = flags,
 		.ret = &ret
 	};
-	next->open(&ctx, next, &call);
+	_next->open(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -543,18 +260,14 @@ int openat64(int dirfd, const char *pathname, int flags, ...) {
 
 	if (OPEN_NEEDS_MODE(flags)) {
 		va_start(args, flags);
-		if (sizeof(mode_t) < sizeof(int))
-			mode = (mode_t) va_arg(args, int);
-		else
-			mode = va_arg(args, mode_t);
+		mode = va_arg(args, mode_t);
 		va_end(args);
 	}
 
-	if (!pathname || pathname[0] != '/') {
+	if (!pathname) {
 		return _openat64(dirfd, pathname, flags, mode);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
@@ -565,7 +278,7 @@ int openat64(int dirfd, const char *pathname, int flags, ...) {
 		.mode = mode,
 		.ret = &ret
 	};
-	next->open(&ctx, next, &call);
+	_next->open(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -578,11 +291,10 @@ int __openat64_2(int dirfd, const char *pathname, int flags) {
 	init();
 	debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat64_2(%s)\n", pathname?pathname:"NULL");
 
-	if (OPEN_NEEDS_MODE(flags) || !pathname || pathname[0] != '/') {
+	if (OPEN_NEEDS_MODE(flags) || !pathname) {
 		return ___openat64_2(dirfd, pathname, flags);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
@@ -592,7 +304,7 @@ int __openat64_2(int dirfd, const char *pathname, int flags) {
 		.flags = flags,
 		.ret = &ret
 	};
-	next->open(&ctx, next, &call);
+	_next->open(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -610,7 +322,6 @@ int creat(const char *pathname, mode_t mode) {
 		return _open(pathname, O_CREAT | O_WRONLY | O_TRUNC, mode);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
@@ -620,7 +331,7 @@ int creat(const char *pathname, mode_t mode) {
 		.mode = mode,
 		.ret = &ret
 	};
-	next->open(&ctx, next, &call);
+	_next->open(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -636,7 +347,6 @@ int creat64(const char *pathname, mode_t mode) {
 		return _open64(pathname, O_CREAT | O_WRONLY | O_TRUNC, mode);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
@@ -646,7 +356,7 @@ int creat64(const char *pathname, mode_t mode) {
 		.mode = mode,
 		.ret = &ret
 	};
-	next->open(&ctx, next, &call);
+	_next->open(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -662,7 +372,6 @@ FILE* fopen(const char *pathname, const char *mode) {
 		return _fopen(pathname, mode);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetPtr ret = { ._errno = errno };
 	CallFOpen call = {
@@ -671,7 +380,7 @@ FILE* fopen(const char *pathname, const char *mode) {
 		.mode = mode,
 		.ret = &ret
 	};
-	next->fopen(&ctx, next, &call);
+	_next->fopen(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -688,7 +397,6 @@ FILE *fopen64(const char *__restrict pathname, const char *__restrict mode) {
 		return _fopen64(pathname, mode);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetPtr ret = { ._errno = errno };
 	CallFOpen call = {
@@ -697,7 +405,7 @@ FILE *fopen64(const char *__restrict pathname, const char *__restrict mode) {
 		.mode = mode,
 		.ret = &ret
 	};
-	next->fopen(&ctx, next, &call);
+	_next->fopen(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -713,14 +421,13 @@ DIR *opendir(const char *pathname) {
 		return _opendir(pathname);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetPtr ret = { ._errno = errno };
 	CallOpendir call = {
 		.path = pathname,
 		.ret = &ret
 	};
-	next->opendir(&ctx, next, &call);
+	_next->opendir(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -735,7 +442,6 @@ int stat(const char *pathname, struct stat *buf) {
 		return _stat(pathname, buf);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
@@ -744,7 +450,7 @@ int stat(const char *pathname, struct stat *buf) {
 		.statbuf = buf,
 		.ret = &ret
 	};
-	next->stat(&ctx, next, &call);
+	_next->stat(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -765,7 +471,6 @@ int stat64(const char *pathname, struct stat *buf) {
 		return _stat64(pathname, buf);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
@@ -774,7 +479,7 @@ int stat64(const char *pathname, struct stat *buf) {
 		.statbuf = buf,
 		.ret = &ret
 	};
-	next->stat(&ctx, next, &call);
+	_next->stat(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -794,7 +499,6 @@ int __xstat(int ver, const char *pathname, struct stat *buf) {
 		return ___xstat(ver, pathname, buf);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
@@ -804,7 +508,7 @@ int __xstat(int ver, const char *pathname, struct stat *buf) {
 		.statbuf = buf,
 		.ret = &ret
 	};
-	next->stat(&ctx, next, &call);
+	_next->stat(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -820,7 +524,6 @@ int __xstat64(int ver, const char *pathname, struct stat64 *buf) {
 		return ___xstat64(ver, pathname, buf);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
@@ -830,7 +533,7 @@ int __xstat64(int ver, const char *pathname, struct stat64 *buf) {
 		.statbuf = buf,
 		.ret = &ret
 	};
-	next->stat(&ctx, next, &call);
+	_next->stat(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -849,7 +552,6 @@ int lstat(const char *restrict pathname, struct stat *restrict statbuf) {
 		return _lstat(pathname, statbuf);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
@@ -858,7 +560,7 @@ int lstat(const char *restrict pathname, struct stat *restrict statbuf) {
 		.statbuf = statbuf,
 		.ret = &ret
 	};
-	next->stat(&ctx, next, &call);
+	_next->stat(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -874,7 +576,6 @@ int lstat64(const char *restrict pathname, struct stat64 *restrict statbuf) {
 		return _lstat64(pathname, statbuf);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
@@ -883,7 +584,7 @@ int lstat64(const char *restrict pathname, struct stat64 *restrict statbuf) {
 		.statbuf = statbuf,
 		.ret = &ret
 	};
-	next->stat(&ctx, next, &call);
+	_next->stat(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -896,11 +597,10 @@ int fstatat(int dirfd, const char *restrict pathname,
 	init();
 	debug(DEBUG_LEVEL_VERBOSE, __FILE__": fstatat(%s)\n", pathname?pathname:"NULL");
 
-	if (!pathname || pathname[0] != '/') {
+	if (!pathname) {
 		return _fstatat(dirfd, pathname, statbuf, flags);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
@@ -911,7 +611,7 @@ int fstatat(int dirfd, const char *restrict pathname,
 		.flags = flags,
 		.ret = &ret
 	};
-	next->stat(&ctx, next, &call);
+	_next->stat(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -924,11 +624,10 @@ int fstatat64(int dirfd, const char *restrict pathname,
 	init();
 	debug(DEBUG_LEVEL_VERBOSE, __FILE__": fstatat64(%s)\n", pathname?pathname:"NULL");
 
-	if (!pathname || pathname[0] != '/') {
+	if (!pathname) {
 		return _fstatat64(dirfd, pathname, statbuf, flags);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
@@ -939,7 +638,7 @@ int fstatat64(int dirfd, const char *restrict pathname,
 		.flags = flags,
 		.ret = &ret
 	};
-	next->stat(&ctx, next, &call);
+	_next->stat(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -953,11 +652,10 @@ int statx(int dirfd, const char *restrict pathname, int flags,
 	init();
 	debug(DEBUG_LEVEL_VERBOSE, __FILE__": statx(%s)\n", pathname?pathname:"NULL");
 
-	if (!pathname || pathname[0] != '/') {
+	if (!pathname) {
 		return _statx(dirfd, pathname, flags, mask, statxbuf);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
@@ -969,7 +667,7 @@ int statx(int dirfd, const char *restrict pathname, int flags,
 		.statbuf = statxbuf,
 		.ret = &ret
 	};
-	next->stat(&ctx, next, &call);
+	_next->stat(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -986,7 +684,6 @@ ssize_t readlink(const char *restrict pathname,
 		return _readlink(pathname, buf, bufsiz);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetSSize ret = { ._errno = errno };
 	CallReadlink call = {
@@ -996,7 +693,7 @@ ssize_t readlink(const char *restrict pathname,
 		.bufsiz = bufsiz,
 		.ret = &ret
 	};
-	next->readlink(&ctx, next, &call);
+	_next->readlink(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -1008,11 +705,10 @@ ssize_t readlinkat(int dirfd, const char *restrict pathname,
 	init();
 	debug(DEBUG_LEVEL_VERBOSE, __FILE__": readlinkat(%s)\n", pathname?pathname:"NULL");
 
-	if (!pathname || pathname[0] != '/') {
+	if (!pathname) {
 		return _readlinkat(dirfd, pathname, buf, bufsiz);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetSSize ret = { ._errno = errno };
 	CallReadlink call = {
@@ -1023,7 +719,7 @@ ssize_t readlinkat(int dirfd, const char *restrict pathname,
 		.bufsiz = bufsiz,
 		.ret = &ret
 	};
-	next->readlink(&ctx, next, &call);
+	_next->readlink(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -1038,7 +734,6 @@ int access(const char *pathname, int mode) {
 		return _access(pathname, mode);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallAccess call = {
@@ -1047,7 +742,7 @@ int access(const char *pathname, int mode) {
 		.mode = mode,
 		.ret = &ret
 	};
-	next->access(&ctx, next, &call);
+	_next->access(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -1058,11 +753,10 @@ int faccessat(int dirfd, const char *pathname, int mode, int flags) {
 	init();
 	debug(DEBUG_LEVEL_VERBOSE, __FILE__": faccessat(%s)\n", pathname?pathname:"NULL");
 
-	if (!pathname || pathname[0] != '/') {
+	if (!pathname) {
 		return _faccessat(dirfd, pathname, mode, flags);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallAccess call = {
@@ -1073,7 +767,7 @@ int faccessat(int dirfd, const char *pathname, int mode, int flags) {
 		.flags = flags,
 		.ret = &ret
 	};
-	next->access(&ctx, next, &call);
+	_next->access(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -1089,7 +783,6 @@ int euidaccess(const char *pathname, int mode) {
 		return _euidaccess(pathname, mode);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallAccess call = {
@@ -1098,7 +791,7 @@ int euidaccess(const char *pathname, int mode) {
 		.mode = mode,
 		.ret = &ret
 	};
-	next->access(&ctx, next, &call);
+	_next->access(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -1113,7 +806,6 @@ int eaccess(const char *pathname, int mode) {
 		return _eaccess(pathname, mode);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallAccess call = {
@@ -1122,7 +814,7 @@ int eaccess(const char *pathname, int mode) {
 		.mode = mode,
 		.ret = &ret
 	};
-	next->access(&ctx, next, &call);
+	_next->access(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -1256,7 +948,6 @@ static int handle_execve(const char *pathname, char *const argv[],
 		return _execve(pathname, argv, envp);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallExec call = {
@@ -1267,7 +958,7 @@ static int handle_execve(const char *pathname, char *const argv[],
 		.envp = envp,
 		.ret = &ret
 	};
-	next->exec(&ctx, next, &call);
+	_next->exec(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -1275,11 +966,10 @@ static int handle_execve(const char *pathname, char *const argv[],
 static int handle_execveat(int dirfd, const char *pathname, char *const argv[],
 						   char *const envp[], int flags) {
 
-	if (!pathname || pathname[0] != '/') {
+	if (!pathname) {
 		return _execveat(dirfd, pathname, argv, envp, flags);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallExec call = {
@@ -1292,7 +982,7 @@ static int handle_execveat(int dirfd, const char *pathname, char *const argv[],
 		.flags = flags,
 		.ret = &ret
 	};
-	next->exec(&ctx, next, &call);
+	_next->exec(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -1472,7 +1162,6 @@ static int handle_execvpe(const char *pathname, char *const argv[],
 		return _execve(pathname, argv, envp);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallExec call = {
@@ -1483,7 +1172,7 @@ static int handle_execvpe(const char *pathname, char *const argv[],
 		.envp = envp,
 		.ret = &ret
 	};
-	handle_exec_p(&ctx, next, &call);
+	handle_exec_p(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -1641,7 +1330,6 @@ int posix_spawn(pid_t *restrict pid, const char *restrict pathname,
 		return _posix_spawn(pid, pathname, file_actions, attrp, argv, envp);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallExec call = {
@@ -1655,7 +1343,7 @@ int posix_spawn(pid_t *restrict pid, const char *restrict pathname,
 		.envp = envp,
 		.ret = &ret
 	};
-	next->exec(&ctx, next, &call);
+	_next->exec(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -1674,7 +1362,6 @@ int posix_spawnp(pid_t *restrict pid, const char *restrict filename,
 		return _posix_spawnp(pid, filename, file_actions, attrp, argv, envp);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallExec call = {
@@ -1688,7 +1375,7 @@ int posix_spawnp(pid_t *restrict pid, const char *restrict filename,
 		.envp = envp,
 		.ret = &ret
 	};
-	handle_exec_p(&ctx, next, &call);
+	handle_exec_p(&ctx, _next, &call);
 	errno = call.ret->_errno;
 	return call.ret->ret;
 }
@@ -1712,7 +1399,6 @@ char *realpath(const char *restrict pathname, char *restrict resolved_path) {
 		return _realpath(pathname, resolved_path);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetPtr ret = { ._errno = errno };
 	CallRealpath call = {
@@ -1720,7 +1406,7 @@ char *realpath(const char *restrict pathname, char *restrict resolved_path) {
 		.out = resolved_path,
 		.ret = &ret
 	};
-	next->realpath(&ctx, next, &call);
+	_next->realpath(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -1736,7 +1422,6 @@ char *canonicalize_file_name(const char *pathname) {
 		return _realpath(pathname, NULL);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetPtr ret = { ._errno = errno };
 	CallRealpath call = {
@@ -1744,7 +1429,7 @@ char *canonicalize_file_name(const char *pathname) {
 		.out = NULL,
 		.ret = &ret
 	};
-	next->realpath(&ctx, next, &call);
+	_next->realpath(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -1771,7 +1456,6 @@ int link(const char *oldpath, const char *newpath) {
 		return _link(oldpath, newpath);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallLink call = {
@@ -1780,7 +1464,7 @@ int link(const char *oldpath, const char *newpath) {
 		.newpath = newpath,
 		.ret = &ret
 	};
-	next->link(&ctx, next, &call);
+	_next->link(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -1796,7 +1480,6 @@ int linkat(int olddirfd, const char *oldpath,
 		return _linkat(olddirfd, oldpath, newdirfd, newpath, flags);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallLink call = {
@@ -1808,7 +1491,7 @@ int linkat(int olddirfd, const char *oldpath,
 		.flags = flags,
 		.ret = &ret
 	};
-	next->link(&ctx, next, &call);
+	_next->link(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -1823,7 +1506,6 @@ int symlink(const char *oldpath, const char *newpath) {
 		return _symlink(oldpath, newpath);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallLink call = {
@@ -1832,7 +1514,7 @@ int symlink(const char *oldpath, const char *newpath) {
 		.newpath = newpath,
 		.ret = &ret
 	};
-	next->symlink(&ctx, next, &call);
+	_next->symlink(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -1847,7 +1529,6 @@ int symlinkat(const char *oldpath, int newdirfd, const char *newpath) {
 		return _symlinkat(oldpath, newdirfd, newpath);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallLink call = {
@@ -1857,7 +1538,7 @@ int symlinkat(const char *oldpath, int newdirfd, const char *newpath) {
 		.newpath = newpath,
 		.ret = &ret
 	};
-	next->symlink(&ctx, next, &call);
+	_next->symlink(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -1872,7 +1553,6 @@ int unlink(const char *pathname) {
 		return _unlink(pathname);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallUnlink call = {
@@ -1880,7 +1560,7 @@ int unlink(const char *pathname) {
 		.path = pathname,
 		.ret = &ret
 	};
-	next->unlink(&ctx, next, &call);
+	_next->unlink(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -1895,7 +1575,6 @@ int unlinkat(int dirfd, const char *pathname, int flags) {
 		return _unlinkat(dirfd, pathname, flags);
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallUnlink call = {
@@ -1905,7 +1584,7 @@ int unlinkat(int dirfd, const char *pathname, int flags) {
 		.flags = flags,
 		.ret = &ret
 	};
-	next->unlink(&ctx, next, &call);
+	_next->unlink(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -1921,7 +1600,6 @@ ssize_t listxattr(const char *pathname, char *list, size_t size) {
 		return -1;
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetSSize ret = { ._errno = errno };
 	CallListXattr call = {
@@ -1931,7 +1609,7 @@ ssize_t listxattr(const char *pathname, char *list, size_t size) {
 		.size = size,
 		.ret = &ret
 	};
-	next->listxattr(&ctx, next, &call);
+	_next->listxattr(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -1947,7 +1625,6 @@ ssize_t llistxattr(const char *pathname, char *list, size_t size) {
 		return -1;
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetSSize ret = { ._errno = errno };
 	CallListXattr call = {
@@ -1957,7 +1634,7 @@ ssize_t llistxattr(const char *pathname, char *list, size_t size) {
 		.size = size,
 		.ret = &ret
 	};
-	next->listxattr(&ctx, next, &call);
+	_next->listxattr(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -1973,7 +1650,6 @@ ssize_t flistxattr(int fd, char *list, size_t size) {
 		return -1;
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetSSize ret = { ._errno = errno };
 	CallListXattr call = {
@@ -1983,7 +1659,7 @@ ssize_t flistxattr(int fd, char *list, size_t size) {
 		.size = size,
 		.ret = &ret
 	};
-	next->listxattr(&ctx, next, &call);
+	_next->listxattr(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -2000,7 +1676,6 @@ int setxattr(const char *pathname, const char *name,
 		return -1;
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallSetXattr call = {
@@ -2012,7 +1687,7 @@ int setxattr(const char *pathname, const char *name,
 		.flags = flags,
 		.ret = &ret
 	};
-	next->setxattr(&ctx, next, &call);
+	_next->setxattr(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -2029,7 +1704,6 @@ int lsetxattr(const char *pathname, const char *name,
 		return -1;
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallSetXattr call = {
@@ -2041,7 +1715,7 @@ int lsetxattr(const char *pathname, const char *name,
 		.flags = flags,
 		.ret = &ret
 	};
-	next->setxattr(&ctx, next, &call);
+	_next->setxattr(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -2058,7 +1732,6 @@ int fsetxattr(int fd, const char *name,
 		return -1;
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetInt ret = { ._errno = errno };
 	CallSetXattr call = {
@@ -2070,7 +1743,7 @@ int fsetxattr(int fd, const char *name,
 		.flags = flags,
 		.ret = &ret
 	};
-	next->setxattr(&ctx, next, &call);
+	_next->setxattr(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -2087,7 +1760,6 @@ ssize_t getxattr(const char *pathname, const char *name,
 		return -1;
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetSSize ret = { ._errno = errno };
 	CallGetXattr call = {
@@ -2098,7 +1770,7 @@ ssize_t getxattr(const char *pathname, const char *name,
 		.size = size,
 		.ret = &ret
 	};
-	next->getxattr(&ctx, next, &call);
+	_next->getxattr(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -2115,7 +1787,6 @@ ssize_t lgetxattr(const char *pathname, const char *name,
 		return -1;
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetSSize ret = { ._errno = errno };
 	CallGetXattr call = {
@@ -2126,7 +1797,7 @@ ssize_t lgetxattr(const char *pathname, const char *name,
 		.size = size,
 		.ret = &ret
 	};
-	next->getxattr(&ctx, next, &call);
+	_next->getxattr(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
@@ -2143,7 +1814,6 @@ ssize_t fgetxattr(int fd, const char *name,
 		return -1;
 	}
 
-	const CallHandler *next = chain();
 	Context ctx;
 	RetSSize ret = { ._errno = errno };
 	CallGetXattr call = {
@@ -2154,12 +1824,13 @@ ssize_t fgetxattr(int fd, const char *name,
 		.size = size,
 		.ret = &ret
 	};
-	next->getxattr(&ctx, next, &call);
+	_next->getxattr(&ctx, _next, &call);
 	errno = ret._errno;
 	return ret.ret;
 }
 
-static int bottom_open(Context *ctx, const CallHandler *this, CallOpen *call) {
+static int bottom_open(Context *ctx, const CallHandler *this,
+					   const CallOpen *call) {
 	int ret;
 
 	switch (call->type) {
@@ -2208,8 +1879,8 @@ static int bottom_open(Context *ctx, const CallHandler *this, CallOpen *call) {
 	return ret;
 }
 
-static void *bottom_fopen(Context *ctx, const CallHandler *this,
-						  CallFOpen *call) {
+static FILE *bottom_fopen(Context *ctx, const CallHandler *this,
+						  const CallFOpen *call) {
 	FILE *ret;
 
 	if (call->fopen64) {
@@ -2226,8 +1897,8 @@ static void *bottom_fopen(Context *ctx, const CallHandler *this,
 	return ret;
 }
 
-static void *bottom_opendir(Context *ctx, const CallHandler *this,
-							CallOpendir *call) {
+static DIR *bottom_opendir(Context *ctx, const CallHandler *this,
+							const CallOpendir *call) {
 	DIR *ret;
 
 	ret = _opendir(call->path);
@@ -2240,7 +1911,8 @@ static void *bottom_opendir(Context *ctx, const CallHandler *this,
 	return ret;
 }
 
-static int bottom_stat(Context *ctx, const CallHandler *this, CallStat *call) {
+static int bottom_stat(Context *ctx, const CallHandler *this,
+					   const CallStat *call) {
 	int ret;
 
 	switch (call->type) {
@@ -2294,8 +1966,8 @@ static int bottom_stat(Context *ctx, const CallHandler *this, CallStat *call) {
 	return ret;
 }
 
-static signed long bottom_readlink(Context *ctx, const CallHandler *this,
-								   CallReadlink *call) {
+static ssize_t bottom_readlink(Context *ctx, const CallHandler *this,
+							   const CallReadlink *call) {
 	ssize_t ret;
 
 	if (call->at) {
@@ -2313,7 +1985,7 @@ static signed long bottom_readlink(Context *ctx, const CallHandler *this,
 }
 
 static int bottom_access(Context *ctx, const CallHandler *this,
-						 CallAccess *call) {
+						 const CallAccess *call) {
 	int ret;
 
 	switch (call->type) {
@@ -2346,8 +2018,8 @@ static int bottom_access(Context *ctx, const CallHandler *this,
 	return ret;
 }
 
-static int _bottom_execve(Context *ctx, const CallHandler *next,
-						  CallExec *call) {
+static int _bottom_execve(Context *ctx, const CallHandler *this,
+						  const CallExec *call) {
 	int ret;
 
 	switch (call->type) {
@@ -2378,8 +2050,8 @@ static int _bottom_execve(Context *ctx, const CallHandler *next,
 	return ret;
 }
 
-static int bottom_exec(Context *ctx, const CallHandler *next,
-					   CallExec *call) {
+static int bottom_exec(Context *ctx, const CallHandler *this,
+					   const CallExec *call) {
 	int fd;
 	int _errno = 0;
 	ssize_t ret, size;
@@ -2388,7 +2060,7 @@ static int bottom_exec(Context *ctx, const CallHandler *next,
 	callexec_copy(&_call, call);
 
 	if (call->final || (exectype_is_at(call->type) && call->path[0] != '/')) {
-		return _bottom_execve(ctx, next, call);
+		return _bottom_execve(ctx, this, call);
 	}
 
 	exec_argc = array_len(call->argv);
@@ -2452,23 +2124,21 @@ static int bottom_exec(Context *ctx, const CallHandler *next,
 
 		debug_exec(pathname, argv, call->envp);
 
-		next = chain();
 		_call.path = pathname;
 		_call.argv = argv;
 
-		return next->exec(ctx, next, &_call);
+		return _next->exec(ctx, _next, &_call);
 	}
 
-	next = chain();
 	_call.final = 1;
-	next->exec(ctx, next, &_call);
+	_next->exec(ctx, _next, &_call);
 
 out:
 	return call->ret->ret;
 }
 
-static void *bottom_realpath(Context *ctx, const CallHandler *this,
-							 CallRealpath *call) {
+static char *bottom_realpath(Context *ctx, const CallHandler *this,
+							 const CallRealpath *call) {
 	char *ret;
 
 	ret = _realpath(call->path, call->out);
@@ -2481,7 +2151,8 @@ static void *bottom_realpath(Context *ctx, const CallHandler *this,
 	return ret;
 }
 
-static int bottom_link(Context *ctx, const CallHandler *this, CallLink *call) {
+static int bottom_link(Context *ctx, const CallHandler *this,
+					   const CallLink *call) {
 	int ret;
 
 	if (call->at) {
@@ -2492,14 +2163,15 @@ static int bottom_link(Context *ctx, const CallHandler *this, CallLink *call) {
 	}
 
 	call->ret->ret = ret;
-	if (!ret) {
+	if (ret < 0) {
 		call->ret->_errno = errno;
 	}
 
 	return ret;
 }
 
-static int bottom_symlink(Context *ctx, const CallHandler *this, CallLink *call) {
+static int bottom_symlink(Context *ctx, const CallHandler *this,
+						  const CallLink *call) {
 	int ret;
 
 	if (call->at) {
@@ -2509,14 +2181,15 @@ static int bottom_symlink(Context *ctx, const CallHandler *this, CallLink *call)
 	}
 
 	call->ret->ret = ret;
-	if (!ret) {
+	if (ret < 0) {
 		call->ret->_errno = errno;
 	}
 
 	return ret;
 }
 
-static int bottom_unlink(Context *ctx, const CallHandler *this, CallUnlink *call) {
+static int bottom_unlink(Context *ctx, const CallHandler *this,
+						 const CallUnlink *call) {
 	int ret;
 
 	if (call->at) {
@@ -2526,15 +2199,15 @@ static int bottom_unlink(Context *ctx, const CallHandler *this, CallUnlink *call
 	}
 
 	call->ret->ret = ret;
-	if (!ret) {
+	if (ret < 0) {
 		call->ret->_errno = errno;
 	}
 
 	return ret;
 }
 
-static signed long bottom_listxattr(Context *ctx, const CallHandler *this,
-									CallListXattr *call) {
+static ssize_t bottom_listxattr(Context *ctx, const CallHandler *this,
+								const CallListXattr *call) {
 	ssize_t ret;
 
 	switch (call->type) {
@@ -2556,7 +2229,7 @@ static signed long bottom_listxattr(Context *ctx, const CallHandler *this,
 	}
 
 	call->ret->ret = ret;
-	if (!ret) {
+	if (ret < 0) {
 		call->ret->_errno = errno;
 	}
 
@@ -2564,8 +2237,8 @@ static signed long bottom_listxattr(Context *ctx, const CallHandler *this,
 }
 
 static int bottom_setxattr(Context *ctx, const CallHandler *this,
-						   CallSetXattr *call) {
-	ssize_t ret;
+						   const CallSetXattr *call) {
+	int ret;
 
 	switch (call->type) {
 		case XATTRTYPE_PLAIN:
@@ -2589,15 +2262,15 @@ static int bottom_setxattr(Context *ctx, const CallHandler *this,
 	}
 
 	call->ret->ret = ret;
-	if (!ret) {
+	if (ret < 0) {
 		call->ret->_errno = errno;
 	}
 
 	return ret;
 }
 
-static signed long bottom_getxattr(Context *ctx, const CallHandler *this,
-								   CallGetXattr *call) {
+static ssize_t bottom_getxattr(Context *ctx, const CallHandler *this,
+							   const CallGetXattr *call) {
 	ssize_t ret;
 
 	switch (call->type) {
@@ -2619,29 +2292,26 @@ static signed long bottom_getxattr(Context *ctx, const CallHandler *this,
 	}
 
 	call->ret->ret = ret;
-	if (!ret) {
+	if (ret < 0) {
 		call->ret->_errno = errno;
 	}
 
 	return ret;
 }
 
-static const CallHandler *chain() {
-	static const CallHandler next = {
-		bottom_open,
-		bottom_fopen,
-		bottom_opendir,
-		bottom_stat,
-		bottom_readlink,
-		bottom_access,
-		bottom_exec,
-		bottom_realpath,
-		bottom_link,
-		bottom_symlink,
-		bottom_unlink,
-		bottom_listxattr,
-		bottom_setxattr,
-		bottom_getxattr
-	};
-	return &next;
-}
+static const CallHandler bottom = {
+	bottom_open,
+	bottom_fopen,
+	bottom_opendir,
+	bottom_stat,
+	bottom_readlink,
+	bottom_access,
+	bottom_exec,
+	bottom_realpath,
+	bottom_link,
+	bottom_symlink,
+	bottom_unlink,
+	bottom_listxattr,
+	bottom_setxattr,
+	bottom_getxattr
+};
