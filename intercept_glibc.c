@@ -781,6 +781,9 @@ int stat64(const char *pathname, struct stat *buf) {
 #endif
 
 #ifdef _STAT_VER
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
+
 __attribute__((visibility("default")))
 int __xstat(int ver, const char *pathname, struct stat *buf) {
 
@@ -832,6 +835,8 @@ int __xstat64(int ver, const char *pathname, struct stat64 *buf) {
 	return call.ret->ret;
 }
 #endif
+
+#pragma GCC diagnostic pop
 #endif
 
 __attribute__((visibility("default")))
