@@ -31,6 +31,7 @@
 #include "parent_exec.h"
 #include "parent_glob.h"
 #include "parent_link.h"
+#include "parent_xattr.h"
 
 #ifdef O_TMPFILE
 #define OPEN_NEEDS_MODE(oflag) \
@@ -332,6 +333,7 @@ static void init() {
 	parent_open_load();
 	parent_stat_load();
 	parent_link_load();
+	parent_xattr_load();
 }
 
 static const CallHandler *chain();
@@ -2528,23 +2530,95 @@ static int bottom_unlink(Context *ctx, const CallHandler *this, CallUnlink *call
 
 static signed long bottom_listxattr(Context *ctx, const CallHandler *this,
 									CallListXattr *call) {
-	call->ret->_errno = ENOTSUP;
-	call->ret->ret = -1;
-	return -1;
+	ssize_t ret;
+
+	switch (call->type) {
+		case XATTRTYPE_PLAIN:
+			ret = _listxattr(call->path, call->list, call->size);
+		break;
+
+		case XATTRTYPE_L:
+			ret = _llistxattr(call->path, call->list, call->size);
+		break;
+
+		case XATTRTYPE_F:
+			ret = _flistxattr(call->fd, call->list, call->size);
+		break;
+
+		default:
+			abort();
+		break;
+	}
+
+	call->ret->ret = ret;
+	if (!ret) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
 }
 
 static int bottom_setxattr(Context *ctx, const CallHandler *this,
 						   CallSetXattr *call) {
-	call->ret->_errno = ENOTSUP;
-	call->ret->ret = -1;
-	return -1;
+	ssize_t ret;
+
+	switch (call->type) {
+		case XATTRTYPE_PLAIN:
+			ret = _setxattr(call->path, call->name, call->value, call->size,
+							call->flags);
+		break;
+
+		case XATTRTYPE_L:
+			ret = _lsetxattr(call->path, call->name, call->value, call->size,
+							 call->flags);
+		break;
+
+		case XATTRTYPE_F:
+			ret = _fsetxattr(call->fd, call->name, call->value, call->size,
+							 call->flags);
+		break;
+
+		default:
+			abort();
+		break;
+	}
+
+	call->ret->ret = ret;
+	if (!ret) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
 }
 
 static signed long bottom_getxattr(Context *ctx, const CallHandler *this,
 								   CallGetXattr *call) {
-	call->ret->_errno = ENOTSUP;
-	call->ret->ret = -1;
-	return -1;
+	ssize_t ret;
+
+	switch (call->type) {
+		case XATTRTYPE_PLAIN:
+			ret = _getxattr(call->path, call->name, call->value, call->size);
+		break;
+
+		case XATTRTYPE_L:
+			ret = _lgetxattr(call->path, call->name, call->value, call->size);
+		break;
+
+		case XATTRTYPE_F:
+			ret = _fgetxattr(call->fd, call->name, call->value, call->size);
+		break;
+
+		default:
+			abort();
+		break;
+	}
+
+	call->ret->ret = ret;
+	if (!ret) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
 }
 
 static const CallHandler *chain() {
