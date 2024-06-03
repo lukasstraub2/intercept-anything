@@ -14,7 +14,7 @@
 typedef struct RootlinkHandler RootlinkHandler;
 struct RootlinkHandler {
 	CallHandler this;
-	CallHandler next;
+	const CallHandler *next;
 };
 static const RootlinkHandler *cast(const CallHandler *this) {
 	return (const RootlinkHandler*) this;
@@ -115,11 +115,11 @@ static int rootlink_open(Context *ctx, const CallHandler *_this,
 	callopen_copy(&_call, call);
 
 	if (opentype_is_at(call->type) && call->path[0] != '/') {
-		return this->next.open(ctx, &this->next, (CallOpen *)call);
+		return this->next->open(ctx, this->next, call);
 	}
 
 	MANGLE_PATH(_call.path, -1);
-	return this->next.open(ctx, &this->next, &_call);
+	return this->next->open(ctx, this->next, &_call);
 }
 
 static FILE *rootlink_fopen(Context *ctx, const CallHandler *_this,
@@ -129,7 +129,7 @@ static FILE *rootlink_fopen(Context *ctx, const CallHandler *_this,
 	callfopen_copy(&_call, call);
 
 	MANGLE_PATH(_call.path, NULL);
-	return this->next.fopen(ctx, &this->next, &_call);
+	return this->next->fopen(ctx, this->next, &_call);
 }
 
 static DIR *rootlink_opendir(Context *ctx, const CallHandler *_this,
@@ -139,7 +139,7 @@ static DIR *rootlink_opendir(Context *ctx, const CallHandler *_this,
 	callopendir_copy(&_call, call);
 
 	MANGLE_PATH(_call.path, NULL);
-	return this->next.opendir(ctx, &this->next, &_call);
+	return this->next->opendir(ctx, this->next, &_call);
 }
 
 static int rootlink_stat(Context *ctx, const CallHandler *_this,
@@ -149,11 +149,11 @@ static int rootlink_stat(Context *ctx, const CallHandler *_this,
 	callstat_copy(&_call, call);
 
 	if (stattype_is_at(call->type) && call->path[0] != '/') {
-		return this->next.stat(ctx, &this->next, (CallStat *)call);
+		return this->next->stat(ctx, this->next, call);
 	}
 
 	MANGLE_PATH(_call.path, -1);
-	return this->next.stat(ctx, &this->next, &_call);
+	return this->next->stat(ctx, this->next, &_call);
 }
 
 static ssize_t rootlink_readlink(Context *ctx, const CallHandler *_this,
@@ -163,11 +163,11 @@ static ssize_t rootlink_readlink(Context *ctx, const CallHandler *_this,
 	callreadlink_copy(&_call, call);
 
 	if (call->at && call->path[0] != '/') {
-		return this->next.readlink(ctx, &this->next, (CallReadlink *)call);
+		return this->next->readlink(ctx, this->next, (CallReadlink *)call);
 	}
 
 	MANGLE_PATH(_call.path, -1);
-	return this->next.readlink(ctx, &this->next, &_call);
+	return this->next->readlink(ctx, this->next, &_call);
 }
 
 static int rootlink_access(Context *ctx, const CallHandler *_this,
@@ -177,11 +177,11 @@ static int rootlink_access(Context *ctx, const CallHandler *_this,
 	callaccess_copy(&_call, call);
 
 	if (accesstype_is_at(call->type) && call->path[0] != '/') {
-		return this->next.access(ctx, &this->next, (CallAccess *)call);
+		return this->next->access(ctx, this->next, call);
 	}
 
 	MANGLE_PATH(_call.path, -1);
-	return this->next.access(ctx, &this->next, &_call);
+	return this->next->access(ctx, this->next, &_call);
 }
 
 static int rootlink_exec(Context *ctx, const CallHandler *_this,
@@ -191,11 +191,11 @@ static int rootlink_exec(Context *ctx, const CallHandler *_this,
 	callexec_copy(&_call, call);
 
 	if (exectype_is_at(call->type) && call->path[0] != '/') {
-		return this->next.exec(ctx, &this->next, (CallExec *)call);
+		return this->next->exec(ctx, this->next, call);
 	}
 
 	MANGLE_PATH(_call.path, -1);
-	return this->next.exec(ctx, &this->next, &_call);
+	return this->next->exec(ctx, this->next, &_call);
 }
 
 static char *rootlink_realpath(Context *ctx, const CallHandler *_this,
@@ -205,7 +205,7 @@ static char *rootlink_realpath(Context *ctx, const CallHandler *_this,
 	callrealpath_copy(&_call, call);
 
 	MANGLE_PATH(_call.path, NULL);
-	return this->next.realpath(ctx, &this->next, &_call);
+	return this->next->realpath(ctx, this->next, &_call);
 }
 
 static ssize_t rootlink_listxattr(Context *ctx, const CallHandler *_this,
@@ -215,11 +215,11 @@ static ssize_t rootlink_listxattr(Context *ctx, const CallHandler *_this,
 	calllistxattr_copy(&_call, call);
 
 	if (call->type == XATTRTYPE_F) {
-		return this->next.listxattr(ctx, &this->next, (CallListXattr *)call);
+		return this->next->listxattr(ctx, this->next, call);
 	}
 
 	MANGLE_PATH(_call.path, -1);
-	return this->next.listxattr(ctx, &this->next, &_call);
+	return this->next->listxattr(ctx, this->next, &_call);
 }
 
 static ssize_t rootlink_getxattr(Context *ctx, const CallHandler *_this,
@@ -229,11 +229,11 @@ static ssize_t rootlink_getxattr(Context *ctx, const CallHandler *_this,
 	callgetxattr_copy(&_call, call);
 
 	if (call->type == XATTRTYPE_F) {
-		return this->next.getxattr(ctx, &this->next, (CallGetXattr *)call);
+		return this->next->getxattr(ctx, this->next, call);
 	}
 
 	MANGLE_PATH(_call.path, -1);
-	return this->next.getxattr(ctx, &this->next, &_call);
+	return this->next->getxattr(ctx, this->next, &_call);
 }
 
 // Provide only readonly functions for now
@@ -251,7 +251,7 @@ const CallHandler *rootlink_init(const CallHandler *next) {
 	}
 	initialized = 1;
 
-	this.next = *next;
+	this.next = next;
 	this.this = *next;
 
 	this.this.open = rootlink_open;
