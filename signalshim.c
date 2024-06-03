@@ -1,20 +1,15 @@
+
 #define _GNU_SOURCE
-#define BUF_SIZE (64*1024)
 
-#ifdef _FILE_OFFSET_BITS
-#undef _FILE_OFFSET_BITS
-#endif
-
-#ifndef _LARGEFILE64_SOURCE
-#define _LARGEFILE64_SOURCE 1
-#endif
-
-#define DEBUG_ENV "SIGSYS_DEBUG"
+#include "signalshim.h"
+#define DEBUG_ENV "SIGNALSHIM_DEBUG"
 #include "config.h"
 #include "debug.h"
+#include "intercept.h"
 
 #include <errno.h>
 #include <signal.h>
+#include <ucontext.h>
 
 static void handler(int sig, siginfo_t *info, void *ucontext) {
     ucontext_t* ctx = (ucontext_t*)ucontext;
@@ -33,8 +28,14 @@ static void handler(int sig, siginfo_t *info, void *ucontext) {
     errno = old_errno;
 }
 
-static void __attribute__((constructor)) initialize() {
-    struct sigaction sig;
+const CallHandler *signalshim_init(const CallHandler *next) {
+	struct sigaction sig;
+	static int initialized = 0;
+
+	if (initialized) {
+		return NULL;
+	}
+	initialized = 1;
 
     debug(DEBUG_LEVEL_VERBOSE, __FILE__": registering signal handler\n");
 
@@ -43,4 +44,6 @@ static void __attribute__((constructor)) initialize() {
     sig.sa_flags = SA_SIGINFO;
 
     sigaction(SIGSYS, &sig, NULL);
+
+	return next;
 }
