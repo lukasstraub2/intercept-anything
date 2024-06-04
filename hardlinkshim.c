@@ -19,20 +19,16 @@
 #include <fcntl.h>
 #include <sys/file.h>
 
-typedef struct HardlinkHandler HardlinkHandler;
-struct HardlinkHandler {
+struct This {
 	CallHandler this;
 	const CallHandler *next;
 	int dirfd;
 };
-static const HardlinkHandler *cast(const CallHandler *this) {
-	return (const HardlinkHandler*) this;
-}
 
 #define HARDLINK_PREFIX PREFIX "/tmp/hardlinkshim/"
 #define LOCKFILE "lock"
 
-static int lock(const HardlinkHandler *this, int operation) {
+static int lock(const This *this, int operation) {
 	int ret, fd;
 
 	ret = _openat64(this->dirfd, LOCKFILE, O_RDWR | O_CLOEXEC, 0777);
@@ -171,7 +167,7 @@ static int cnt_add(char *linkname, int add) {
 	ret = cnt_read(linkname);
 	if (ret < 0) {
 		if (errno == ENOENT) {
-			ret = add;
+			ret = 0;
 		} else {
 			return -1;
 		}
@@ -205,10 +201,14 @@ static int is_hardlinkat(Context *ctx, int dirfd, const char *path) {
 
 	ret = readlink_scratch(ctx, dirfd, path);
 	if (ret < 0) {
-		return -1;
+		if (errno == EINVAL) {
+			return 0;
+		} else {
+			return -1;
+		}
 	}
 
-	if (strcmp_prefix(ctx->scratch, HARDLINK_PREFIX)) {
+	if (!strcmp_prefix(ctx->scratch, HARDLINK_PREFIX)) {
 		return 1;
 	}
 
@@ -304,13 +304,12 @@ static int del_hardlink(Context *ctx, int dirfd, const char *path) {
 	return 0;
 }
 
-static int hardlink_stat(Context *ctx, const CallHandler *_this,
+static int hardlink_stat(Context *ctx, const This *this,
 						 const CallStat *call) {
-	const HardlinkHandler *this = cast(_this);
 	int ret, lock_fd;
 	RetInt *_ret = call->ret;
 
-	ret = lock(this, LOCK_EX);
+	ret = lock(this, LOCK_SH);
 	if (ret < 0) {
 		_ret->_errno = errno;
 		_ret->ret = -1;
@@ -353,7 +352,7 @@ static int hardlink_stat(Context *ctx, const CallHandler *_this,
 			_call.flags &= ~AT_SYMLINK_NOFOLLOW;
 		}
 
-		ret = this->next->stat(ctx, this->next, &_call);
+		ret = this->next->stat(ctx, this->next->stat_next, &_call);
 		if (ret < 0) {
 			unlock(lock_fd);
 			return -1;
@@ -382,14 +381,14 @@ static int hardlink_stat(Context *ctx, const CallHandler *_this,
 			break;
 		}
 	} else {
-		return this->next->stat(ctx, this->next, call);
+		this->next->stat(ctx, this->next->stat_next, call);
 	}
 
 	ret = unlock(lock_fd);
 	if (ret < 0) {
 		goto err;
 	}
-	return 0;
+	return _ret->ret;
 
 err:
 	_ret->_errno = errno;
@@ -398,9 +397,8 @@ err:
 	return -1;
 }
 
-static int hardlink_link(Context *ctx, const CallHandler *_this,
+static int hardlink_link(Context *ctx, const This *this,
 						 const CallLink *call) {
-	const HardlinkHandler *this = cast(_this);
 	int ret, lock_fd;
 	RetInt *_ret = call->ret;
 
@@ -505,9 +503,8 @@ err:
 	return -1;
 }
 
-static int hardlink_unlink(Context *ctx, const CallHandler *_this,
+static int hardlink_unlink(Context *ctx, const This *this,
 						   const CallUnlink *call) {
-	const HardlinkHandler *this = cast(_this);
 	int ret, lock_fd;
 	RetInt *_ret = call->ret;
 
@@ -530,14 +527,14 @@ static int hardlink_unlink(Context *ctx, const CallHandler *_this,
 			goto err;
 		}
 	} else {
-		return this->next->unlink(ctx, this->next, call);
+		this->next->unlink(ctx, this->next->unlink_next, call);
 	}
 
 	ret = unlock(lock_fd);
 	if (ret < 0) {
 		goto err;
 	}
-	return 0;
+	return _ret->ret;
 
 err:
 	_ret->_errno = errno;
@@ -567,7 +564,7 @@ static int mkpath(const char *_file_path, mode_t mode) {
 }
 
 const CallHandler *hardlinkshim_init(const CallHandler *next) {
-	static HardlinkHandler this;
+	static This this;
 	static int initialized = 0;
 	int ret;
 
@@ -580,8 +577,11 @@ const CallHandler *hardlinkshim_init(const CallHandler *next) {
 	this.this = *next;
 
 	this.this.stat = hardlink_stat;
+	this.this.stat_next = &this;
 	this.this.link = hardlink_link;
+	this.this.link_next = &this;
 	this.this.unlink = hardlink_unlink;
+	this.this.unlink_next = &this;
 
 	ret = mkpath(HARDLINK_PREFIX LOCKFILE, 0777);
 	if (ret < 0) {

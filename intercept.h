@@ -389,22 +389,37 @@ static void callgetxattr_copy(CallGetXattr *dst, const CallGetXattr *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
-	int (*open)(Context *ctx, const CallHandler *this, const CallOpen *call);
-	FILE *(*fopen)(Context *ctx, const CallHandler *this, const CallFOpen *call);
-	DIR *(*opendir)(Context *ctx, const CallHandler *this, const CallOpendir *call);
-	int (*stat)(Context *ctx, const CallHandler *this, const CallStat *call);
-	ssize_t (*readlink)(Context *ctx, const CallHandler *this, const CallReadlink *call);
-	int (*access)(Context *ctx, const CallHandler *this, const CallAccess *call);
-	int (*exec)(Context *ctx, const CallHandler *this, const CallExec *call);
-	char *(*realpath)(Context *ctx, const CallHandler *this, const CallRealpath *call);
-	int (*link)(Context *ctx, const CallHandler *this, const CallLink *call);
-	int (*symlink)(Context *ctx, const CallHandler *this, const CallLink *call);
-	int (*unlink)(Context *ctx, const CallHandler *this, const CallUnlink *call);
-	ssize_t (*listxattr)(Context *ctx, const CallHandler *this, const CallListXattr *call);
-	int (*setxattr)(Context *ctx, const CallHandler *this, const CallSetXattr *call);
-	ssize_t (*getxattr)(Context *ctx, const CallHandler *this, const CallGetXattr *call);
+	int (*open)(Context *ctx, const This *this, const CallOpen *call);
+	const This *open_next;
+	FILE *(*fopen)(Context *ctx, const This *this, const CallFOpen *call);
+	const This *fopen_next;
+	DIR *(*opendir)(Context *ctx, const This *this, const CallOpendir *call);
+	const This *opendir_next;
+	int (*stat)(Context *ctx, const This *this, const CallStat *call);
+	const This *stat_next;
+	ssize_t (*readlink)(Context *ctx, const This *this, const CallReadlink *call);
+	const This *readlink_next;
+	int (*access)(Context *ctx, const This *this, const CallAccess *call);
+	const This *access_next;
+	int (*exec)(Context *ctx, const This *this, const CallExec *call);
+	const This *exec_next;
+	char *(*realpath)(Context *ctx, const This *this, const CallRealpath *call);
+	const This *realpath_next;
+	int (*link)(Context *ctx, const This *this, const CallLink *call);
+	const This *link_next;
+	int (*symlink)(Context *ctx, const This *this, const CallLink *call);
+	const This *symlink_next;
+	int (*unlink)(Context *ctx, const This *this, const CallUnlink *call);
+	const This *unlink_next;
+	ssize_t (*listxattr)(Context *ctx, const This *this, const CallListXattr *call);
+	const This *listxattr_next;
+	int (*setxattr)(Context *ctx, const This *this, const CallSetXattr *call);
+	const This *setxattr_next;
+	ssize_t (*getxattr)(Context *ctx, const This *this, const CallGetXattr *call);
+	const This *getxattr_next;
 };
 
 const CallHandler *main_init(const CallHandler *bottom);

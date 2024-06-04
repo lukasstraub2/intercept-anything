@@ -11,14 +11,10 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-typedef struct RootshimHandler RootshimHandler;
-struct RootshimHandler {
+struct This {
 	CallHandler this;
 	const CallHandler *next;
 };
-static const RootshimHandler *cast(const CallHandler *this) {
-	return (const RootshimHandler*) this;
-}
 
 static int handle_uptime() {
     const char *content = "106315.82 92968.73\n";
@@ -100,13 +96,12 @@ static int fhandle_path(const char *path, RetPtr *_ret) {
 	return 0;
 }
 
-static int rootshim_open(Context *ctx, const CallHandler *_this,
+static int rootshim_open(Context *ctx, const This *this,
 						 const CallOpen *call) {
 	RetInt *ret = call->ret;
-	const RootshimHandler *this = cast(_this);
 
 	if (opentype_is_at(call->type) && call->path[0] != '/') {
-		return this->next->open(ctx, this->next, call);
+		return this->next->open(ctx, this->next->open_next, call);
 	}
 
 	if (handle_path(call->path, ret)) {
@@ -124,13 +119,12 @@ static int rootshim_open(Context *ctx, const CallHandler *_this,
 		return ret->ret;
 	}
 
-	return this->next->open(ctx, this->next, call);
+	return this->next->open(ctx, this->next->open_next, call);
 }
 
-static FILE *rootshim_fopen(Context *ctx, const CallHandler *_this,
+static FILE *rootshim_fopen(Context *ctx, const This *this,
 							const CallFOpen *call) {
 	RetPtr *ret = call->ret;
-	const RootshimHandler *this = cast(_this);
 
 	if (fhandle_path(call->path, ret)) {
 		if (!ret->ret) {
@@ -147,16 +141,15 @@ static FILE *rootshim_fopen(Context *ctx, const CallHandler *_this,
 		return ret->ret;
 	}
 
-	return this->next->fopen(ctx, this->next, call);
+	return this->next->fopen(ctx, this->next->fopen_next, call);
 }
 
-static int rootshim_access(Context *ctx, const CallHandler *_this,
+static int rootshim_access(Context *ctx, const This *this,
 						   const CallAccess *call) {
 	RetInt *ret = call->ret;
-	const RootshimHandler *this = cast(_this);
 
 	if (accesstype_is_at(call->type) && call->path[0] != '/') {
-		return this->next->access(ctx, this->next, call);
+		return this->next->access(ctx, this->next->access_next, call);
 	}
 
 	if (handle_path(call->path, ret)) {
@@ -174,16 +167,15 @@ static int rootshim_access(Context *ctx, const CallHandler *_this,
 		return 0;
 	}
 
-	return this->next->access(ctx, this->next, call);
+	return this->next->access(ctx, this->next->access_next, call);
 }
 
-static ssize_t rootshim_listxattr(Context *ctx, const CallHandler *_this,
+static ssize_t rootshim_listxattr(Context *ctx, const This *this,
 								  const CallListXattr *call) {
 	RetInt ret;
-	const RootshimHandler *this = cast(_this);
 
 	if (call->type == XATTRTYPE_F) {
-		return this->next->listxattr(ctx, this->next, call);
+		return this->next->listxattr(ctx, this->next->listxattr_next, call);
 	}
 
 	if (handle_path(call->path, &ret)) {
@@ -197,16 +189,15 @@ static ssize_t rootshim_listxattr(Context *ctx, const CallHandler *_this,
 		return -1;
 	}
 
-	return this->next->listxattr(ctx, this->next, call);
+	return this->next->listxattr(ctx, this->next->listxattr_next, call);
 }
 
-static int rootshim_setxattr(Context *ctx, const CallHandler *_this,
+static int rootshim_setxattr(Context *ctx, const This *this,
 							 const CallSetXattr *call) {
 	RetInt ret;
-	const RootshimHandler *this = cast(_this);
 
 	if (call->type == XATTRTYPE_F) {
-		return this->next->setxattr(ctx, this->next, call);
+		return this->next->setxattr(ctx, this->next->setxattr_next, call);
 	}
 
 	if (handle_path(call->path, &ret)) {
@@ -220,16 +211,15 @@ static int rootshim_setxattr(Context *ctx, const CallHandler *_this,
 		return -1;
 	}
 
-	return this->next->setxattr(ctx, this->next, call);
+	return this->next->setxattr(ctx, this->next->setxattr_next, call);
 }
 
-static ssize_t rootshim_getxattr(Context *ctx, const CallHandler *_this,
+static ssize_t rootshim_getxattr(Context *ctx, const This *this,
 								 const CallGetXattr *call) {
 	RetInt ret;
-	const RootshimHandler *this = cast(_this);
 
 	if (call->type == XATTRTYPE_F) {
-		return this->next->getxattr(ctx, this->next, call);
+		return this->next->getxattr(ctx, this->next->getxattr_next, call);
 	}
 
 	if (handle_path(call->path, &ret)) {
@@ -243,17 +233,17 @@ static ssize_t rootshim_getxattr(Context *ctx, const CallHandler *_this,
 		return -1;
 	}
 
-	return this->next->getxattr(ctx, this->next, call);
+	return this->next->getxattr(ctx, this->next->getxattr_next, call);
 }
 
 // Provide only readonly functions for now
-// int rootshim_link(Context *ctx, const CallHandler *this, CallLink *call);
-// int rootshim_symlink(Context *ctx, const CallHandler *this, CallLink *call);
-// int rootshim_unlink(Context *ctx, const CallHandler *this, CallUnlink *call);
+// int rootshim_link(Context *ctx, const This *this, CallLink *call);
+// int rootshim_symlink(Context *ctx, const This *this, CallLink *call);
+// int rootshim_unlink(Context *ctx, const This *this, CallUnlink *call);
 
 const CallHandler *rootshim_init(const CallHandler *next) {
 	static int initialized = 0;
-	static RootshimHandler this;
+	static This this;
 
 	if (initialized) {
 		return NULL;
@@ -264,11 +254,17 @@ const CallHandler *rootshim_init(const CallHandler *next) {
 	this.this = *next;
 
 	this.this.open = rootshim_open;
+	this.this.open_next = &this;
 	this.this.fopen = rootshim_fopen;
+	this.this.fopen_next = &this;
 	this.this.access = rootshim_access;
+	this.this.access_next = &this;
 	this.this.listxattr = rootshim_listxattr;
+	this.this.listxattr_next = &this;
 	this.this.setxattr = rootshim_setxattr;
+	this.this.setxattr_next = &this;
 	this.this.getxattr = rootshim_getxattr;
+	this.this.getxattr_next = &this;
 
 	return &this.this;
 }
