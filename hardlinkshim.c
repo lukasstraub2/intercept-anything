@@ -145,7 +145,7 @@ static int cnt_write(char *linkname, int cnt) {
 		goto err;
 	}
 
-	ret = rename(tmpname, linkname);
+	ret = _rename(tmpname, linkname);
 	if (ret < 0) {
 		goto err;
 	}
@@ -457,8 +457,8 @@ static int hardlink_link(Context *ctx, const This *this,
 				goto err;
 			}
 
-			ret = renameat((call->at? call->olddirfd: AT_FDCWD), call->oldpath,
-						   AT_FDCWD, linkname);
+			ret = _renameat((call->at? call->olddirfd: AT_FDCWD), call->oldpath,
+							AT_FDCWD, linkname);
 			if (ret < 0) {
 				goto err;
 			}

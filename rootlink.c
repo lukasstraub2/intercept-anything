@@ -184,10 +184,11 @@ static ssize_t rootlink_getxattr(Context *ctx, const This *this,
 }
 
 // Provide only readonly functions for now
-// int rootlink_link(Context *ctx, const CallHandler *this, CallLink *call);
-// int rootlink_symlink(Context *ctx, const CallHandler *this, CallLink *call);
-// int rootlink_unlink(Context *ctx, const CallHandler *this, CallUnlink *call);
-// int rootlink_setxattr(Context *ctx, const CallHandler *this, CallSetXattr *call);
+// int rootlink_link(Context *ctx, const This *this, CallLink *call);
+// int rootlink_symlink(Context *ctx, const This *this, CallLink *call);
+// int rootlink_unlink(Context *ctx, const This *this, CallUnlink *call);
+// int rootlink_setxattr(Context *ctx, const This *this, CallSetXattr *call);
+// int rootlink_rename(Context *ctx, const This *this, CallRename *call);
 
 const CallHandler *rootlink_init(const CallHandler *next) {
 	static int initialized = 0;

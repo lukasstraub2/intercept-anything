@@ -1817,6 +1817,82 @@ ssize_t fgetxattr(int fd, const char *name,
 	return ret.ret;
 }
 
+__attribute__((visibility("default")))
+int rename(const char *oldpath, const char *newpath) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": rename(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+
+	if (!oldpath || !newpath) {
+		return _rename(oldpath, newpath);
+	}
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallRename call = {
+		.type = RENAMETYPE_PLAIN,
+		.oldpath = oldpath,
+		.newpath = newpath,
+		.ret = &ret
+	};
+	_next->rename(&ctx, _next->rename_next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+__attribute__((visibility("default")))
+int renameat(int olddirfd, const char *oldpath,
+			 int newdirfd, const char *newpath) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": renameat(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+
+	if (!oldpath || !newpath) {
+		return _renameat(olddirfd, oldpath, newdirfd, newpath);
+	}
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallRename call = {
+		.type = RENAMETYPE_AT,
+		.olddirfd = olddirfd,
+		.oldpath = oldpath,
+		.newdirfd = newdirfd,
+		.newpath = newpath,
+		.ret = &ret
+	};
+	_next->rename(&ctx, _next->rename_next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+__attribute__((visibility("default")))
+int renameat2(int olddirfd, const char *oldpath,
+			  int newdirfd, const char *newpath, unsigned int flags) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": renameat2(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+
+	if (!oldpath || !newpath) {
+		return _renameat2(olddirfd, oldpath, newdirfd, newpath, flags);
+	}
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallRename call = {
+		.type = RENAMETYPE_AT2,
+		.olddirfd = olddirfd,
+		.oldpath = oldpath,
+		.newdirfd = newdirfd,
+		.newpath = newpath,
+		.flags = flags,
+		.ret = &ret
+	};
+	_next->rename(&ctx, _next->rename_next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
 static int bottom_open(Context *ctx, const This *this,
 					   const CallOpen *call) {
 	int ret;
@@ -2287,6 +2363,38 @@ static ssize_t bottom_getxattr(Context *ctx, const This *this,
 	return ret;
 }
 
+static int bottom_rename(Context *ctx, const This *this,
+						 const CallRename *call) {
+	int ret;
+
+	switch (call->type) {
+		case RENAMETYPE_PLAIN:
+			ret = _rename(call->oldpath, call->newpath);
+		break;
+
+		case RENAMETYPE_AT:
+			ret = _renameat(call->olddirfd, call->oldpath,
+							call->newdirfd, call->newpath);
+		break;
+
+		case RENAMETYPE_AT2:
+			ret = _renameat2(call->olddirfd, call->oldpath,
+							 call->newdirfd, call->newpath, call->flags);
+		break;
+
+		default:
+			abort();
+		break;
+	}
+
+	call->ret->ret = ret;
+	if (ret < 0) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
+}
+
 static const CallHandler bottom = {
 	bottom_open,
 	NULL,
@@ -2315,5 +2423,7 @@ static const CallHandler bottom = {
 	bottom_setxattr,
 	NULL,
 	bottom_getxattr,
+	NULL,
+	bottom_rename,
 	NULL
 };

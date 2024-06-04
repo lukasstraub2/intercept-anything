@@ -15,6 +15,12 @@ def_parent(int, linkat, int olddirfd, const char *oldpath,
 def_parent(int, symlink, const char *target, const char *linkpath)
 def_parent(int, symlinkat, const char *target, int newdirfd, const char *linkpath)
 
+def_parent(int, rename, const char *oldpath, const char *newpath)
+def_parent(int, renameat, int olddirfd, const char *oldpath,
+		   int newdirfd, const char *newpath)
+def_parent(int, renameat2, int olddirfd, const char *oldpath,
+		   int newdirfd, const char *newpath, unsigned int flags)
+
 #ifdef _INTERCEPT_GLIBC
 static void parent_link_load() {
 	load_unlink_func();
@@ -23,5 +29,8 @@ static void parent_link_load() {
 	load_linkat_func();
 	load_symlink_func();
 	load_symlinkat_func();
+	load_rename_func();
+	load_renameat_func();
+	load_renameat2_func();
 }
 #endif

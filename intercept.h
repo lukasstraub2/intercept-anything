@@ -389,6 +389,45 @@ static void callgetxattr_copy(CallGetXattr *dst, const CallGetXattr *call) {
 	dst->ret = call->ret;
 }
 
+typedef enum RenameType RenameType;
+enum RenameType {
+	RENAMETYPE_PLAIN,
+	RENAMETYPE_AT,
+	RENAMETYPE_AT2
+};
+static int renametype_is_at(RenameType type) {
+	return type >= RENAMETYPE_AT;
+}
+
+typedef struct CallRename CallRename;
+struct CallRename {
+	RenameType type;
+	int olddirfd;
+	const char *oldpath;
+	int newdirfd;
+	const char *newpath;
+	unsigned int flags;
+	RetInt *ret;
+};
+
+static void callrename_copy(CallRename *dst, const CallRename *call) {
+	dst->type = call->type;
+
+	if (renametype_is_at(call->type)) {
+		dst->olddirfd = call->olddirfd;
+		dst->newdirfd = call->newdirfd;
+	}
+
+	dst->oldpath = call->oldpath;
+	dst->newpath = call->newpath;
+
+	if (call->type == RENAMETYPE_AT2) {
+		dst->flags = call->flags;
+	}
+
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -420,6 +459,8 @@ struct CallHandler {
 	const This *setxattr_next;
 	ssize_t (*getxattr)(Context *ctx, const This *this, const CallGetXattr *call);
 	const This *getxattr_next;
+	int (*rename)(Context *ctx, const This *this, const CallRename *call);
+	const This *rename_next;
 };
 
 const CallHandler *main_init(const CallHandler *bottom);

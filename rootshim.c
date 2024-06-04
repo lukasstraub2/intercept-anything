@@ -240,6 +240,7 @@ static ssize_t rootshim_getxattr(Context *ctx, const This *this,
 // int rootshim_link(Context *ctx, const This *this, CallLink *call);
 // int rootshim_symlink(Context *ctx, const This *this, CallLink *call);
 // int rootshim_unlink(Context *ctx, const This *this, CallUnlink *call);
+// int rootshim_rename(Context *ctx, const This *this, CallRename *call);
 
 const CallHandler *rootshim_init(const CallHandler *next) {
 	static int initialized = 0;
