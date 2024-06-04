@@ -1,5 +1,5 @@
 
-#define _GNU_SOURCE
+#include "common.h"
 
 #include "signalshim.h"
 #define DEBUG_ENV "SIGNALSHIM_DEBUG"

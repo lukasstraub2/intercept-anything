@@ -1,5 +1,5 @@
 
-#define BUF_SIZE (64*1024)
+#include "common.h"
 
 #include "rootshim.h"
 #include "config.h"
@@ -18,10 +18,6 @@ struct RootshimHandler {
 };
 static const RootshimHandler *cast(const CallHandler *this) {
 	return (const RootshimHandler*) this;
-}
-
-static int strcmp_prefix(const char *a, const char *b) {
-    return strncmp(a, b, strlen(b));
 }
 
 static int handle_uptime() {

@@ -1,4 +1,6 @@
 
+#include "common.h"
+
 #include "noxattrs.h"
 #include "intercept.h"
 
@@ -34,6 +36,7 @@ const CallHandler *noxattrs_init(const CallHandler *next) {
 	}
 	initialized = 1;
 
+	// this will pass through the functions allright, but not the next pointer:(
 	this = *next;
 	this.listxattr = noxattrs_listxattr;
 	this.setxattr = noxattrs_setxattr;

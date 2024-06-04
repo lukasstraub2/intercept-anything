@@ -1,9 +1,10 @@
 
-#define BUF_SIZE (64*1024)
+#include "common.h"
 
 #include "rootlink.h"
 #include "config.h"
 #include "intercept.h"
+#include "util.h"
 
 #include <string.h>
 #include <unistd.h>
@@ -20,49 +21,9 @@ static const RootlinkHandler *cast(const CallHandler *this) {
 	return (const RootlinkHandler*) this;
 }
 
-#define max(a,b)             \
-({                           \
-    __typeof__ (a) _a = (a); \
-    __typeof__ (b) _b = (b); \
-    _a > _b ? _a : _b;       \
-})
-
-#define min(a,b)             \
-({                           \
-    __typeof__ (a) _a = (a); \
-    __typeof__ (b) _b = (b); \
-    _a < _b ? _a : _b;       \
-})
-
-static size_t concat(char *out, size_t out_len, const char *a, const char *b) {
-    const size_t a_len = strlen(a);
-    const size_t b_len = strlen(b);
-
-    if (!out) {
-        return a_len + b_len +1;
-    }
-
-    if (a_len +1 > out_len) {
-        memcpy(out, a, out_len);
-        out[out_len -1] = '\0';
-        return a_len + b_len +1;
-    }
-
-    memcpy(out, a, a_len +1);
-    memcpy(out + a_len, b, min(b_len +1, out_len - a_len));
-    out[out_len -1] = '\0';
-
-    return a_len + b_len +1;
-}
-
-static int strcmp_prefix(const char *a, const char *b) {
-    return strncmp(a, b, strlen(b));
-}
-
 static int handle_path(const char *path) {
 	return !strcmp_prefix(path, "/usr") ||
-			!strcmp_prefix(path, "/bin") ||
-			!strcmp_prefix(path, "/tmp");
+			!strcmp_prefix(path, "/bin");
 }
 
 static size_t mangle_path(char *out, size_t out_len, const char *path) {
