@@ -22,6 +22,7 @@
 struct This {
 	CallHandler this;
 	const CallHandler *next;
+	const CallHandler *bottom;
 	int dirfd;
 };
 
@@ -201,7 +202,7 @@ static int is_hardlinkat(Context *ctx, int dirfd, const char *path) {
 
 	ret = readlink_scratch(ctx, dirfd, path);
 	if (ret < 0) {
-		if (errno == EINVAL) {
+		if (errno == EINVAL || errno == ENOENT) {
 			return 0;
 		} else {
 			return -1;
@@ -274,20 +275,10 @@ static int add_hardlink(Context *ctx, const CallLink *call) {
 	}
 }
 
-static int del_hardlink(Context *ctx, int dirfd, const char *path) {
-	ssize_t ret;
+static int del_hardlink(char *linkname) {
+	int ret;
 
-	ret = readlink_scratch(ctx, dirfd, path);
-	if (ret < 0) {
-		return -1;
-	}
-
-	ret = _unlinkat(dirfd, path, 0);
-	if (ret < 0) {
-		return -1;
-	}
-
-	ret = cnt_add(ctx->scratch, -1);
+	ret = cnt_add(linkname, -1);
 	if (ret < 0) {
 		return -1;
 	}
@@ -296,12 +287,102 @@ static int del_hardlink(Context *ctx, int dirfd, const char *path) {
 		return 0;
 	}
 
-	ret = _unlink(ctx->scratch);
+	ret = _unlink(linkname);
 	if (ret < 0) {
 		return -1;
 	}
 
 	return 0;
+}
+
+static int hardlink_open(Context *ctx, const This *this,
+						 const CallOpen *call) {
+	int ret, lock_fd;
+	RetInt *_ret = call->ret;
+
+	ret = lock(this, LOCK_SH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		return -1;
+	}
+	lock_fd = ret;
+
+	ret = is_hardlinkat(ctx, (opentype_is_at(call->type)? call->dirfd: AT_FDCWD),
+						call->path);
+	if (ret < 0) {
+		goto err;
+	}
+
+	if (ret) {
+		CallOpen _call;
+		callopen_copy(&_call, call);
+
+		_call.flags &= ~(O_NOFOLLOW);
+		this->next->open(ctx, this->next->open_next, &_call);
+	} else {
+		this->next->open(ctx, this->next->open_next, call);
+	}
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		goto err;
+	}
+	return _ret->ret;
+
+err:
+	_ret->_errno = errno;
+	unlock(lock_fd);
+	_ret->ret = -1;
+	return -1;
+}
+
+static FILE *hardlink_fopen(Context *ctx, const This *this,
+							const CallFOpen *call) {
+	int ret, lock_fd;
+	RetPtr *_ret = call->ret;
+
+	ret = lock(this, LOCK_SH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = NULL;
+		return NULL;
+	}
+	lock_fd = ret;
+
+	this->next->fopen(ctx, this->next->fopen_next, call);
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = NULL;
+		return NULL;
+	}
+	return _ret->ret;
+}
+
+static DIR *hardlink_opendir(Context *ctx, const This *this,
+							 const CallOpendir *call) {
+	int ret, lock_fd;
+	RetPtr *_ret = call->ret;
+
+	ret = lock(this, LOCK_SH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = NULL;
+		return NULL;
+	}
+	lock_fd = ret;
+
+	this->next->opendir(ctx, this->next->opendir_next, call);
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = NULL;
+		return NULL;
+	}
+	return _ret->ret;
 }
 
 static int hardlink_stat(Context *ctx, const This *this,
@@ -395,6 +476,154 @@ err:
 	unlock(lock_fd);
 	_ret->ret = -1;
 	return -1;
+}
+
+static ssize_t hardlink_readlink(Context *ctx, const This *this,
+								 const CallReadlink *call) {
+	int ret, lock_fd;
+	RetSSize *_ret = call->ret;
+
+	ret = lock(this, LOCK_SH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		return -1;
+	}
+	lock_fd = ret;
+
+	ret = is_hardlinkat(ctx, (call->at? call->dirfd: AT_FDCWD), call->path);
+	if (ret < 0) {
+		goto err;
+	}
+
+	if (ret) {
+		_ret->_errno = EINVAL;
+		_ret->ret = -1;
+	} else {
+		this->next->readlink(ctx, this->next->readlink_next, call);
+	}
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		goto err;
+	}
+	return _ret->ret;
+
+err:
+	_ret->_errno = errno;
+	unlock(lock_fd);
+	_ret->ret = -1;
+	return -1;
+}
+
+static int hardlink_access(Context *ctx, const This *this,
+						   const CallAccess *call) {
+	int ret, lock_fd;
+	RetInt *_ret = call->ret;
+
+	ret = lock(this, LOCK_SH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		return -1;
+	}
+	lock_fd = ret;
+
+	this->next->access(ctx, this->next->access_next, call);
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		goto err;
+	}
+	return _ret->ret;
+
+err:
+	_ret->_errno = errno;
+	unlock(lock_fd);
+	_ret->ret = -1;
+	return -1;
+}
+
+static int hardlink_exec(Context *ctx, const This *this, const CallExec *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	// Do not take lock since exec may recurse
+	ret = is_hardlinkat(ctx, (exectype_is_at(call->type)?
+								  call->dirfd: AT_FDCWD),
+						call->path);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		return -1;
+	}
+
+	if (ret) {
+		CallExec _call;
+		callexec_copy(&_call, call);
+
+		if (exectype_is_at(call->type)) {
+			_call.flags &= ~AT_SYMLINK_NOFOLLOW;
+		}
+
+		this->next->exec(ctx, this->next->exec_next, &_call);
+	} else {
+		this->next->exec(ctx, this->next->exec_next, call);
+	}
+
+	return _ret->ret;
+}
+
+static char *hardlink_realpath(Context *ctx, const This *this,
+							   const CallRealpath *call) {
+	int ret, lock_fd;
+	RetPtr *_ret = call->ret;
+
+	ret = lock(this, LOCK_SH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = NULL;
+		return NULL;
+	}
+	lock_fd = ret;
+
+	ret = is_hardlinkat(ctx, AT_FDCWD, call->path);
+	if (ret < 0) {
+		goto err;
+	}
+
+	if (ret) {
+		size_t len = strlen(call->path) +1;
+		if (call->out) {
+			if (len >= PATH_MAX) {
+				errno = ENAMETOOLONG;
+				goto err;
+			}
+			memcpy(call->out, call->path, len);
+		} else {
+			char *out = malloc(len);
+			if (!out) {
+				goto err;
+			}
+
+			memcpy(out, call->path, len);
+			_ret->ret = out;
+		}
+	} else {
+		this->next->realpath(ctx, this->next->realpath_next, call);
+	}
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		goto err;
+	}
+	return _ret->ret;
+
+err:
+	_ret->_errno = errno;
+	unlock(lock_fd);
+	_ret->ret = NULL;
+	return NULL;
 }
 
 static int hardlink_link(Context *ctx, const This *this,
@@ -503,9 +732,38 @@ err:
 	return -1;
 }
 
+static int hardlink_symlink(Context *ctx, const This *this,
+							const CallLink *call) {
+	int ret, lock_fd;
+	RetInt *_ret = call->ret;
+
+	ret = lock(this, LOCK_SH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		return -1;
+	}
+	lock_fd = ret;
+
+	this->next->symlink(ctx, this->next->symlink_next, call);
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		goto err;
+	}
+	return _ret->ret;
+
+err:
+	_ret->_errno = errno;
+	unlock(lock_fd);
+	_ret->ret = -1;
+	return -1;
+}
+
 static int hardlink_unlink(Context *ctx, const This *this,
 						   const CallUnlink *call) {
-	int ret, lock_fd;
+	ssize_t ret;
+	int lock_fd;
 	RetInt *_ret = call->ret;
 
 	ret = lock(this, LOCK_EX);
@@ -522,12 +780,227 @@ static int hardlink_unlink(Context *ctx, const This *this,
 	}
 
 	if (ret) {
-		ret = del_hardlink(ctx, (call->at? call->dirfd: AT_FDCWD), call->path);
+		ret = readlink_scratch(ctx, (call->at? call->dirfd: AT_FDCWD),
+							   call->path);
+		if (ret < 0) {
+			goto err;
+		}
+
+		ret = this->bottom->unlink(ctx, this->next->unlink_next, call);
+		if (ret < 0) {
+			goto err;
+		}
+
+		ret = del_hardlink(ctx->scratch);
 		if (ret < 0) {
 			goto err;
 		}
 	} else {
 		this->next->unlink(ctx, this->next->unlink_next, call);
+	}
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		goto err;
+	}
+	return _ret->ret;
+
+err:
+	_ret->_errno = errno;
+	unlock(lock_fd);
+	_ret->ret = -1;
+	return -1;
+}
+
+static ssize_t hardlink_listxattr(Context *ctx, const This *this,
+								  const CallListXattr *call) {
+	int ret, lock_fd;
+	RetSSize *_ret = call->ret;
+
+	ret = lock(this, LOCK_SH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		return -1;
+	}
+	lock_fd = ret;
+
+	if (call->type == XATTRTYPE_F) {
+		ret = 0;
+	} else {
+		ret = is_hardlinkat(ctx, AT_FDCWD, call->path);
+		if (ret < 0) {
+			goto err;
+		}
+	}
+
+	if (ret) {
+		CallListXattr _call;
+		calllistxattr_copy(&_call, call);
+
+		if (call->type == XATTRTYPE_L) {
+			_call.type = XATTRTYPE_PLAIN;
+		}
+
+		this->next->listxattr(ctx, this->next->listxattr_next, &_call);
+	} else {
+		this->next->listxattr(ctx, this->next->listxattr_next, call);
+	}
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		goto err;
+	}
+	return _ret->ret;
+
+err:
+	_ret->_errno = errno;
+	unlock(lock_fd);
+	_ret->ret = -1;
+	return -1;
+}
+
+static int hardlink_setxattr(Context *ctx, const This *this,
+							 const CallSetXattr *call) {
+	int ret, lock_fd;
+	RetInt *_ret = call->ret;
+
+	ret = lock(this, LOCK_SH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		return -1;
+	}
+	lock_fd = ret;
+
+	if (call->type == XATTRTYPE_F) {
+		ret = 0;
+	} else {
+		ret = is_hardlinkat(ctx, AT_FDCWD, call->path);
+		if (ret < 0) {
+			goto err;
+		}
+	}
+
+	if (ret) {
+		CallSetXattr _call;
+		callsetxattr_copy(&_call, call);
+
+		if (call->type == XATTRTYPE_L) {
+			_call.type = XATTRTYPE_PLAIN;
+		}
+
+		this->next->setxattr(ctx, this->next->setxattr_next, &_call);
+	} else {
+		this->next->setxattr(ctx, this->next->setxattr_next, call);
+	}
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		goto err;
+	}
+	return _ret->ret;
+
+err:
+	_ret->_errno = errno;
+	unlock(lock_fd);
+	_ret->ret = -1;
+	return -1;
+}
+
+static ssize_t hardlink_getxattr(Context *ctx, const This *this,
+								 const CallGetXattr *call) {
+	int ret, lock_fd;
+	RetSSize *_ret = call->ret;
+
+	ret = lock(this, LOCK_SH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		return -1;
+	}
+	lock_fd = ret;
+
+	if (call->type == XATTRTYPE_F) {
+		ret = 0;
+	} else {
+		ret = is_hardlinkat(ctx, AT_FDCWD, call->path);
+		if (ret < 0) {
+			goto err;
+		}
+	}
+
+	if (ret) {
+		CallGetXattr _call;
+		callgetxattr_copy(&_call, call);
+
+		if (call->type == XATTRTYPE_L) {
+			_call.type = XATTRTYPE_PLAIN;
+		}
+
+		this->next->getxattr(ctx, this->next->getxattr_next, &_call);
+	} else {
+		this->next->getxattr(ctx, this->next->getxattr_next, call);
+	}
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		goto err;
+	}
+	return _ret->ret;
+
+err:
+	_ret->_errno = errno;
+	unlock(lock_fd);
+	_ret->ret = -1;
+	return -1;
+}
+
+static int hardlink_rename(Context *ctx, const This *this,
+						   const CallRename *call) {
+	ssize_t ret;
+	int lock_fd;
+	RetInt *_ret = call->ret;
+
+	ret = lock(this, LOCK_EX);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		return -1;
+	}
+	lock_fd = ret;
+
+	if (call->type == RENAMETYPE_AT2 &&
+			call->flags & (RENAME_EXCHANGE | RENAME_NOREPLACE)) {
+		ret = 0;
+	} else {
+		ret = is_hardlinkat(ctx, (renametype_is_at(call->type)?
+									  call->newdirfd: AT_FDCWD),
+							call->newpath);
+		if (ret < 0) {
+			goto err;
+		}
+	}
+
+	if (ret) {
+		ret = readlink_scratch(ctx, (renametype_is_at(call->type)?
+										 call->newdirfd: AT_FDCWD),
+							   call->newpath);
+		if (ret < 0) {
+			goto err;
+		}
+
+		ret = this->bottom->rename(ctx, this->next->rename_next, call);
+		if (ret < 0) {
+			goto err;
+		}
+
+		ret = del_hardlink(ctx->scratch);
+		if (ret < 0) {
+			goto err;
+		}
+	} else {
+		this->next->rename(ctx, this->next->rename_next, call);
 	}
 
 	ret = unlock(lock_fd);
@@ -563,7 +1036,8 @@ static int mkpath(const char *_file_path, mode_t mode) {
 	return 0;
 }
 
-const CallHandler *hardlinkshim_init(const CallHandler *next) {
+const CallHandler *hardlinkshim_init(const CallHandler *next,
+									 const CallHandler *bottom) {
 	static This this;
 	static int initialized = 0;
 	int ret;
@@ -574,14 +1048,39 @@ const CallHandler *hardlinkshim_init(const CallHandler *next) {
 	initialized = 1;
 
 	this.next = next;
+	this.bottom = bottom;
 	this.this = *next;
 
+	this.this.open = hardlink_open;
+	this.this.open_next = &this;
+	this.this.fopen = hardlink_fopen;
+	this.this.fopen_next = &this;
+	this.this.opendir = hardlink_opendir;
+	this.this.opendir_next = &this;
 	this.this.stat = hardlink_stat;
 	this.this.stat_next = &this;
+	this.this.readlink = hardlink_readlink;
+	this.this.readlink_next = &this;
+	this.this.access = hardlink_access;
+	this.this.access_next = &this;
+	this.this.exec = hardlink_exec;
+	this.this.exec_next = &this;
+	this.this.realpath = hardlink_realpath;
+	this.this.realpath_next = &this;
 	this.this.link = hardlink_link;
 	this.this.link_next = &this;
+	this.this.symlink = hardlink_symlink;
+	this.this.symlink_next = &this;
 	this.this.unlink = hardlink_unlink;
 	this.this.unlink_next = &this;
+	this.this.listxattr = hardlink_listxattr;
+	this.this.listxattr_next = &this;
+	this.this.setxattr = hardlink_setxattr;
+	this.this.setxattr_next = &this;
+	this.this.getxattr = hardlink_getxattr;
+	this.this.getxattr_next = &this;
+	this.this.rename = hardlink_rename;
+	this.this.rename_next = &this;
 
 	ret = mkpath(HARDLINK_PREFIX LOCKFILE, 0777);
 	if (ret < 0) {
