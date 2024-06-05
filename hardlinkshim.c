@@ -245,10 +245,10 @@ static int is_dotdot(const char *path) {
 	return last[0] == '.' && last[1] == '.' && last[2] == '\0';
 }
 
-static int is_nonempty(const char *path) {
+static int is_empty(const char *path) {
 	char *last = strrchr(path, '/') +1;
 
-	return last[0] != '\0';
+	return last[0] == '\0' || (last[0] == '.' && last[1] == '\0');
 }
 
 static int is_inside_prefix(const This *this, const char *_file_path) {
@@ -279,7 +279,7 @@ static int is_inside_prefix(const This *this, const char *_file_path) {
 		if (inside) {
 			if (is_dotdot(file_path)) {
 				inside--;
-			} else if (is_nonempty(file_path)) {
+			} else if (!is_empty(file_path)) {
 				inside++;
 			}
 		} else {
