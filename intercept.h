@@ -221,7 +221,8 @@ typedef enum ExecType ExecType;
 enum ExecType {
 	EXECTYPE_EXECVE,
 	EXECTYPE_EXECVE_AT,
-	EXECTYPE_POSIX_SPAWN
+	EXECTYPE_POSIX_SPAWN,
+	EXECTYPE_POSIX_SPAWNP
 };
 static int exectype_is_at(ExecType type) {
 	return type == EXECTYPE_EXECVE_AT;
@@ -262,6 +263,7 @@ static void callexec_copy(CallExec *dst, const CallExec *call) {
 		break;
 
 		case EXECTYPE_POSIX_SPAWN:
+		case EXECTYPE_POSIX_SPAWNP:
 			dst->pid = call->pid;
 			dst->file_actions = call->file_actions;
 			dst->attrp = call->attrp;

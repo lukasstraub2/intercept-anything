@@ -1310,6 +1310,7 @@ int posix_spawn(pid_t *restrict pid, const char *restrict pathname,
 				const posix_spawnattr_t *restrict attrp,
 				char *const argv[restrict],
 				char *const envp[restrict]) {
+	int ret;
 
 	init();
 	debug(DEBUG_LEVEL_VERBOSE, __FILE__": posix_spawn(%s)\n", pathname?pathname:"NULL");
@@ -1319,7 +1320,7 @@ int posix_spawn(pid_t *restrict pid, const char *restrict pathname,
 	}
 
 	Context ctx;
-	RetInt ret = { ._errno = errno };
+	RetInt _ret = { ._errno = errno };
 	CallExec call = {
 		.type = EXECTYPE_POSIX_SPAWN,
 		.final = 0,
@@ -1329,11 +1330,16 @@ int posix_spawn(pid_t *restrict pid, const char *restrict pathname,
 		.path = pathname,
 		.argv = argv,
 		.envp = envp,
-		.ret = &ret
+		.ret = &_ret
 	};
-	_next->exec(&ctx, _next->exec_next, &call);
-	errno = call.ret->_errno;
-	return call.ret->ret;
+	ret = _next->exec(&ctx, _next->exec_next, &call);
+	if (ret < 0) {
+		// Fall back
+		call.final = 1;
+		_next->exec(&ctx, _next->exec_next, &call);
+	}
+	errno = _ret._errno;
+	return _ret.ret;
 }
 
 __attribute__((visibility("default")))
@@ -1342,6 +1348,7 @@ int posix_spawnp(pid_t *restrict pid, const char *restrict filename,
 				 const posix_spawnattr_t *restrict attrp,
 				 char *const argv[restrict],
 				 char *const envp[restrict]) {
+	int ret;
 
 	init();
 	debug(DEBUG_LEVEL_VERBOSE, __FILE__": posix_spawnp(%s)\n", filename?filename:"NULL");
@@ -1351,7 +1358,7 @@ int posix_spawnp(pid_t *restrict pid, const char *restrict filename,
 	}
 
 	Context ctx;
-	RetInt ret = { ._errno = errno };
+	RetInt _ret = { ._errno = errno };
 	CallExec call = {
 		.type = EXECTYPE_POSIX_SPAWN,
 		.final = 0,
@@ -1361,11 +1368,17 @@ int posix_spawnp(pid_t *restrict pid, const char *restrict filename,
 		.path = filename,
 		.argv = argv,
 		.envp = envp,
-		.ret = &ret
+		.ret = &_ret
 	};
-	handle_exec_p(&ctx, _next, &call);
-	errno = call.ret->_errno;
-	return call.ret->ret;
+	ret = handle_exec_p(&ctx, _next, &call);
+	if (ret < 0) {
+		// Fall back
+		call.type = EXECTYPE_POSIX_SPAWNP;
+		call.final = 1;
+		_next->exec(&ctx, _next->exec_next, &call);
+	}
+	errno = _ret._errno;
+	return _ret.ret;
 }
 
 __attribute__((visibility("default")))
@@ -2099,6 +2112,11 @@ static int _bottom_execve(Context *ctx, const This *this,
 		case EXECTYPE_POSIX_SPAWN:
 			ret = _posix_spawn(call->pid, call->path, call->file_actions,
 							   call->attrp, call->argv, call->envp);
+		break;
+
+		case EXECTYPE_POSIX_SPAWNP:
+			ret = _posix_spawnp(call->pid, call->path, call->file_actions,
+								call->attrp, call->argv, call->envp);
 		break;
 
 		default:
