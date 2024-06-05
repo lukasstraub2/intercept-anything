@@ -10,3 +10,5 @@ print
 confstr
 test.sh
 rootlink.*
+!rootlink.h
+!rootlink.c
