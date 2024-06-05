@@ -168,6 +168,23 @@ err:
 	return -1;
 }
 
+static int cnt_del(char *linkname) {
+	int ret;
+
+	ret = changeprefix(linkname, "cnt");
+	if (ret < 0) {
+		return -1;
+	}
+
+	ret = _unlink(linkname);
+	changeprefix(linkname, "ino");
+	if (ret < 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
 static int cnt_add(char *linkname, int add) {
 	int ret;
 
@@ -452,6 +469,11 @@ static int del_hardlink(char *linkname) {
 	}
 
 	ret = _unlink(linkname);
+	if (ret < 0) {
+		return -1;
+	}
+
+	ret = cnt_del(linkname);
 	if (ret < 0) {
 		return -1;
 	}
