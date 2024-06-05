@@ -23,7 +23,6 @@ struct This {
 	CallHandler this;
 	const CallHandler *next;
 	const CallHandler *bottom;
-	int dirfd;
 	dev_t prefix_dev;
 	ino64_t prefix_ino;
 };
@@ -34,7 +33,7 @@ struct This {
 static int lock(const This *this, int operation) {
 	int ret, fd;
 
-	ret = _openat64(this->dirfd, LOCKFILE, O_RDWR | O_CLOEXEC, 0777);
+	ret = _open64(HARDLINK_PREFIX LOCKFILE, O_RDWR | O_CLOEXEC, 0777);
 	if (ret < 0) {
 		return ret;
 	}
@@ -1312,14 +1311,6 @@ const CallHandler *hardlinkshim_init(const CallHandler *next,
 		return NULL;
 	}
 	_close(ret);
-
-	ret = _open64(HARDLINK_PREFIX, O_DIRECTORY | O_RDONLY | O_CLOEXEC, 0777);
-	if (ret < 0) {
-		debug(DEBUG_LEVEL_ALWAYS, __FILE__": open64(%s): %s\n", HARDLINK_PREFIX,
-			  strerror(errno));
-		return NULL;
-	}
-	this.dirfd = ret;
 
 	ret = _stat64(PREFIX, &statbuf);
 	if (ret < 0) {
