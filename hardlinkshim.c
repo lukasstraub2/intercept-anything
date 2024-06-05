@@ -239,8 +239,21 @@ static int _is_inside_prefix(const This *this, const char *component) {
 	return 0;
 }
 
+static int is_dotdot(const char *path) {
+	char *last = strrchr(path, '/') +1;
+
+	return last[0] == '.' && last[1] == '.' && last[2] == '\0';
+}
+
+static int is_nonempty(const char *path) {
+	char *last = strrchr(path, '/') +1;
+
+	return last[0] != '\0';
+}
+
 static int is_inside_prefix(const This *this, const char *_file_path) {
 	int ret;
+	int inside = 0;
 	char *path;
 	size_t len = strlen(_file_path) +1;
 	char file_path[len];
@@ -263,22 +276,30 @@ static int is_inside_prefix(const This *this, const char *_file_path) {
 		}
 		*path = '\0';
 
-		ret = _is_inside_prefix(this, file_path);
-		if (ret < 0) {
-			if (errno == EACCES || errno == ENOENT) {
-				return 0;
-			} else {
-				return -1;
+		if (inside) {
+			if (is_dotdot(file_path)) {
+				inside--;
+			} else if (is_nonempty(file_path)) {
+				inside++;
 			}
-		}
-		if (ret) {
-			return 1;
+		} else {
+			ret = _is_inside_prefix(this, file_path);
+			if (ret < 0) {
+				if (errno == EACCES || errno == ENOENT) {
+					return 0;
+				} else {
+					return -1;
+				}
+			}
+			if (ret) {
+				inside++;
+			}
 		}
 
 		*path = '/';
 	}
 
-	return 0;
+	return inside;
 }
 
 // Only use this for rename and link
