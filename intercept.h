@@ -7,6 +7,7 @@
 #include <spawn.h>
 
 #define SCRATCH_SIZE (64*1024)
+_Static_assert(SCRATCH_SIZE >= PATH_MAX, "SCRATCH_SIZE");
 
 typedef struct Context Context;
 struct Context {

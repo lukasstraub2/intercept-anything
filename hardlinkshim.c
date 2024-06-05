@@ -24,6 +24,8 @@ struct This {
 	const CallHandler *next;
 	const CallHandler *bottom;
 	int dirfd;
+	dev_t prefix_dev;
+	ino64_t prefix_ino;
 };
 
 #define HARDLINK_PREFIX PREFIX "/tmp/hardlinkshim/"
@@ -138,7 +140,11 @@ static int cnt_write(char *linkname, int cnt) {
 	}
 	changeprefix(tmpname, "tmp");
 
-	snprintf(buf, SCRATCH_SIZE, "%d", cnt);
+	ret = snprintf(buf, SCRATCH_SIZE, "%d", cnt);
+	if (ret >= SCRATCH_SIZE) {
+		errno = ENAMETOOLONG;
+		goto err;
+	}
 
 	_unlink(tmpname);
 	ret = _symlink(buf, tmpname);
@@ -211,6 +217,143 @@ static int is_hardlinkat(Context *ctx, int dirfd, const char *path) {
 
 	if (!strcmp_prefix(ctx->scratch, HARDLINK_PREFIX)) {
 		return 1;
+	}
+
+	return 0;
+}
+
+static int _is_inside_prefix(const This *this, const char *component) {
+	struct stat64 statbuf;
+	int ret;
+
+	ret = _stat64(component, &statbuf);
+	if (ret < 0) {
+		return -1;
+	}
+
+	if (statbuf.st_dev == this->prefix_dev &&
+			statbuf.st_ino == this->prefix_ino) {
+		return 1;
+	}
+
+	return 0;
+}
+
+static int is_inside_prefix(const This *this, const char *_file_path) {
+	int ret;
+	char *path;
+	size_t len = strlen(_file_path) +1;
+	char file_path[len];
+	memcpy(file_path, _file_path, len);
+
+	for (path = file_path + len - 2; path >= file_path && *path == '/'; path--) {
+		*path = '\0';
+	}
+
+	// Skip the first few components that may match our prefix
+	// This reduces the number of stat calls we do later
+	int components = -2;
+	for (path = strchr(PREFIX, '/'); path; path = strchr(path + 1, '/')) {
+		components++;
+	}
+
+	for (path = strchr(file_path + 1, '/'); path; path = strchr(path + 1, '/')) {
+		if (components-- >= 0) {
+			continue;
+		}
+		*path = '\0';
+
+		ret = _is_inside_prefix(this, file_path);
+		if (ret < 0) {
+			if (errno == EACCES || errno == ENOENT) {
+				return 0;
+			} else {
+				return -1;
+			}
+		}
+		if (ret) {
+			return 1;
+		}
+
+		*path = '/';
+	}
+
+	return 0;
+}
+
+// Only use this for rename and link
+static int is_inside_prefixat(Context *ctx, const This *this, int dirfd,
+							  const char *path) {
+	int ret;
+	char buf[SCRATCH_SIZE];
+
+	if (path[0] == '/') {
+		return is_inside_prefix(this, path);
+	}
+
+	ret = snprintf(buf, SCRATCH_SIZE, "/proc/self/fd/%u", dirfd);
+	if (ret >= SCRATCH_SIZE) {
+		errno = ENAMETOOLONG;
+		return -1;
+	}
+
+	if (dirfd == AT_FDCWD) {
+		char *cwd = getcwd(ctx->scratch, SCRATCH_SIZE);
+		if (!cwd) {
+			ret = -1;
+		}
+	} else {
+		ret = readlink_scratch(ctx, AT_FDCWD, buf);
+	}
+	if (ret < 0) {
+		if (errno == ENOENT) {
+			errno = EBADF;
+		}
+		return -1;
+	}
+
+	size_t len = strlen(ctx->scratch) +1;
+	if (len +1 >= SCRATCH_SIZE) {
+		errno = ENAMETOOLONG;
+		return -1;
+	}
+	ctx->scratch[len -1] = '/';
+	ctx->scratch[len] = '\0';
+
+	ret = concat(buf, SCRATCH_SIZE, ctx->scratch, path);
+	if (ret >= SCRATCH_SIZE) {
+		errno = ENAMETOOLONG;
+		return -1;
+	}
+
+	return is_inside_prefix(this, buf);
+}
+
+static int ab_inside_prefixat(Context *ctx, const This *this,
+							  int dirfda, const char *patha,
+							  int dirfdb, const char *pathb) {
+	int ret, a_inprefix, b_inprefix;
+
+	ret = is_inside_prefixat(ctx, this, dirfda, patha);
+	if (ret < 0) {
+		return -1;
+	}
+	a_inprefix = ret;
+
+	ret = is_inside_prefixat(ctx, this, dirfdb, pathb);
+	if (ret < 0) {
+		return -1;
+	}
+	b_inprefix = ret;
+
+	if (!a_inprefix || !b_inprefix) {
+		if (a_inprefix == b_inprefix) {
+			errno = ENOTSUP;
+			return -1;
+		} else {
+			errno = EXDEV;
+			return -1;
+		}
 	}
 
 	return 0;
@@ -631,6 +774,19 @@ static int hardlink_link(Context *ctx, const This *this,
 	int ret, lock_fd;
 	RetInt *_ret = call->ret;
 
+	if (call->at) {
+		ret = ab_inside_prefixat(ctx, this, call->olddirfd, call->oldpath,
+								 call->newdirfd, call->newpath);
+	} else {
+		ret = ab_inside_prefixat(ctx, this, AT_FDCWD, call->oldpath,
+								 AT_FDCWD, call->newpath);
+	}
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		return -1;
+	}
+
 	if (call->at && call->flags & (AT_EMPTY_PATH | AT_SYMLINK_FOLLOW)) {
 		// TODO: Handle AT_SYMLINK_FOLLOW
 		_ret->_errno = ENOENT;
@@ -962,6 +1118,21 @@ static int hardlink_rename(Context *ctx, const This *this,
 	int lock_fd;
 	RetInt *_ret = call->ret;
 
+	if (renametype_is_at(call->type)) {
+		ret = ab_inside_prefixat(ctx, this, call->olddirfd, call->oldpath,
+								 call->newdirfd, call->newpath);
+	} else {
+		ret = ab_inside_prefixat(ctx, this, AT_FDCWD, call->oldpath,
+								 AT_FDCWD, call->newpath);
+	}
+	if (ret < 0) {
+		if (errno != ENOTSUP) {
+			_ret->_errno = errno;
+			_ret->ret = -1;
+			return -1;
+		}
+	}
+
 	ret = lock(this, LOCK_EX);
 	if (ret < 0) {
 		_ret->_errno = errno;
@@ -1040,6 +1211,7 @@ const CallHandler *hardlinkshim_init(const CallHandler *next,
 									 const CallHandler *bottom) {
 	static This this;
 	static int initialized = 0;
+	struct stat64 statbuf;
 	int ret;
 
 	if (initialized) {
@@ -1105,6 +1277,15 @@ const CallHandler *hardlinkshim_init(const CallHandler *next,
 		return NULL;
 	}
 	this.dirfd = ret;
+
+	ret = _stat64(PREFIX, &statbuf);
+	if (ret < 0) {
+		debug(DEBUG_LEVEL_ALWAYS, __FILE__": stat64(%s): %s\n", PREFIX,
+			  strerror(errno));
+		return NULL;
+	}
+	this.prefix_dev = statbuf.st_dev;
+	this.prefix_ino = statbuf.st_ino;
 
 	return &this.this;
 }
