@@ -977,13 +977,13 @@ static int handle_execveat(int dirfd, const char *pathname, char *const argv[],
 
 /* The file is accessible but it is not an executable file.  Invoke
    the shell to interpret it as a script.  */
-static void maybe_script_execute(Context *ctx, const CallHandler *next,
-								 const CallExec *call) {
+static void maybe_script_execute(const char *file, char *const argv[],
+								 char *const envp[]) {
 	int64_t argc;
 
-	argc = array_len(call->argv);
+	argc = array_len(argv);
 	if (argc >= INT_MAX -1) {
-		call->ret->_errno = E2BIG;
+		errno = E2BIG;
 		return;
 	}
 
@@ -996,56 +996,42 @@ static void maybe_script_execute(Context *ctx, const CallHandler *next,
 	arguments.  */
 	char *new_argv[argc > 1 ? 2 + argc : 3];
 	new_argv[0] = (char *) "/bin/sh";
-	new_argv[1] = (char *) call->path;
+	new_argv[1] = (char *) file;
 	if (argc > 1) {
-		array_copy(new_argv + 2, call->argv + 1, argc);
+		array_copy(new_argv + 2, argv + 1, argc);
 	} else {
 		new_argv[2] = NULL;
 	}
 
-	CallExec _call;
-	callexec_copy(&_call, call);
-	_call.path = new_argv[0];
-	_call.argv = new_argv;
-
 	/* Execute the shell.  */
-	next->exec(ctx, next->exec_next, &_call);
+	handle_execve(new_argv[0], new_argv, envp);
 }
 
-static int handle_exec_p(Context *ctx, const CallHandler *next,
-						 const CallExec *call) {
-	RetInt *ret = call->ret;
-	CallExec _call;
-	callexec_copy(&_call, call);
-	int got_eacces = 0;
-
+static int _handle_execvpe(const char *file, char *const argv[], char *const envp[],
+						   int exec_script) {
 	/* We check the simple case first. */
-	if (call->path[0] == '\0') {
-		ret->_errno = ENOENT;
-		ret->ret = -1;
-		goto out;
+	if (*file == '\0') {
+		errno = ENOENT;
+		return -1;
 	}
 
 	/* Don't search when it contains a slash.  */
-	if (strchr(call->path, '/') != NULL) {
-		next->exec(ctx, next->exec_next, (CallExec *)call);
+	if (strchr(file, '/') != NULL) {
+		handle_execve(file, argv, envp);
 
-		if (ret->_errno == ENOEXEC) {
-			maybe_script_execute(ctx, next, call);
+		if (errno == ENOEXEC && exec_script) {
+			maybe_script_execute(file, argv, envp);
 		}
 
-		ret->ret = -1;
-		goto out;
+		return -1;
 	}
 
 	size_t path_buf_size = confstr(_CS_PATH, NULL, 0);
 	if (path_buf_size == 0 || path_buf_size > (64*1024)) {
-		ret->_errno = ENAMETOOLONG;
-		ret->ret = -1;
-		goto out;
+		errno = ENAMETOOLONG;
+		return -1;
 	}
 
-	{
 	char path_buf[path_buf_size];
 	const char *path = getenv("PATH");
 	if (!path) {
@@ -1055,21 +1041,20 @@ static int handle_exec_p(Context *ctx, const CallHandler *next,
 	/* Although GLIBC does not enforce NAME_MAX, we set it as the maximum
 	 size to avoid unbounded stack allocation.  Same applies for
 	 PATH_MAX.  */
-	size_t file_len = strnlen(call->path, NAME_MAX) + 1;
+	size_t file_len = strnlen(file, NAME_MAX) + 1;
 	size_t path_len = strnlen(path, PATH_MAX - 1) + 1;
 
 	/* NAME_MAX does not include the terminating null character.  */
 	if ((file_len - 1 > NAME_MAX) || path_len + file_len + 1 > (64*1024)) {
-		ret->_errno = ENAMETOOLONG;
-		ret->ret = -1;
-		goto out;
+		errno = ENAMETOOLONG;
+		return -1;
 	}
 
 	const char *subp;
+	int got_eacces = 0;
 	/* The resulting string maximum size would be potentially a entry
 	 in PATH plus '/' (path_len + 1) and then the the resulting file name
 	 plus '\0' (file_len since it already accounts for the '\0').  */
-	{
 	char buffer[path_len + file_len + 1];
 	for (const char *p = path; ; p = subp) {
 		subp = strchrnul(p, ':');
@@ -1087,20 +1072,19 @@ static int handle_exec_p(Context *ctx, const CallHandler *next,
 		 execute.  */
 		char *pend = mempcpy(buffer, p, subp - p);
 		*pend = '/';
-		memcpy(pend + (p < subp), call->path, file_len);
+		memcpy(pend + (p < subp), file, file_len);
 
-		_call.path = buffer;
-		next->exec(ctx, next->exec_next, &_call);
+		handle_execve(buffer, argv, envp);
 
-		if (ret->_errno == ENOEXEC) {
+		if (errno == ENOEXEC && exec_script) {
 			/* This has O(P*C) behavior, where P is the length of the path and C
 			   is the argument count.  A better strategy would be allocate the
 			   substitute argv and reuse it each time through the loop (so it
 			   behaves as O(P+C) instead.  */
-			maybe_script_execute(ctx, next, &_call);
+			maybe_script_execute(buffer, argv, envp);
 		}
 
-		switch (ret->_errno)
+		switch (errno)
 		{
 			case EACCES:
 				/* Record that we got a 'Permission denied' error.  If we end
@@ -1128,41 +1112,21 @@ static int handle_exec_p(Context *ctx, const CallHandler *next,
 		}
 
 		if (*subp++ == '\0') break;
-	}}}
+	}
 
 	/* We tried every element and none of them worked.  */
 	if (got_eacces) {
 		/* At least one failure was due to permissions, so report that
 		   error.  */
-		ret->_errno = EACCES;
+		errno = EACCES;
 	}
 
-	ret->ret = -1;
-
-out:
-	return ret->ret;
+	return -1;
 }
 
 static int handle_execvpe(const char *pathname, char *const argv[],
 						  char *const envp[]) {
-
-	if (!pathname) {
-		return _execve(pathname, argv, envp);
-	}
-
-	Context ctx;
-	RetInt ret = { ._errno = errno };
-	CallExec call = {
-		.type = EXECTYPE_EXECVE,
-		.final = 0,
-		.path = pathname,
-		.argv = argv,
-		.envp = envp,
-		.ret = &ret
-	};
-	handle_exec_p(&ctx, _next, &call);
-	errno = call.ret->_errno;
-	return call.ret->ret;
+	return _handle_execvpe(pathname, argv, envp, 1);
 }
 
 __attribute__((visibility("default")))
@@ -1304,13 +1268,52 @@ int execvpe(const char *file, char *const argv[], char *const envp[]) {
 }
 #endif
 
+typedef enum PosixType PosixType;
+enum PosixType {
+	POSIXTYPE_PLAIN,
+	POSIXTYPE_P
+};
+
+static int posix_spawn_helper(PosixType type,
+							  pid_t *restrict pid, const char *restrict filename,
+							  const posix_spawn_file_actions_t *restrict file_actions,
+							  const posix_spawnattr_t *restrict attrp,
+							  char *const argv[restrict],
+							  char *const envp[restrict]) {
+	int64_t argc;
+
+	argc = array_len(argv);
+	if (argc >= INT_MAX -1) {
+		errno = E2BIG;
+		return -1;
+	}
+
+	/* Construct an argument list for the shell based on original arguments:
+	 1. Empty list (argv = { NULL }, argc = 1 }: new argv will contain 3
+	arguments - default shell, script to execute, and ending NULL.
+	 2. Non empty argument list (argc = { ..., NULL }, argc > 1}: new argv
+	will contain also the default shell and the script to execute.  It
+	will also skip the script name in arguments and only copy script
+	arguments.  */
+	char *new_argv[argc > 1 ? 2 + argc : 3];
+	new_argv[0] = (char *) (type == POSIXTYPE_PLAIN? "posix_spawn": "posix_spawnp");
+	new_argv[1] = (char *) filename;
+	if (argc > 1) {
+		array_copy(new_argv + 2, argv, argc + 1);
+	} else {
+		new_argv[2] = NULL;
+	}
+
+	return _posix_spawn(pid, PREFIX "/opt/posix_spawnp_helper", file_actions,
+						attrp, new_argv, envp);
+}
+
 __attribute__((visibility("default")))
 int posix_spawn(pid_t *restrict pid, const char *restrict pathname,
 				const posix_spawn_file_actions_t *restrict file_actions,
 				const posix_spawnattr_t *restrict attrp,
 				char *const argv[restrict],
 				char *const envp[restrict]) {
-	int ret;
 
 	init();
 	debug(DEBUG_LEVEL_VERBOSE, __FILE__": posix_spawn(%s)\n", pathname?pathname:"NULL");
@@ -1319,27 +1322,8 @@ int posix_spawn(pid_t *restrict pid, const char *restrict pathname,
 		return _posix_spawn(pid, pathname, file_actions, attrp, argv, envp);
 	}
 
-	Context ctx;
-	RetInt _ret = { ._errno = errno };
-	CallExec call = {
-		.type = EXECTYPE_POSIX_SPAWN,
-		.final = 0,
-		.pid = pid,
-		.file_actions = file_actions,
-		.attrp = attrp,
-		.path = pathname,
-		.argv = argv,
-		.envp = envp,
-		.ret = &_ret
-	};
-	ret = _next->exec(&ctx, _next->exec_next, &call);
-	if (ret < 0) {
-		// Fall back
-		call.final = 1;
-		_next->exec(&ctx, _next->exec_next, &call);
-	}
-	errno = _ret._errno;
-	return _ret.ret;
+	return posix_spawn_helper(POSIXTYPE_PLAIN, pid, pathname, file_actions,
+							  attrp, argv, envp);
 }
 
 __attribute__((visibility("default")))
@@ -1348,7 +1332,6 @@ int posix_spawnp(pid_t *restrict pid, const char *restrict filename,
 				 const posix_spawnattr_t *restrict attrp,
 				 char *const argv[restrict],
 				 char *const envp[restrict]) {
-	int ret;
 
 	init();
 	debug(DEBUG_LEVEL_VERBOSE, __FILE__": posix_spawnp(%s)\n", filename?filename:"NULL");
@@ -1357,28 +1340,8 @@ int posix_spawnp(pid_t *restrict pid, const char *restrict filename,
 		return _posix_spawnp(pid, filename, file_actions, attrp, argv, envp);
 	}
 
-	Context ctx;
-	RetInt _ret = { ._errno = errno };
-	CallExec call = {
-		.type = EXECTYPE_POSIX_SPAWN,
-		.final = 0,
-		.pid = pid,
-		.file_actions = file_actions,
-		.attrp = attrp,
-		.path = filename,
-		.argv = argv,
-		.envp = envp,
-		.ret = &_ret
-	};
-	ret = handle_exec_p(&ctx, _next, &call);
-	if (ret < 0) {
-		// Fall back
-		call.type = EXECTYPE_POSIX_SPAWNP;
-		call.final = 1;
-		_next->exec(&ctx, _next->exec_next, &call);
-	}
-	errno = _ret._errno;
-	return _ret.ret;
+	return posix_spawn_helper(POSIXTYPE_P, pid, filename, file_actions, attrp,
+							  argv, envp);
 }
 
 __attribute__((visibility("default")))
