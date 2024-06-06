@@ -13,6 +13,7 @@
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "config.h"
 #include "debug.h"
+#include "util.h"
 
 #define _INTERCEPT_GLIBC
 #include "parent_open.h"
@@ -1970,6 +1971,120 @@ int fchdir(int fd) {
 	return call.ret->ret;
 }
 
+__attribute__((visibility("default")))
+char *mktemp(char *template) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": mktemp(%s)\n", template ? template : "NULL");
+
+	if (!template) {
+		return _mktemp(template);
+	}
+
+	Context ctx;
+	RetPtr ret = { ._errno = errno };
+	CallMktemp call = {
+		.type = MKTEMPTYPE_PLAIN,
+		.template = template,
+		.ret = &ret
+	};
+	_next->mktemp(&ctx, _next->mktemp_next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+__attribute__((visibility("default")))
+int mkstemp(char *template) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": mkstemp(%s)\n", template ? template : "NULL");
+
+	if (!template) {
+		return _mkstemp(template);
+	}
+
+	Context ctx;
+	RetPtr ret = { ._errno = errno };
+	CallMktemp call = {
+		.type = MKTEMPTYPE_MKS,
+		.template = template,
+		.ret = &ret
+	};
+	_next->mktemp(&ctx, _next->mktemp_next, &call);
+	errno = ret._errno;
+	return ptr_to_int(ret.ret);
+}
+
+__attribute__((visibility("default")))
+int mkostemp(char *template, int flags) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": mkostemp(%s)\n", template ? template : "NULL");
+
+	if (!template) {
+		return _mkostemp(template, flags);
+	}
+
+	Context ctx;
+	RetPtr ret = { ._errno = errno };
+	CallMktemp call = {
+		.type = MKTEMPTYPE_MKOS,
+		.template = template,
+		.flags = flags,
+		.ret = &ret
+	};
+	_next->mktemp(&ctx, _next->mktemp_next, &call);
+	errno = ret._errno;
+	return ptr_to_int(ret.ret);
+}
+
+__attribute__((visibility("default")))
+int mkstemps(char *template, int suffixlen) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": mkstemps(%s)\n", template ? template : "NULL");
+
+	if (!template) {
+		return _mkstemps(template, suffixlen);
+	}
+
+	Context ctx;
+	RetPtr ret = { ._errno = errno };
+	CallMktemp call = {
+		.type = MKTEMPTYPE_MKS_S,
+		.template = template,
+		.suffixlen = suffixlen,
+		.ret = &ret
+	};
+	_next->mktemp(&ctx, _next->mktemp_next, &call);
+	errno = ret._errno;
+	return ptr_to_int(ret.ret);
+}
+
+__attribute__((visibility("default")))
+int mkostemps(char *template, int suffixlen, int flags) {
+
+	init();
+	debug(DEBUG_LEVEL_VERBOSE, __FILE__": mkostemps(%s)\n", template ? template : "NULL");
+
+	if (!template) {
+		return _mkostemps(template, suffixlen, flags);
+	}
+
+	Context ctx;
+	RetPtr ret = { ._errno = errno };
+	CallMktemp call = {
+		.type = MKTEMPTYPE_MKOS_S,
+		.template = template,
+		.suffixlen = suffixlen,
+		.flags = flags,
+		.ret = &ret
+	};
+	_next->mktemp(&ctx, _next->mktemp_next, &call);
+	errno = ret._errno;
+	return ptr_to_int(ret.ret);
+}
+
 static int bottom_open(Context *ctx, const This *this,
 					   const CallOpen *call) {
 	int ret;
@@ -2512,6 +2627,53 @@ static int bottom_chdir(Context *ctx, const This *this,
 	return ret;
 }
 
+static void *bottom_mktemp(Context *ctx, const This *this,
+						   const CallMktemp *call) {
+	void *ret_ptr = NULL;
+	int ret = -1;
+
+	switch (call->type) {
+		case MKTEMPTYPE_PLAIN:
+			ret_ptr = _mktemp(call->template);
+		break;
+
+		case MKTEMPTYPE_MKS:
+			ret = _mkstemp(call->template);
+		break;
+
+		case MKTEMPTYPE_MKOS:
+			ret = _mkostemp(call->template, call->flags);
+		break;
+
+		case MKTEMPTYPE_MKS_S:
+			ret = _mkstemps(call->template, call->suffixlen);
+		break;
+
+		case MKTEMPTYPE_MKOS_S:
+			ret = _mkostemps(call->template, call->suffixlen, call->flags);
+		break;
+
+		default:
+			abort();
+		break;
+	}
+
+	if (call->type == MKTEMPTYPE_PLAIN) {
+		if (!ret_ptr) {
+			call->ret->_errno = errno;
+		}
+		call->ret->ret = ret_ptr;
+		return ret_ptr;
+	} else {
+		if (ret < 0) {
+			call->ret->_errno = errno;
+		}
+		ret_ptr = int_to_ptr(ret);
+		call->ret->ret = ret_ptr;
+		return ret_ptr;
+	}
+}
+
 static const CallHandler bottom = {
 	bottom_open,
 	NULL,
@@ -2546,5 +2708,7 @@ static const CallHandler bottom = {
 	bottom_scandir,
 	NULL,
 	bottom_chdir,
+	NULL,
+	bottom_mktemp,
 	NULL
 };
