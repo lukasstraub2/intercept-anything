@@ -1,4 +1,3 @@
-// Lots of stuff copied from nolibc
 
 #include "nolibc.h"
 #include "mysignal.h"
@@ -119,6 +118,22 @@ static int handle_access(const char *path, int mode) {
 	return __sysret(sys_access(path, mode));
 }
 
+static int handle_execve(const char *path, char *const argv[], char *const envp[]) {
+	trace("execve(%s)\n", path);
+	return __sysret(sys_execve(path, argv, envp));
+}
+
+static int sys_execveat(int dirfd, const char *path, char *const argv[],
+						char *const envp[], int flags) {
+	return my_syscall5(__NR_execveat, dirfd, path, argv, envp, flags);
+}
+
+static int handle_execveat(int dirfd, const char *path, char *const argv[],
+						   char *const envp[], int flags) {
+	trace("execveat(%s)\n", path);
+	return __sysret(sys_execveat(dirfd, path, argv, envp, flags));
+}
+
 static unsigned long handle_syscall(SysArgs *args) {
 	int ret;
 
@@ -174,6 +189,19 @@ static unsigned long handle_syscall(SysArgs *args) {
 			ret = handle_access((const char *)args->arg1, args->arg2);
 		break;
 
+		case __NR_execve:
+			ret = handle_execve((const char *)args->arg1,
+								(char *const *)args->arg2,
+								(char *const *)args->arg3);
+		break;
+
+		case __NR_execveat:
+			ret = handle_execveat(args->arg1, (const char *)args->arg2,
+								  (char *const *)args->arg3,
+								  (char *const *)args->arg4,
+								  args->arg5);
+		break;
+
 		default:
 			debug("Unhandled syscall no. %lu\n", args->num);
 			errno = ENOSYS;
@@ -216,20 +244,22 @@ static int install_filter() {
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
 #ifdef __NR_open
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 11, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 13, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 11, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 13, 0),
 #endif
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 10, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 9, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 8, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 7, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 6, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 5, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 4, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 3, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 2, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 1, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 12, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 11, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 10, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 9, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 8, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 7, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 6, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 5, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 4, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 3, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 2, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execveat, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer) + 4)),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)&__start_text) >> 32, 0, 3),
