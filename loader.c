@@ -1,8 +1,12 @@
 #include "nolibc.h"
 #include "mprotect.h"
 #include "trampo.h"
-#include "z_utils.h"
 #include "myelf.h"
+
+#define DEBUG_ENV "DEBUG_LOADER"
+#include "debug.h"
+
+#define alloca	__builtin_alloca
 
 #define PAGE_SIZE	4096
 #define ALIGN		(PAGE_SIZE - 1)
@@ -115,28 +119,28 @@ void z_entry(unsigned long *sp, void (*fini)(void))
 
 	(void)env;
 	if (argc < 2)
-		z_errx(1, "no input file");
+		exit_error("no input file");
 	file = argv[1];
 
 	for (i = 0;; i++, ehdr++) {
 		/* Open file, read and than check ELF header.*/
 		if ((fd = open(file, O_RDONLY)) < 0)
-			z_errx(1, "can't open %s", file);
+			exit_error("can't open %s", file);
 		if (read(fd, ehdr, sizeof(*ehdr)) != sizeof(*ehdr))
-			z_errx(1, "can't read ELF header %s", file);
+			exit_error("can't read ELF header %s", file);
 		if (!check_ehdr(ehdr))
-			z_errx(1, "bogus ELF header %s", file);
+			exit_error("bogus ELF header %s", file);
 
 		/* Read the program header. */
 		sz = ehdr->e_phnum * sizeof(Elf_Phdr);
 		phdr = alloca(sz);
 		if (lseek(fd, ehdr->e_phoff, SEEK_SET) < 0)
-			z_errx(1, "can't lseek to program header %s", file);
+			exit_error("can't lseek to program header %s", file);
 		if (read(fd, phdr, sz) != sz)
-			z_errx(1, "can't read program header %s", file);
+			exit_error("can't read program header %s", file);
 		/* Time to load ELF. */
 		if ((base[i] = loadelf_anon(fd, ehdr, phdr)) == LOAD_ERR)
-			z_errx(1, "can't load ELF %s", file);
+			exit_error("can't load ELF %s", file);
 
 		/* Set the entry point, if the file is dynamic than add bias. */
 		entry[i] = ehdr->e_entry + (ehdr->e_type == ET_DYN ? base[i] : 0);
@@ -148,12 +152,12 @@ void z_entry(unsigned long *sp, void (*fini)(void))
 				continue;
 			elf_interp = alloca(iter->p_filesz);
 			if (lseek(fd, iter->p_offset, SEEK_SET) < 0)
-				z_errx(1, "can't lseek interp segment");
+				exit_error("can't lseek interp segment");
 			if (read(fd, elf_interp, iter->p_filesz) !=
 					(ssize_t)iter->p_filesz)
-				z_errx(1, "can't read interp segment");
+				exit_error("can't read interp segment");
 			if (elf_interp[iter->p_filesz - 1] != '\0')
-				z_errx(1, "bogus interp path");
+				exit_error("bogus interp path");
 			file = elf_interp;
 		}
 		/* Looks like the ELF is static -- leave the loop. */
