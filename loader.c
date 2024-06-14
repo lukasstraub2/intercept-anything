@@ -130,27 +130,22 @@ err:
 #define Z_PROG		0
 #define Z_INTERP	1
 
-void z_entry(unsigned long *sp, void (*fini)(void))
+int main(int argc, char **argv, char **envp)
 {
+	unsigned long *sp = (unsigned long *)argv;
+	sp--;
 	Elf_Ehdr ehdrs[2], *ehdr = ehdrs;
 	Elf_Phdr *phdr, *iter;
 	Elf_auxv_t *av;
-	char **argv, **env, **p, *elf_interp = NULL;
+	char **p, *elf_interp = NULL;
 	unsigned long base[2], entry[2];
 	const char *file;
 	ssize_t sz;
-	int argc, fd, i;
+	int fd, i;
 
-	(void)fini;
-
-	argc = (int)*(sp);
-	argv = (char **)(sp + 1);
-	environ = env = p = argv + argc + 1;
-	while (*p++ != NULL)
-		;
+	for (p = envp; *p++;);
 	av = (void *)p;
 
-	(void)env;
 	if (argc < 2)
 		exit_error("no input file");
 	file = argv[1];
