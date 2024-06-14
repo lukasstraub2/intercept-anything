@@ -1,5 +1,6 @@
 a.out
-rootlink.so
+*.so
+*.o
 posix_spawnp_helper
 print
 confstr
