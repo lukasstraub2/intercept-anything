@@ -134,6 +134,34 @@ static int handle_execveat(int dirfd, const char *path, char *const argv[],
 	return __sysret(sys_execveat(dirfd, path, argv, envp, flags));
 }
 
+static int sys_rt_sigprocmask(int how, const sigset_t *set,
+							  sigset_t *oldset, size_t sigsetsize) {
+	return my_syscall4(__NR_rt_sigprocmask, how, set, oldset, sigsetsize);
+}
+
+static int handle_rt_sigprocmask(int how, const sigset_t *set,
+								 sigset_t *oldset, size_t sigsetsize) {
+	trace("rt_sigprocmask()\n");
+	return __sysret(sys_rt_sigprocmask(how, set, oldset, sigsetsize));
+}
+
+static long sys_rt_sigaction(int signum, const struct sigaction *act,
+							 struct sigaction *oldact, size_t sigsetsize) {
+	return my_syscall4(__NR_rt_sigaction, signum, act, oldact, sigsetsize);
+}
+
+static long handle_rt_sigaction(int signum, const struct sigaction *act,
+								struct sigaction *oldact, size_t sigsetsize) {
+	trace("rt_sigaction(%d)\n", signum);
+
+	// TODO: Move this to filter chain
+	if (signum == SIGSYS) {
+		return 0;
+	}
+
+	return __sysret(sys_rt_sigaction(signum, act, oldact, sigsetsize));
+}
+
 static unsigned long handle_syscall(SysArgs *args) {
 	int ret;
 
@@ -202,6 +230,17 @@ static unsigned long handle_syscall(SysArgs *args) {
 								  args->arg5);
 		break;
 
+		case __NR_rt_sigprocmask:
+			ret = handle_rt_sigprocmask(args->arg1, (const sigset_t *)args->arg2,
+										(sigset_t *)args->arg3, args->arg4);
+		break;
+
+		case __NR_rt_sigaction:
+			ret = handle_rt_sigaction(args->arg1,
+									  (const struct sigaction *)args->arg2,
+									  (struct sigaction *)args->arg3, args->arg4);
+		break;
+
 		default:
 			debug("Unhandled syscall no. %lu\n", args->num);
 			errno = ENOSYS;
@@ -244,22 +283,24 @@ static int install_filter() {
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
 #ifdef __NR_open
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 13, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 15, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 13, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 15, 0),
 #endif
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 12, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 11, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 10, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 9, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 8, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 7, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 6, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 5, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 4, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 3, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 2, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execveat, 1, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 14, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 13, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 12, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 11, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 10, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 9, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 8, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 7, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 6, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 5, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 4, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execveat, 3, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigprocmask, 2, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigaction, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer) + 4)),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)&__start_text) >> 32, 0, 3),
