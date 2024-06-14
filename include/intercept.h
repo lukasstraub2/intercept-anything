@@ -449,24 +449,6 @@ struct CallChdir {
 	RetInt *ret;
 };
 
-typedef enum MktempType MktempType;
-enum MktempType {
-	MKTEMPTYPE_PLAIN,
-	MKTEMPTYPE_MKS,
-	MKTEMPTYPE_MKOS,
-	MKTEMPTYPE_MKS_S,
-	MKTEMPTYPE_MKOS_S
-};
-
-typedef struct CallMktemp CallMktemp;
-struct CallMktemp {
-	MktempType type;
-	char *template;
-	int flags;
-	int suffixlen;
-	RetPtr *ret;
-};
-
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -504,8 +486,6 @@ struct CallHandler {
 	const This *scandir_next;
 	int (*chdir)(Context *ctx, const This *this, const CallChdir *call);
 	const This *chdir_next;
-	void *(*mktemp)(Context *ctx, const This *this, const CallMktemp *call);
-	const This *mktemp_next;
 };
 
 const CallHandler *main_init(const CallHandler *bottom);

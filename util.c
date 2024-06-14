@@ -28,15 +28,3 @@ size_t concat(char *out, size_t out_len, const char *a, const char *b) {
 int strcmp_prefix(const char *a, const char *b) {
 	return strncmp(a, b, strlen(b));
 }
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
-#pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
-void *int_to_ptr(int num) {
-	return (void *) num;
-}
-
-int ptr_to_int(void *ptr) {
-	return (int) ptr;
-}
-#pragma GCC diagnostic pop

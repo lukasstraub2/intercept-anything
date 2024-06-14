@@ -18,6 +18,3 @@
 
 size_t concat(char *out, size_t out_len, const char *a, const char *b);
 int strcmp_prefix(const char *a, const char *b);
-
-void *int_to_ptr(int num);
-int ptr_to_int(void *ptr);
