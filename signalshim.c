@@ -15,7 +15,7 @@ static void handler(int sig, siginfo_t *info, void *ucontext) {
     ucontext_t* ctx = (ucontext_t*)ucontext;
     int old_errno = errno;
 
-    debug(DEBUG_LEVEL_VERBOSE, __FILE__": caught SIGSYS by syscall no. %u\n", info->si_syscall);
+    trace(": caught SIGSYS by syscall no. %u\n", info->si_syscall);
 
 #ifdef __aarch64__
     ctx->uc_mcontext.regs[0] = (greg_t) -ENOSYS;
@@ -37,7 +37,7 @@ const CallHandler *signalshim_init(const CallHandler *next) {
 	}
 	initialized = 1;
 
-    debug(DEBUG_LEVEL_VERBOSE, __FILE__": registering signal handler\n");
+    trace(": registering signal handler\n");
 
     sig.sa_sigaction = handler;
     sigemptyset(&sig.sa_mask);

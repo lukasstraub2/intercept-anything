@@ -46,7 +46,7 @@ static void init() {
 	}
 	initialized = 1;
 
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": init()\n");
+	trace(": init()\n");
 
 	parent_close_load();
 	parent_exec_load();
@@ -67,7 +67,7 @@ int open(const char *pathname, int flags, ...) {
 	mode_t mode = 0;
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": open(%s)\n", pathname?pathname:"NULL");
+	trace(": open(%s)\n", pathname?pathname:"NULL");
 
 	if (OPEN_NEEDS_MODE(flags)) {
 		va_start(args, flags);
@@ -99,7 +99,7 @@ __attribute__((visibility("default")))
 int __open_2(const char *pathname, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": __open_2(%s)\n", pathname?pathname:"NULL");
+	trace(": __open_2(%s)\n", pathname?pathname:"NULL");
 
 	if (OPEN_NEEDS_MODE(flags) || !pathname) {
 		return ___open_2(pathname, flags);
@@ -126,7 +126,7 @@ int open64(const char *pathname, int flags, ...) {
 	mode_t mode = 0;
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": open64(%s)\n", pathname?pathname:"NULL");
+	trace(": open64(%s)\n", pathname?pathname:"NULL");
 
 	if (OPEN_NEEDS_MODE(flags)) {
 		va_start(args, flags);
@@ -158,7 +158,7 @@ __attribute__((visibility("default")))
 int __open64_2(const char *pathname, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": __open64_2(%s)\n", pathname?pathname:"NULL");
+	trace(": __open64_2(%s)\n", pathname?pathname:"NULL");
 
 	if (OPEN_NEEDS_MODE(flags) || !pathname) {
 		return ___open64_2(pathname, flags);
@@ -186,7 +186,7 @@ int openat(int dirfd, const char *pathname, int flags, ...) {
 	mode_t mode = 0;
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": openat(%s)\n", pathname?pathname:"NULL");
+	trace(": openat(%s)\n", pathname?pathname:"NULL");
 
 	if (OPEN_NEEDS_MODE(flags)) {
 		va_start(args, flags);
@@ -219,7 +219,7 @@ __attribute__((visibility("default")))
 int __openat_2(int dirfd, const char *pathname, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat_2(%s)\n", pathname?pathname:"NULL");
+	trace(": __openat_2(%s)\n", pathname?pathname:"NULL");
 
 	if (OPEN_NEEDS_MODE(flags) || !pathname) {
 		return ___openat_2(dirfd, pathname, flags);
@@ -247,7 +247,7 @@ int openat64(int dirfd, const char *pathname, int flags, ...) {
 	mode_t mode = 0;
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": openat64(%s)\n", pathname?pathname:"NULL");
+	trace(": openat64(%s)\n", pathname?pathname:"NULL");
 
 	if (OPEN_NEEDS_MODE(flags)) {
 		va_start(args, flags);
@@ -280,7 +280,7 @@ __attribute__((visibility("default")))
 int __openat64_2(int dirfd, const char *pathname, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": __openat64_2(%s)\n", pathname?pathname:"NULL");
+	trace(": __openat64_2(%s)\n", pathname?pathname:"NULL");
 
 	if (OPEN_NEEDS_MODE(flags) || !pathname) {
 		return ___openat64_2(dirfd, pathname, flags);
@@ -307,7 +307,7 @@ __attribute__((visibility("default")))
 int creat(const char *pathname, mode_t mode) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": creat(%s)\n", pathname?pathname:"NULL");
+	trace(": creat(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _open(pathname, O_CREAT | O_WRONLY | O_TRUNC, mode);
@@ -332,7 +332,7 @@ __attribute__((visibility("default")))
 int creat64(const char *pathname, mode_t mode) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": creat64(%s)\n", pathname?pathname:"NULL");
+	trace(": creat64(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _open64(pathname, O_CREAT | O_WRONLY | O_TRUNC, mode);
@@ -357,7 +357,7 @@ __attribute__((visibility("default")))
 FILE* fopen(const char *pathname, const char *mode) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": fopen(%s)\n", pathname?pathname:"NULL");
+	trace(": fopen(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _fopen(pathname, mode);
@@ -382,7 +382,7 @@ __attribute__((visibility("default")))
 FILE *fopen64(const char *__restrict pathname, const char *__restrict mode) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": fopen64(%s)\n", pathname?pathname:"NULL");
+	trace(": fopen64(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _fopen64(pathname, mode);
@@ -406,7 +406,7 @@ __attribute__((visibility("default")))
 DIR *opendir(const char *pathname) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": opendir(%s)\n", pathname?pathname:"NULL");
+	trace(": opendir(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _opendir(pathname);
@@ -427,7 +427,7 @@ __attribute__((visibility("default")))
 int stat(const char *pathname, struct stat *buf) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": stat(%s)\n", pathname?pathname:"NULL");
+	trace(": stat(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _stat(pathname, buf);
@@ -456,7 +456,7 @@ int stat64(const char *pathname, struct stat *buf) {
 #endif
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": stat64(%s)\n", pathname?pathname:"NULL");
+	trace(": stat64(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _stat64(pathname, buf);
@@ -484,7 +484,7 @@ __attribute__((visibility("default")))
 int __xstat(int ver, const char *pathname, struct stat *buf) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": __xstat(%s)\n", pathname?pathname:"NULL");
+	trace(": __xstat(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return ___xstat(ver, pathname, buf);
@@ -509,7 +509,7 @@ __attribute__((visibility("default")))
 int __xstat64(int ver, const char *pathname, struct stat64 *buf) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": __xstat64(%s)\n", pathname?pathname:"NULL");
+	trace(": __xstat64(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return ___xstat64(ver, pathname, buf);
@@ -537,7 +537,7 @@ __attribute__((visibility("default")))
 int lstat(const char *restrict pathname, struct stat *restrict statbuf) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": lstat(%s)\n", pathname?pathname:"NULL");
+	trace(": lstat(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _lstat(pathname, statbuf);
@@ -561,7 +561,7 @@ __attribute__((visibility("default")))
 int lstat64(const char *restrict pathname, struct stat64 *restrict statbuf) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": lstat64(%s)\n", pathname?pathname:"NULL");
+	trace(": lstat64(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _lstat64(pathname, statbuf);
@@ -586,7 +586,7 @@ int fstatat(int dirfd, const char *restrict pathname,
 			struct stat *restrict statbuf, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": fstatat(%s)\n", pathname?pathname:"NULL");
+	trace(": fstatat(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _fstatat(dirfd, pathname, statbuf, flags);
@@ -613,7 +613,7 @@ int fstatat64(int dirfd, const char *restrict pathname,
 			  struct stat64 *restrict statbuf, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": fstatat64(%s)\n", pathname?pathname:"NULL");
+	trace(": fstatat64(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _fstatat64(dirfd, pathname, statbuf, flags);
@@ -641,7 +641,7 @@ int statx(int dirfd, const char *restrict pathname, int flags,
 		  unsigned int mask, struct statx *restrict statxbuf) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": statx(%s)\n", pathname?pathname:"NULL");
+	trace(": statx(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _statx(dirfd, pathname, flags, mask, statxbuf);
@@ -669,7 +669,7 @@ ssize_t readlink(const char *restrict pathname,
 				 char *restrict buf, size_t bufsiz) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": readlink(%s)\n", pathname?pathname:"NULL");
+	trace(": readlink(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _readlink(pathname, buf, bufsiz);
@@ -694,7 +694,7 @@ ssize_t readlinkat(int dirfd, const char *restrict pathname,
 				   char *restrict buf, size_t bufsiz) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": readlinkat(%s)\n", pathname?pathname:"NULL");
+	trace(": readlinkat(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _readlinkat(dirfd, pathname, buf, bufsiz);
@@ -719,7 +719,7 @@ __attribute__((visibility("default")))
 int access(const char *pathname, int mode) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": access(%s)\n", pathname?pathname:"NULL");
+	trace(": access(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _access(pathname, mode);
@@ -742,7 +742,7 @@ __attribute__((visibility("default")))
 int faccessat(int dirfd, const char *pathname, int mode, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": faccessat(%s)\n", pathname?pathname:"NULL");
+	trace(": faccessat(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _faccessat(dirfd, pathname, mode, flags);
@@ -768,7 +768,7 @@ __attribute__((visibility("default")))
 int euidaccess(const char *pathname, int mode) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": euidaccess(%s)\n", pathname?pathname:"NULL");
+	trace(": euidaccess(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _euidaccess(pathname, mode);
@@ -791,7 +791,7 @@ __attribute__((visibility("default")))
 int eaccess(const char *pathname, int mode) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": eaccess(%s)\n", pathname?pathname:"NULL");
+	trace(": eaccess(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _eaccess(pathname, mode);
@@ -900,13 +900,13 @@ static void debug_exec(const char *pathname, char *const argv[],
 					   char *const envp[]) {
 	int64_t i;
 
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": recurse execve(%s, [ ", pathname?pathname:"NULL");
+	trace(": recurse execve(%s, [ ", pathname?pathname:"NULL");
 
 	for (i = 0; argv[i]; i++) {
-		debug(DEBUG_LEVEL_VERBOSE, "%s, ", argv[i]);
+		trace( "%s, ", argv[i]);
 	}
 
-	debug(DEBUG_LEVEL_VERBOSE, "], envp)\n");
+	trace( "], envp)\n");
 }
 
 static ssize_t read_full(int fd, char *buf, size_t count)
@@ -1136,7 +1136,7 @@ __attribute__((visibility("default")))
 int execve(const char *pathname, char *const argv[], char *const envp[]) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": execve(%s)\n", pathname?pathname:"NULL");
+	trace(": execve(%s)\n", pathname?pathname:"NULL");
 
 	return handle_execve(pathname, argv, envp);
 }
@@ -1145,7 +1145,7 @@ __attribute__((visibility("default")))
 int execveat(int dirfd, const char *pathname, char *const argv[], char *const envp[], int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": execveat(%s)\n", pathname?pathname:"NULL");
+	trace(": execveat(%s)\n", pathname?pathname:"NULL");
 
 	return handle_execveat(dirfd, pathname, argv, envp, flags);
 }
@@ -1156,7 +1156,7 @@ int execl(const char *pathname, const char *arg, ... /*, (char *) NULL */) {
 	va_list args;
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": execl(%s)\n", pathname?pathname:"NULL");
+	trace(": execl(%s)\n", pathname?pathname:"NULL");
 
 	va_start(args, arg);
 	for (argc = 1; va_arg(args, const char *); argc++) {
@@ -1186,7 +1186,7 @@ int execlp(const char *file, const char *arg, ... /*, (char *) NULL */) {
 	va_list args;
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": execlp(%s)\n", file?file:"NULL");
+	trace(": execlp(%s)\n", file?file:"NULL");
 
 	va_start(args, arg);
 	for (argc = 1; va_arg(args, const char *); argc++) {
@@ -1216,7 +1216,7 @@ int execle(const char *pathname, const char *arg, ... /*, (char *) NULL, char *c
 	va_list args;
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": execle(%s)\n", pathname?pathname:"NULL");
+	trace(": execle(%s)\n", pathname?pathname:"NULL");
 
 	va_start(args, arg);
 	for (argc = 1; va_arg(args, const char *); argc++) {
@@ -1246,7 +1246,7 @@ __attribute__((visibility("default")))
 int execv(const char *pathname, char *const argv[]) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": execv(%s)\n", pathname?pathname:"NULL");
+	trace(": execv(%s)\n", pathname?pathname:"NULL");
 
 	return handle_execve(pathname, argv, environ);
 }
@@ -1255,7 +1255,7 @@ __attribute__((visibility("default")))
 int execvp(const char *pathname, char *const argv[]) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": execvp(%s)\n", pathname?pathname:"NULL");
+	trace(": execvp(%s)\n", pathname?pathname:"NULL");
 
 	return handle_execvpe(pathname, argv, environ);
 }
@@ -1265,7 +1265,7 @@ __attribute__((visibility("default")))
 int execvpe(const char *file, char *const argv[], char *const envp[]) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": execvpe(%s)\n", file?file:"NULL");
+	trace(": execvpe(%s)\n", file?file:"NULL");
 
 	return handle_execvpe(file, argv, envp);
 }
@@ -1319,7 +1319,7 @@ int posix_spawn(pid_t *restrict pid, const char *restrict pathname,
 				char *const envp[restrict]) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": posix_spawn(%s)\n", pathname?pathname:"NULL");
+	trace(": posix_spawn(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _posix_spawn(pid, pathname, file_actions, attrp, argv, envp);
@@ -1337,7 +1337,7 @@ int posix_spawnp(pid_t *restrict pid, const char *restrict filename,
 				 char *const envp[restrict]) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": posix_spawnp(%s)\n", filename?filename:"NULL");
+	trace(": posix_spawnp(%s)\n", filename?filename:"NULL");
 
 	if (!filename) {
 		return _posix_spawnp(pid, filename, file_actions, attrp, argv, envp);
@@ -1351,7 +1351,7 @@ __attribute__((visibility("default")))
 int system(const char* command) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": system(%s)\n", command?command:"NULL");
+	trace(": system(%s)\n", command?command:"NULL");
 
 	return _system(command);
 }
@@ -1360,7 +1360,7 @@ __attribute__((visibility("default")))
 char *realpath(const char *restrict pathname, char *restrict resolved_path) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": realpath(%s)\n", pathname?pathname:"NULL");
+	trace(": realpath(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _realpath(pathname, resolved_path);
@@ -1383,7 +1383,7 @@ __attribute__((visibility("default")))
 char *canonicalize_file_name(const char *pathname) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": canonicalize_file_name(%s)\n", pathname?pathname:"NULL");
+	trace(": canonicalize_file_name(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _realpath(pathname, NULL);
@@ -1408,7 +1408,7 @@ int glob(const char *restrict pattern, int flags,
 		 glob_t *restrict pglob) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": glob(%s)\n", pattern?pattern:"NULL");
+	trace(": glob(%s)\n", pattern?pattern:"NULL");
 
 	return _glob(pattern, flags, errfunc, pglob);
 }
@@ -1417,7 +1417,7 @@ __attribute__((visibility("default")))
 int link(const char *oldpath, const char *newpath) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": link(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+	trace(": link(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
 
 	if (!oldpath || !newpath) {
 		return _link(oldpath, newpath);
@@ -1441,7 +1441,7 @@ int linkat(int olddirfd, const char *oldpath,
 		   int newdirfd, const char *newpath, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": linkat(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+	trace(": linkat(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
 
 	if (!oldpath || !newpath) {
 		return _linkat(olddirfd, oldpath, newdirfd, newpath, flags);
@@ -1467,7 +1467,7 @@ __attribute__((visibility("default")))
 int symlink(const char *oldpath, const char *newpath) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": symlink(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+	trace(": symlink(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
 
 	if (!oldpath || !newpath) {
 		return _symlink(oldpath, newpath);
@@ -1490,7 +1490,7 @@ __attribute__((visibility("default")))
 int symlinkat(const char *oldpath, int newdirfd, const char *newpath) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": symlinkat(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+	trace(": symlinkat(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
 
 	if (!oldpath || !newpath) {
 		return _symlinkat(oldpath, newdirfd, newpath);
@@ -1514,7 +1514,7 @@ __attribute__((visibility("default")))
 int unlink(const char *pathname) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": unlink(%s)\n", pathname?pathname:"NULL");
+	trace(": unlink(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _unlink(pathname);
@@ -1536,7 +1536,7 @@ __attribute__((visibility("default")))
 int unlinkat(int dirfd, const char *pathname, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": unlink(%s)\n", pathname?pathname:"NULL");
+	trace(": unlink(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		return _unlinkat(dirfd, pathname, flags);
@@ -1560,7 +1560,7 @@ __attribute__((visibility("default")))
 ssize_t listxattr(const char *pathname, char *list, size_t size) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": listxattr(%s)\n", pathname?pathname:"NULL");
+	trace(": listxattr(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		errno = EINVAL;
@@ -1585,7 +1585,7 @@ __attribute__((visibility("default")))
 ssize_t llistxattr(const char *pathname, char *list, size_t size) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": llistxattr(%s)\n", pathname?pathname:"NULL");
+	trace(": llistxattr(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		errno = EINVAL;
@@ -1610,7 +1610,7 @@ __attribute__((visibility("default")))
 ssize_t flistxattr(int fd, char *list, size_t size) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": flistxattr(%d)\n", fd);
+	trace(": flistxattr(%d)\n", fd);
 
 	if (fd < 0) {
 		errno = EINVAL;
@@ -1636,7 +1636,7 @@ int setxattr(const char *pathname, const char *name,
 			 const void *value, size_t size, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": setxattr(%s)\n", pathname?pathname:"NULL");
+	trace(": setxattr(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		errno = EINVAL;
@@ -1664,7 +1664,7 @@ int lsetxattr(const char *pathname, const char *name,
 			  const void *value, size_t size, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": lsetxattr(%s)\n", pathname?pathname:"NULL");
+	trace(": lsetxattr(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		errno = EINVAL;
@@ -1692,7 +1692,7 @@ int fsetxattr(int fd, const char *name,
 			  const void *value, size_t size, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": fsetxattr(%d)\n", fd);
+	trace(": fsetxattr(%d)\n", fd);
 
 	if (fd < 0) {
 		errno = EINVAL;
@@ -1720,7 +1720,7 @@ ssize_t getxattr(const char *pathname, const char *name,
 				 void *value, size_t size) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": getxattr(%s)\n", pathname?pathname:"NULL");
+	trace(": getxattr(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		errno = EINVAL;
@@ -1747,7 +1747,7 @@ ssize_t lgetxattr(const char *pathname, const char *name,
 				  void *value, size_t size) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": lgetxattr(%s)\n", pathname?pathname:"NULL");
+	trace(": lgetxattr(%s)\n", pathname?pathname:"NULL");
 
 	if (!pathname) {
 		errno = EINVAL;
@@ -1774,7 +1774,7 @@ ssize_t fgetxattr(int fd, const char *name,
 				  void *value, size_t size) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": fgetxattr(%d)\n", fd);
+	trace(": fgetxattr(%d)\n", fd);
 
 	if (fd < 0) {
 		errno = EINVAL;
@@ -1800,7 +1800,7 @@ __attribute__((visibility("default")))
 int rename(const char *oldpath, const char *newpath) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": rename(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+	trace(": rename(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
 
 	if (!oldpath || !newpath) {
 		return _rename(oldpath, newpath);
@@ -1824,7 +1824,7 @@ int renameat(int olddirfd, const char *oldpath,
 			 int newdirfd, const char *newpath) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": renameat(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+	trace(": renameat(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
 
 	if (!oldpath || !newpath) {
 		return _renameat(olddirfd, oldpath, newdirfd, newpath);
@@ -1850,7 +1850,7 @@ int renameat2(int olddirfd, const char *oldpath,
 			  int newdirfd, const char *newpath, unsigned int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": renameat2(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+	trace(": renameat2(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
 
 	if (!oldpath || !newpath) {
 		return _renameat2(olddirfd, oldpath, newdirfd, newpath, flags);
@@ -1878,7 +1878,7 @@ int scandir(const char *restrict dirp, struct dirent ***restrict namelist,
 			int (*compar)(const struct dirent **, const struct dirent **)) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": scandir(%s)\n", dirp ? dirp : "NULL");
+	trace(": scandir(%s)\n", dirp ? dirp : "NULL");
 
 	if (!dirp) {
 		return _scandir(dirp, namelist, filter, compar);
@@ -1906,7 +1906,7 @@ int scandirat(int dirfd, const char *restrict dirp, struct dirent ***restrict na
 			  int (*compar)(const struct dirent **, const struct dirent **)) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": scandirat(%s)\n", dirp ? dirp : "NULL");
+	trace(": scandirat(%s)\n", dirp ? dirp : "NULL");
 
 	if (!dirp) {
 		return _scandirat(dirfd, dirp, namelist, filter, compar);
@@ -1932,7 +1932,7 @@ __attribute__((visibility("default")))
 int chdir(const char *path) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": chdir(%s)\n", path ? path : "NULL");
+	trace(": chdir(%s)\n", path ? path : "NULL");
 
 	if (!path) {
 		return _chdir(path);
@@ -1954,7 +1954,7 @@ __attribute__((visibility("default")))
 int fchdir(int fd) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": fchdir(%d)\n", fd);
+	trace(": fchdir(%d)\n", fd);
 
 	if (fd < 0) {
 		return _fchdir(fd);
@@ -1975,7 +1975,7 @@ __attribute__((visibility("default")))
 char *mktemp(char *template) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": mktemp(%s)\n", template ? template : "NULL");
+	trace(": mktemp(%s)\n", template ? template : "NULL");
 
 	if (!template) {
 		return _mktemp(template);
@@ -1997,7 +1997,7 @@ __attribute__((visibility("default")))
 int mkstemp(char *template) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": mkstemp(%s)\n", template ? template : "NULL");
+	trace(": mkstemp(%s)\n", template ? template : "NULL");
 
 	if (!template) {
 		return _mkstemp(template);
@@ -2019,7 +2019,7 @@ __attribute__((visibility("default")))
 int mkostemp(char *template, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": mkostemp(%s)\n", template ? template : "NULL");
+	trace(": mkostemp(%s)\n", template ? template : "NULL");
 
 	if (!template) {
 		return _mkostemp(template, flags);
@@ -2042,7 +2042,7 @@ __attribute__((visibility("default")))
 int mkstemps(char *template, int suffixlen) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": mkstemps(%s)\n", template ? template : "NULL");
+	trace(": mkstemps(%s)\n", template ? template : "NULL");
 
 	if (!template) {
 		return _mkstemps(template, suffixlen);
@@ -2065,7 +2065,7 @@ __attribute__((visibility("default")))
 int mkostemps(char *template, int suffixlen, int flags) {
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": mkostemps(%s)\n", template ? template : "NULL");
+	trace(": mkostemps(%s)\n", template ? template : "NULL");
 
 	if (!template) {
 		return _mkostemps(template, suffixlen, flags);
@@ -2092,7 +2092,7 @@ FILE *tmpfile(void) {
 	FILE *ret;
 
 	init();
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": tmpfile()\n");
+	trace(": tmpfile()\n");
 
 	fd = mkstemp(template);
 	if (fd < 0) {

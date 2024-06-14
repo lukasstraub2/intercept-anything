@@ -50,12 +50,12 @@ unsigned long handle_syscall(SysArgs *args) {
 
 	switch (args->num) {
 		case __NR_open:
-			debug(DEBUG_LEVEL_VERBOSE, __FILE__": open(%s)\n", (const char *)args->arg1);
+			trace(": open(%s)\n", (const char *)args->arg1);
 			ret = _open64((const char *)args->arg1, args->arg2, args->arg3);
 		break;
 
 		case __NR_openat:
-			debug(DEBUG_LEVEL_VERBOSE, __FILE__": openat(%s)\n", (const char *)args->arg2);
+			trace(": openat(%s)\n", (const char *)args->arg2);
 			ret = _openat64(args->arg1, (const char *)args->arg2, args->arg3,
 							args->arg4);
 		break;
@@ -77,7 +77,7 @@ static void handler(int sig, siginfo_t *info, void *ucontext) {
 	struct ucontext* ctx = (struct ucontext*)ucontext;
 	int old_errno = errno;
 
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": caught SIGSYS by syscall no. %u\n", info->si_syscall);
+	trace(": caught SIGSYS by syscall no. %u\n", info->si_syscall);
 
 	unsigned long ret;
 	SysArgs args = {
@@ -125,14 +125,17 @@ static int install_filter() {
 		.len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
 		.filter = filter,
 	};
+
 	if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
-		perror("prctl(NO_NEW_PRIVS)");
+		exit_error("prctl(NO_NEW_PRIVS)");
 		return 1;
 	}
+
 	if (prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0)) {
-		perror("prctl(PR_SET_SECCOMP)");
+		exit_error("prctl(PR_SET_SECCOMP)");
 		return 1;
 	}
+
 	return 0;
 }
 
@@ -145,7 +148,7 @@ void intercept_init() {
 	}
 	initialized = 1;
 
-	debug(DEBUG_LEVEL_VERBOSE, __FILE__": registering signal handler\n");
+	trace("registering signal handler\n");
 
 	sig.sa_handler = handler;
 	//sigemptyset(&sig.sa_mask);

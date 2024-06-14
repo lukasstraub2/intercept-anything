@@ -19,7 +19,7 @@
 #include <unistd.h>
 
 int link(const char *oldpath, const char *newpath) {
-    debug(DEBUG_LEVEL_VERBOSE, __FILE__": link(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+    trace(": link(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
 
     errno = ENOTSUP;
     return -1;
@@ -27,7 +27,7 @@ int link(const char *oldpath, const char *newpath) {
 
 int linkat(int olddirfd, const char *oldpath,
            int newdirfd, const char *newpath, int flags) {
-    debug(DEBUG_LEVEL_VERBOSE, __FILE__": linkat(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
+    trace(": linkat(%s, %s)\n", oldpath?oldpath:"NULL", newpath?newpath:"NULL");
 
     errno = ENOTSUP;
     return -1;

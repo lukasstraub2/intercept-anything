@@ -1298,24 +1298,21 @@ const CallHandler *hardlinkshim_init(const CallHandler *next,
 
 	ret = mkpath(HARDLINK_PREFIX LOCKFILE, 0777);
 	if (ret < 0) {
-		debug(DEBUG_LEVEL_ALWAYS, __FILE__": mkpath(%s): %s\n", LOCKFILE,
-			  strerror(errno));
+		exit_error("mkpath(%s): %s", LOCKFILE, strerror(errno));
 		return NULL;
 	}
 
 	ret = _open64(HARDLINK_PREFIX LOCKFILE, O_CREAT | O_RDWR, 0777);
 	if (ret < 0) {
-		debug(DEBUG_LEVEL_ALWAYS, __FILE__": open64(%s): %s\n",
-			  HARDLINK_PREFIX LOCKFILE,
-			  strerror(errno));
+		exit_error("open64(%s): %s", HARDLINK_PREFIX LOCKFILE,
+				   strerror(errno));
 		return NULL;
 	}
 	_close(ret);
 
 	ret = _stat64(PREFIX, &statbuf);
 	if (ret < 0) {
-		debug(DEBUG_LEVEL_ALWAYS, __FILE__": stat64(%s): %s\n", PREFIX,
-			  strerror(errno));
+		exit_error("stat64(%s): %s", PREFIX, strerror(errno));
 		return NULL;
 	}
 	this.prefix_dev = statbuf.st_dev;
