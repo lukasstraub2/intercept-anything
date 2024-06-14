@@ -1,0 +1,1698 @@
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id B6DFFC54EBD
+	for <linux-kselftest@archiver.kernel.org>; Sun,  8 Jan 2023 13:59:17 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S233070AbjAHN7O (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Sun, 8 Jan 2023 08:59:14 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:50948 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S231415AbjAHN7L (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Sun, 8 Jan 2023 08:59:11 -0500
+Received: from gnuweeb.org (gnuweeb.org [51.81.211.47])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTPS id 3E236DE99;
+        Sun,  8 Jan 2023 05:59:11 -0800 (PST)
+Received: from localhost.localdomain (unknown [182.253.183.184])
+        by gnuweeb.org (Postfix) with ESMTPSA id 43D2B7E500;
+        Sun,  8 Jan 2023 13:59:08 +0000 (UTC)
+X-GW-Data: lPqxHiMPbJw1wb7CM9QUryAGzr0yq5atzVDdxTR0iA==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=gnuweeb.org;
+        s=default; t=1673186351;
+        bh=GTUZnCbGV/UWFXA7BcCYjMcKchB8a7OfQh/kkhPzwLA=;
+        h=From:To:Cc:Subject:Date:From;
+        b=FVpcN3GUI1xGzqnS0IYPQevi4phQ4IgCjHI5gq/WhWwKGWLjgUxuPnpHuTt9GWZsV
+         +CEjy8ktVdHJb5xSYX8+e0ahe6H2f8pl7j6LInpZ59JhwwaRfTc6VldMChnCgFnuuA
+         IGK+5QxBUkVktnk6Qju37UZrZFYwhhiJ02eRYQmWT5HnBGIxB/QavIWvalOG+ChSPO
+         JWurRuoD9T5DSEwroXsVUaFbGisIJQ+qqBSp/O4kyQDBFpdLDDdtkaHj1J6yLCCKko
+         dcha1wlK/2IgpBvBNQZwZLjJW1d9sNol+c9EOvIylSVpub2VwZ1PJ3Yk6bYCGgqJ3a
+         q2XrSpnHaldOA==
+From:   Ammar Faizi <ammarfaizi2@gnuweeb.org>
+To:     Willy Tarreau <w@1wt.eu>
+Cc:     Ammar Faizi <ammarfaizi2@gnuweeb.org>,
+        Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>,
+        GNU/Weeb Mailing List <gwml@vger.gnuweeb.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Subject: [PATCH v3 0/5] nolibc signal handling support
+Date:   Sun,  8 Jan 2023 20:58:59 +0700
+Message-Id: <20230108135904.851762-1-ammar.faizi@intel.com>
+X-Mailer: git-send-email 2.34.1
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+From: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+
+Hi Willy,
+
+On top of the series titled "nolibc auxiliary vector retrieval support".
+The prerequisite patches of this series are in that series.
+
+This is v2 of nolibc signal handling support. It adds signal handling
+support to the nolibc subsystem:
+
+1)  Initial implementation of nolibc sigaction(2) function.
+
+    `sigaction()` needs an architecture-dependent "signal trampoline"
+    function that invokes __rt_sigreturn syscall to resume the process
+    after a signal gets handled.
+
+    The "signal trampoline" function is called `__restore_rt` in this
+    implementation. The naming `__restore_rt` is important for GDB. It
+    also has to be given a special optimization attribute
+    "omit-frame-pointer" to prevent the compiler from creating a stack
+    frame that makes the `%rsp` value no longer points to the `struct
+    rt_sigframe` that the kernel constructed.
+
+
+2)  signal(2) function.
+
+    signal() function is the simpler version of sigaction(). Unlike
+    sigaction(), which fully controls the struct sigaction, the caller
+    only cares about the sa_handler when calling the signal() function.
+    signal() internally calls sigaction().
+
+
+3)  More selftests.
+
+    This series also adds selftests for:
+      - fork(2)
+      - sigaction(2)
+      - signal(2)
+
+
+Side note for __restore_rt:
+This has been tested on x86-64 arch and `__restore_rt` generates the
+correct code. The `__restore_rt` codegen correctness on other
+architectures need to be evaluated as well. If it can't generate the
+correct code, it has to be written in inline Assembly.
+
+The current codegen for __restore_rt looks like this (gcc (Ubuntu 11.3.0-1ubuntu1~22.04) 11.3.0):
+
+  00000000004038e3 <__restore_rt>:
+    4038e3:  endbr64 
+    4038e7:  mov    $0xf,%eax
+    4038ec:  syscall
+
+## Changes since v2:
+  - Fix unintentionally squashed patch. The signal() selftest patch
+    was squashed into the sigaction selftest patch.
+
+## Changes since RFC v1:
+  - Separate getpagesize() series.
+  - Write __restore_rt function in C instead of in inline Assembly.
+
+
+Signed-off-by: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+---
+
+Ammar Faizi (5):
+  nolibc/sys: Implement `sigaction(2)` function
+  nolibc/sys: Implement `signal(2)` function
+  selftests/nolibc: Add `fork(2)` selftest
+  selftests/nolibc: Add `sigaction(2)` selftest
+  selftests/nolibc: Add `signal(2)` selftest
+
+ tools/include/nolibc/sys.h                   |  97 +++++++++++
+ tools/testing/selftests/nolibc/nolibc-test.c | 172 +++++++++++++++++++
+ 2 files changed, 269 insertions(+)
+
+
+base-commit: b6887ec8b0b0c78db414b78e329bf2ce234dedd5
+prerequisite-patch-id: 8dd0ca8ecee1732d8f5c0b233f8231dda6ab0d22
+prerequisite-patch-id: ff4c08615ebbdc1a04ce39f39f99387ee46b2b31
+prerequisite-patch-id: af837a829263849331eb6d73701afd7903146055
+-- 
+Ammar Faizi
+
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id E72A7C54EBE
+	for <linux-kselftest@archiver.kernel.org>; Sun,  8 Jan 2023 13:59:19 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S229483AbjAHN7T (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Sun, 8 Jan 2023 08:59:19 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:51128 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S230400AbjAHN7P (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Sun, 8 Jan 2023 08:59:15 -0500
+Received: from gnuweeb.org (gnuweeb.org [51.81.211.47])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTPS id 96D04DEAE;
+        Sun,  8 Jan 2023 05:59:14 -0800 (PST)
+Received: from localhost.localdomain (unknown [182.253.183.184])
+        by gnuweeb.org (Postfix) with ESMTPSA id 891B67E61F;
+        Sun,  8 Jan 2023 13:59:11 +0000 (UTC)
+X-GW-Data: lPqxHiMPbJw1wb7CM9QUryAGzr0yq5atzVDdxTR0iA==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=gnuweeb.org;
+        s=default; t=1673186354;
+        bh=XNGtWJcW+7/4kkcyC8FDH4yTsKXskMlGZGvdbnPIy3k=;
+        h=From:To:Cc:Subject:Date:In-Reply-To:References:From;
+        b=oxNAKQVNygzLoyt7Hcj0jN9JFo/3A9AsqC53rbU8qAK9HqQF65sZLh6GJEEjvE9hT
+         cf/wYaORP2wt6YDwdhBdpz2fqz+ooC3VKyhDqhum4YWNCS0S8PKb5mv9zrV6qqlxKv
+         6lbHY6H8Z80loPHFK2TwgTTuzoZW6aIGbzZQQ98RkkPn/fY7S3NR/G731de9zelVP9
+         qTCUTwGKEYKvHtyj+JjaH7vIGIGQ5pALtYjDoDLNA22qoAq5mmej4Gafj4WRlI1hRN
+         R1HFWSqbXKDDE2ct+B3DMaeRi+aGHA3oBKsuymPDsYv4szUFG6mC+E/n8k2xWEwck1
+         aahwjC5xSm/jg==
+From:   Ammar Faizi <ammarfaizi2@gnuweeb.org>
+To:     Willy Tarreau <w@1wt.eu>
+Cc:     Ammar Faizi <ammarfaizi2@gnuweeb.org>,
+        Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>,
+        GNU/Weeb Mailing List <gwml@vger.gnuweeb.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Subject: [PATCH v3 1/5] nolibc/sys: Implement `sigaction(2)` function
+Date:   Sun,  8 Jan 2023 20:59:00 +0700
+Message-Id: <20230108135904.851762-2-ammar.faizi@intel.com>
+X-Mailer: git-send-email 2.34.1
+In-Reply-To: <20230108135904.851762-1-ammar.faizi@intel.com>
+References: <20230108135904.851762-1-ammar.faizi@intel.com>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+From: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+
+This commit adds the initial implementation of nolibc `sigaction()`
+function. Currently, this implementation is only available on the
+x86-64 arch.
+
+`sigaction()` needs an architecture-dependent "signal trampoline"
+function that invokes __rt_sigreturn syscall to resume the process
+after a signal gets handled.
+
+The "signal trampoline" function is called `__restore_rt` in this
+implementation. The naming `__restore_rt` is important for GDB. It also
+has to be given a special optimization attribute "omit-frame-pointer"
+to prevent the compiler from creating a stack frame that makes the
+`%rsp` value no longer points to the `struct rt_sigframe` that the
+kernel constructed.
+
+Link: https://lore.kernel.org/lkml/20221228133513.GA7457@1wt.eu
+Suggested-by: Willy Tarreau <w@1wt.eu>
+Signed-off-by: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+---
+
+Side note:
+This has been tested on x86-64 arch and `__restore_rt` generates the
+correct code. The `__restore_rt` codegen correctness on other
+architectures need to be evaluated as well. If it can't generate the
+correct code, it has to be written in inline Assembly.
+
+ tools/include/nolibc/sys.h | 72 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 72 insertions(+)
+
+diff --git a/tools/include/nolibc/sys.h b/tools/include/nolibc/sys.h
+index acf7cf438010..7d594155e77f 100644
+--- a/tools/include/nolibc/sys.h
++++ b/tools/include/nolibc/sys.h
+@@ -1047,6 +1047,78 @@ pid_t setsid(void)
+ 	return ret;
+ }
+ 
++typedef void (*sighandler_t)(int sig);
++
++/*
++ * int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
++ */
++
++static __attribute__((unused))
++int sys_sigaction(int signum, const struct sigaction *act,
++		  struct sigaction *oldact)
++{
++	return my_syscall4(__NR_rt_sigaction, signum, act, oldact,
++			   sizeof(sigset_t));
++}
++
++__attribute__((weak,unused,noreturn,optimize("omit-frame-pointer"),section(".text.__restore_rt")))
++void __restore_rt(void)
++{
++	my_syscall0(__NR_rt_sigreturn);
++	__builtin_unreachable();
++}
++
++static __attribute__((unused))
++int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
++{
++	struct sigaction act2 = *act;
++	int ret;
++
++	/*
++	 * On Linux x86-64, libc's sigaction() always sets the
++	 * @act->sa_restorer when the caller passes a NULL.
++	 *
++	 * @act->sa_restorer is an arch-specific function used
++	 * as a "signal trampoline".
++	 *
++	 * @act->sa_handler is a signal handler provided by the
++	 * user.
++	 *
++	 * When the handled signal is caught, the %rip jumps to
++	 * @act->sa_handler with user stack already set by the
++	 * kernel as below:
++	 *
++	 *         |--------------------|
++	 * %rsp -> |  act->sa_restorer  | (return address)
++	 *         |--------------------|
++	 *         | struct rt_sigframe | (process context info)
++	 *         |                    |
++	 *         |                    |
++	 *          ....................
++	 *
++	 * Once this signal handler executes the "ret" instruction,
++	 * the %rip jumps to @act->sa_restorer. The sa_restorer
++	 * function has to invoke the __rt_sigreturn syscall with
++	 * %rsp pointing to the `struct rt_sigframe` that the kernel
++	 * constructed previously to resume the process.
++	 *
++	 * `struct rt_sigframe` contains the registers' value before
++	 * the signal is caught.
++	 *
++	 */
++	if (!act2.sa_restorer) {
++		act2.sa_flags |= SA_RESTORER;
++		act2.sa_restorer = __restore_rt;
++	}
++
++	ret = sys_sigaction(signum, &act2, oldact);
++	if (ret < 0) {
++		SET_ERRNO(-ret);
++		ret = -1;
++	}
++	return ret;
++}
++
+ 
+ /*
+  * int stat(const char *path, struct stat *buf);
+-- 
+Ammar Faizi
+
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id 993ECC54EBE
+	for <linux-kselftest@archiver.kernel.org>; Sun,  8 Jan 2023 13:59:45 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S233065AbjAHN7U (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Sun, 8 Jan 2023 08:59:20 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:51222 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S232950AbjAHN7T (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Sun, 8 Jan 2023 08:59:19 -0500
+Received: from gnuweeb.org (gnuweeb.org [51.81.211.47])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTPS id 3A027DF67;
+        Sun,  8 Jan 2023 05:59:17 -0800 (PST)
+Received: from localhost.localdomain (unknown [182.253.183.184])
+        by gnuweeb.org (Postfix) with ESMTPSA id CD0CA7E6E2;
+        Sun,  8 Jan 2023 13:59:14 +0000 (UTC)
+X-GW-Data: lPqxHiMPbJw1wb7CM9QUryAGzr0yq5atzVDdxTR0iA==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=gnuweeb.org;
+        s=default; t=1673186357;
+        bh=qZ0V/QjSoT8k1kLlfLdweTxUATQfYPsfP6+ph+Sfr8I=;
+        h=From:To:Cc:Subject:Date:In-Reply-To:References:From;
+        b=RB64m+AB1XK8vdgDRU/KjXiWnlN2eQoEmCPrdjyFaGEGDB06IKlgbodUBwbI6Exje
+         Om7eSpgg/hsKm4jwktmOEvyxOqFeZ2k4t1G/PpWOoX7P78HhtRVAoy73NcwlM0rx+W
+         PlEs1vWkH1HB8xEPUZvCn0s2jKkLdHUsTtBTUVbhnR6aBKggEM7GiMtBeyBO+mdktV
+         iSmO6GJTUYCE97dbx69U+DdNdkk2ssU8PSQjrbzljfAtQ5kFew0U4xXxnmffoXJ0hf
+         ZxTdYvG4bKnzGnlLXFh12XfGHqAn98qva1wcR3/AAJvljMv2xn+TLkTNA6EgAQx5bp
+         IOejifY8aBBqA==
+From:   Ammar Faizi <ammarfaizi2@gnuweeb.org>
+To:     Willy Tarreau <w@1wt.eu>
+Cc:     Ammar Faizi <ammarfaizi2@gnuweeb.org>,
+        Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>,
+        GNU/Weeb Mailing List <gwml@vger.gnuweeb.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Subject: [PATCH v3 2/5] nolibc/sys: Implement `signal(2)` function
+Date:   Sun,  8 Jan 2023 20:59:01 +0700
+Message-Id: <20230108135904.851762-3-ammar.faizi@intel.com>
+X-Mailer: git-send-email 2.34.1
+In-Reply-To: <20230108135904.851762-1-ammar.faizi@intel.com>
+References: <20230108135904.851762-1-ammar.faizi@intel.com>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+From: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+
+signal() function is the simpler version of sigaction(). Unlike
+sigaction(), which fully controls the `struct sigaction`, the caller
+only cares about the sa_handler when calling the signal() function.
+signal() internally calls sigaction().
+
+Signed-off-by: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+---
+ tools/include/nolibc/sys.h | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/tools/include/nolibc/sys.h b/tools/include/nolibc/sys.h
+index 7d594155e77f..54e51f154b1f 100644
+--- a/tools/include/nolibc/sys.h
++++ b/tools/include/nolibc/sys.h
+@@ -1119,6 +1119,31 @@ int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
+ 	return ret;
+ }
+ 
++/*
++ * sighandler_t signal(int signum, sighandler_t handler);
++ */
++
++static __attribute__((unused))
++sighandler_t signal(int signum, sighandler_t handler)
++{
++	const struct sigaction act = {
++		.sa_handler = handler,
++		.sa_flags = SA_RESTORER,
++		.sa_restorer = __restore_rt
++	};
++	sighandler_t old_sah;
++	struct sigaction old;
++	int ret;
++
++	ret = sys_sigaction(signum, &act, &old);
++	if (ret < 0) {
++		SET_ERRNO(-ret);
++		old_sah = SIG_ERR;
++	} else {
++		old_sah = old.sa_handler;
++	}
++	return old_sah;
++}
+ 
+ /*
+  * int stat(const char *path, struct stat *buf);
+-- 
+Ammar Faizi
+
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id 24BEFC63797
+	for <linux-kselftest@archiver.kernel.org>; Sun,  8 Jan 2023 13:59:48 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S232989AbjAHN7p (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Sun, 8 Jan 2023 08:59:45 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:51510 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S234916AbjAHN72 (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Sun, 8 Jan 2023 08:59:28 -0500
+Received: from gnuweeb.org (gnuweeb.org [51.81.211.47])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTPS id 2BDC5DEAB;
+        Sun,  8 Jan 2023 05:59:21 -0800 (PST)
+Received: from localhost.localdomain (unknown [182.253.183.184])
+        by gnuweeb.org (Postfix) with ESMTPSA id 1CD0A7E6EE;
+        Sun,  8 Jan 2023 13:59:17 +0000 (UTC)
+X-GW-Data: lPqxHiMPbJw1wb7CM9QUryAGzr0yq5atzVDdxTR0iA==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=gnuweeb.org;
+        s=default; t=1673186360;
+        bh=FDH1SiFwyTAYw73kTXZ3LWXEORDAq51IpBI/AfSBiCw=;
+        h=From:To:Cc:Subject:Date:In-Reply-To:References:From;
+        b=NpytHYUzml+I6lOZoeqsb+qnJPvs010A+G1N2Z9l8NpQYtjmmimkeEjDJP25fuWTQ
+         zox777FEhhiFuYO4tuPBCojzPKsK8J9abdl29cNZBvhfCwGEVf2TMtV1r7tE6YI1p1
+         AkB8EbBJ34fFK3w0z+kKCKGQRBIUB3X6vwCqScP8GvMZqZOt3xD1NFYcv+pli4DSGd
+         anXffvFKretW9siunjzWXt+Wl1vg/NctDdzOI9ViOAPUbiqOlPAZ9u7lDLrGYmmdbo
+         pom3VPP3fyGLnM/zO/qVnoiBnqe4pA+m95u/r6L9PlWW9wqsxCSjfGsc88U2FdSvFS
+         ngQzUaHwBUckQ==
+From:   Ammar Faizi <ammarfaizi2@gnuweeb.org>
+To:     Willy Tarreau <w@1wt.eu>
+Cc:     Ammar Faizi <ammarfaizi2@gnuweeb.org>,
+        Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>,
+        GNU/Weeb Mailing List <gwml@vger.gnuweeb.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Subject: [PATCH v3 3/5] selftests/nolibc: Add `fork(2)` selftest
+Date:   Sun,  8 Jan 2023 20:59:02 +0700
+Message-Id: <20230108135904.851762-4-ammar.faizi@intel.com>
+X-Mailer: git-send-email 2.34.1
+In-Reply-To: <20230108135904.851762-1-ammar.faizi@intel.com>
+References: <20230108135904.851762-1-ammar.faizi@intel.com>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+From: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+
+Ensure the fork() function can create a child process. Also, when the
+child exits, the parent must be able to get the child's exit code
+via waitpid().
+
+Signed-off-by: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+---
+ tools/testing/selftests/nolibc/nolibc-test.c | 45 ++++++++++++++++++++
+ 1 file changed, 45 insertions(+)
+
+diff --git a/tools/testing/selftests/nolibc/nolibc-test.c b/tools/testing/selftests/nolibc/nolibc-test.c
+index 3a78399f4624..cb6ec9f71aae 100644
+--- a/tools/testing/selftests/nolibc/nolibc-test.c
++++ b/tools/testing/selftests/nolibc/nolibc-test.c
+@@ -471,6 +471,50 @@ static int test_getpagesize(void)
+ 	return !c;
+ }
+ 
++/*
++ * Test fork().
++ * Make sure the exit code can be read from the parent process.
++ */
++static int test_fork_and_exit(int expected_code)
++{
++	int status;
++	int code;
++	pid_t ret;
++	pid_t p;
++
++	p = fork();
++	if (p < 0)
++		return p;
++
++	if (!p)
++		exit(expected_code);
++
++	do {
++		ret = waitpid(p, &status, 0);
++		if (ret < 0)
++			return ret;
++	} while (!WIFEXITED(status));
++
++	code = WEXITSTATUS(status);
++	if (code != expected_code) {
++		printf("test_fork_and_exit(): waitpid(): Invalid exit code: %d; expected = %d\n", code, expected_code);
++		return -1;
++	}
++
++	return 0;
++}
++
++static int test_fork(void)
++{
++	int i;
++
++	for (i = 0; i < 255; i++) {
++		if (test_fork_and_exit(i))
++			return -1;
++	}
++	return 0;
++}
++
+ /* Run syscall tests between IDs <min> and <max>.
+  * Return 0 on success, non-zero on failure.
+  */
+@@ -523,6 +567,7 @@ int run_syscall(int min, int max)
+ 		CASE_TEST(dup3_0);            tmp = dup3(0, 100, 0);  EXPECT_SYSNE(1, tmp, -1); close(tmp); break;
+ 		CASE_TEST(dup3_m1);           tmp = dup3(-1, 100, 0); EXPECT_SYSER(1, tmp, -1, EBADF); if (tmp != -1) close(tmp); break;
+ 		CASE_TEST(execve_root);       EXPECT_SYSER(1, execve("/", (char*[]){ [0] = "/", [1] = NULL }, NULL), -1, EACCES); break;
++		CASE_TEST(fork);              EXPECT_SYSZR(1, test_fork()); break;
+ 		CASE_TEST(getdents64_root);   EXPECT_SYSNE(1, test_getdents64("/"), -1); break;
+ 		CASE_TEST(getdents64_null);   EXPECT_SYSER(1, test_getdents64("/dev/null"), -1, ENOTDIR); break;
+ 		CASE_TEST(gettimeofday_null); EXPECT_SYSZR(1, gettimeofday(NULL, NULL)); break;
+-- 
+Ammar Faizi
+
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id 2CB0BC54EBD
+	for <linux-kselftest@archiver.kernel.org>; Sun,  8 Jan 2023 13:59:49 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S233444AbjAHN7q (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Sun, 8 Jan 2023 08:59:46 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:51444 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S235971AbjAHN7c (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Sun, 8 Jan 2023 08:59:32 -0500
+Received: from gnuweeb.org (gnuweeb.org [51.81.211.47])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTPS id 72E1810041;
+        Sun,  8 Jan 2023 05:59:24 -0800 (PST)
+Received: from localhost.localdomain (unknown [182.253.183.184])
+        by gnuweeb.org (Postfix) with ESMTPSA id 61A7E7E6F8;
+        Sun,  8 Jan 2023 13:59:21 +0000 (UTC)
+X-GW-Data: lPqxHiMPbJw1wb7CM9QUryAGzr0yq5atzVDdxTR0iA==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=gnuweeb.org;
+        s=default; t=1673186364;
+        bh=yxkyMaZ1H0PrseRu3i+/9FKOB8Exis+80uQ6H0Fm5qg=;
+        h=From:To:Cc:Subject:Date:In-Reply-To:References:From;
+        b=UfYI0qI/Hv6/rzfnBOPQbObnn0svGsHTjPGSXcL2MIGo8vz0dFd1mvQHTjLQY/ern
+         v0Mmua/RMr9WNJPy8f284BKO8bNbHXgbXB7TWqzAWJP02aBOel5qagXaYONwJi1YiN
+         uqfFj4PN2Qm9tP4NbzCdI5rPQafvO90gJHDBECn2qBmVlBYHNaD5WwcKiJCxCZmQsh
+         F1ei5RX26v09CwUVHuP1+/UiHLC6MN0zct5PJ7fhz4v7wYZOy+hnLVOxcOlnjQeM9h
+         nS5zyVw7sj5l/Q9IK/3s+pXj98y4viMXTes7Zjfimw7UxFX6p0Wp8BaceDPmkZH6Ys
+         OBVfhCJxpVwzA==
+From:   Ammar Faizi <ammarfaizi2@gnuweeb.org>
+To:     Willy Tarreau <w@1wt.eu>
+Cc:     Ammar Faizi <ammarfaizi2@gnuweeb.org>,
+        Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>,
+        GNU/Weeb Mailing List <gwml@vger.gnuweeb.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Subject: [PATCH v3 4/5] selftests/nolibc: Add `sigaction(2)` selftest
+Date:   Sun,  8 Jan 2023 20:59:03 +0700
+Message-Id: <20230108135904.851762-5-ammar.faizi@intel.com>
+X-Mailer: git-send-email 2.34.1
+In-Reply-To: <20230108135904.851762-1-ammar.faizi@intel.com>
+References: <20230108135904.851762-1-ammar.faizi@intel.com>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+From: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+
+Test the sigaction() function implementation. Test steps:
+
+ - Set a signal handler.
+ - Then send a signal to itself using the kill() syscall.
+ - The program has to survive and store the caught signal number in a
+   volatile global variable.
+ - Validate the volatile global variable value.
+ - Restore the original signal handler.
+
+Signed-off-by: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+---
+ tools/testing/selftests/nolibc/nolibc-test.c | 73 ++++++++++++++++++++
+ 1 file changed, 73 insertions(+)
+
+diff --git a/tools/testing/selftests/nolibc/nolibc-test.c b/tools/testing/selftests/nolibc/nolibc-test.c
+index cb6ec9f71aae..c348c92d26f6 100644
+--- a/tools/testing/selftests/nolibc/nolibc-test.c
++++ b/tools/testing/selftests/nolibc/nolibc-test.c
+@@ -515,6 +515,78 @@ static int test_fork(void)
+ 	return 0;
+ }
+ 
++static volatile int g_test_sig;
++
++static void test_signal_handler(int sig)
++{
++	g_test_sig = sig;
++}
++
++static int test_sigaction_sig(int sig)
++{
++	const struct sigaction new = {
++		.sa_handler = test_signal_handler
++	};
++	struct sigaction old;
++	int ret;
++
++	/*
++	 * Set the signal handler.
++	 */
++	ret = sigaction(sig, &new, &old);
++	if (ret) {
++		printf("test_sigaction_sig(%d): Failed to set a signal handler\n", sig);
++		return ret;
++	}
++
++	/*
++	 * Test the signal handler.
++	 */
++	g_test_sig = 0;
++	kill(getpid(), sig);
++
++	/*
++	 * test_signal_handler() must set @g_test_sig to @sig.
++	 */
++	if (g_test_sig != sig) {
++		printf("test_sigaction_sig(%d): Invalid g_test_sig value (%d != %d)\n", sig, g_test_sig, sig);
++		return -1;
++	}
++
++	/*
++	 * Restore the original signal handler.
++	 */
++	ret = sigaction(sig, &old, NULL);
++	if (ret) {
++		printf("test_sigaction_sig(%d): Failed to restore the signal handler\n", sig);
++		return ret;
++	}
++
++	return 0;
++}
++
++static const int g_sig_to_test[] = {
++	SIGINT,
++	SIGHUP,
++	SIGTERM,
++	SIGQUIT,
++	SIGSEGV
++};
++
++static int test_sigaction(void)
++{
++	size_t i;
++	int ret;
++
++	for (i = 0; i < (sizeof(g_sig_to_test) / sizeof(g_sig_to_test[0])); i++) {
++		ret = test_sigaction_sig(g_sig_to_test[i]);
++		if (ret)
++			return ret;
++	}
++
++	return 0;
++}
++
+ /* Run syscall tests between IDs <min> and <max>.
+  * Return 0 on success, non-zero on failure.
+  */
+@@ -596,6 +668,7 @@ int run_syscall(int min, int max)
+ 		CASE_TEST(select_null);       EXPECT_SYSZR(1, ({ struct timeval tv = { 0 }; select(0, NULL, NULL, NULL, &tv); })); break;
+ 		CASE_TEST(select_stdout);     EXPECT_SYSNE(1, ({ fd_set fds; FD_ZERO(&fds); FD_SET(1, &fds); select(2, NULL, &fds, NULL, NULL); }), -1); break;
+ 		CASE_TEST(select_fault);      EXPECT_SYSER(1, select(1, (void *)1, NULL, NULL, 0), -1, EFAULT); break;
++		CASE_TEST(sigaction);         EXPECT_SYSZR(1, test_sigaction()); break;
+ 		CASE_TEST(stat_blah);         EXPECT_SYSER(1, stat("/proc/self/blah", &stat_buf), -1, ENOENT); break;
+ 		CASE_TEST(stat_fault);        EXPECT_SYSER(1, stat(NULL, &stat_buf), -1, EFAULT); break;
+ 		CASE_TEST(symlink_root);      EXPECT_SYSER(1, symlink("/", "/"), -1, EEXIST); break;
+-- 
+Ammar Faizi
+
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id 20AEBC53210
+	for <linux-kselftest@archiver.kernel.org>; Sun,  8 Jan 2023 13:59:51 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S233748AbjAHN7s (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Sun, 8 Jan 2023 08:59:48 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:51534 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S236072AbjAHN7j (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Sun, 8 Jan 2023 08:59:39 -0500
+Received: from gnuweeb.org (gnuweeb.org [51.81.211.47])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTPS id BE6A3101C0;
+        Sun,  8 Jan 2023 05:59:27 -0800 (PST)
+Received: from localhost.localdomain (unknown [182.253.183.184])
+        by gnuweeb.org (Postfix) with ESMTPSA id A9ECD7E6FB;
+        Sun,  8 Jan 2023 13:59:24 +0000 (UTC)
+X-GW-Data: lPqxHiMPbJw1wb7CM9QUryAGzr0yq5atzVDdxTR0iA==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=gnuweeb.org;
+        s=default; t=1673186367;
+        bh=mVPQCOGvQrQvEwk4wkn1H2/KyDcjp/35/HH0BBizaVM=;
+        h=From:To:Cc:Subject:Date:In-Reply-To:References:From;
+        b=WQ2Y0OZccoWJ4VANBonNBnyq71Wgvpfhn5CGvrm6AYqexv+K2s7V7t30BW/xYXusL
+         O5DYYQh+Xh/aPVpg0O9yTWmZ1HSqMQNj86TkdE5PUzZlUy0Nx+QOdV20JqHzLGnTD/
+         qjrwtAwR+sBLPRhrpOdIB7fQtF8033wdrV42z/HB0zINq9Q4a76ys5qAo3kfrnq6BC
+         jOn82WccpkBxq6+dv1FI8APn/QEKawwh0pX68hC7LNrnbseq4WYUWsCPt6Xg3ltyE8
+         9cXXxXVBYVZRkJZtamm9xC3GZQUReLXb4UELtiu646JxONbeLUbrEva3zcZVUopShv
+         tpgmoEo7eKOVw==
+From:   Ammar Faizi <ammarfaizi2@gnuweeb.org>
+To:     Willy Tarreau <w@1wt.eu>
+Cc:     Ammar Faizi <ammarfaizi2@gnuweeb.org>,
+        Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>,
+        GNU/Weeb Mailing List <gwml@vger.gnuweeb.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Subject: [PATCH v3 5/5] selftests/nolibc: Add `signal(2)` selftest
+Date:   Sun,  8 Jan 2023 20:59:04 +0700
+Message-Id: <20230108135904.851762-6-ammar.faizi@intel.com>
+X-Mailer: git-send-email 2.34.1
+In-Reply-To: <20230108135904.851762-1-ammar.faizi@intel.com>
+References: <20230108135904.851762-1-ammar.faizi@intel.com>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+From: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+
+Just like the sigaction() selftest, but for signal().
+
+Signed-off-by: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+---
+ tools/testing/selftests/nolibc/nolibc-test.c | 54 ++++++++++++++++++++
+ 1 file changed, 54 insertions(+)
+
+diff --git a/tools/testing/selftests/nolibc/nolibc-test.c b/tools/testing/selftests/nolibc/nolibc-test.c
+index c348c92d26f6..946ed0132f93 100644
+--- a/tools/testing/selftests/nolibc/nolibc-test.c
++++ b/tools/testing/selftests/nolibc/nolibc-test.c
+@@ -565,6 +565,45 @@ static int test_sigaction_sig(int sig)
+ 	return 0;
+ }
+ 
++static int test_signal_sig(int sig)
++{
++	sighandler_t old;
++
++	/*
++	 * Set the signal handler.
++	 */
++	old = signal(sig, test_signal_handler);
++	if (old == SIG_ERR) {
++		printf("test_signal_sig(%d): Failed to set a signal handler\n", sig);
++		return -1;
++	}
++
++	/*
++	 * Test the signal handler.
++	 */
++	g_test_sig = 0;
++	kill(getpid(), sig);
++
++	/*
++	 * test_signal_handler() must set @g_test_sig to @sig.
++	 */
++	if (g_test_sig != sig) {
++		printf("test_signal_sig(%d): Invalid g_test_sig value (%d != %d)\n", sig, g_test_sig, sig);
++		return -1;
++	}
++
++	/*
++	 * Restore the original signal handler.
++	 */
++	old = signal(sig, old);
++	if (old == SIG_ERR) {
++		printf("test_signal_sig(%d): Failed to restore the signal handler\n", sig);
++		return -1;
++	}
++
++	return 0;
++}
++
+ static const int g_sig_to_test[] = {
+ 	SIGINT,
+ 	SIGHUP,
+@@ -587,6 +626,20 @@ static int test_sigaction(void)
+ 	return 0;
+ }
+ 
++static int test_signal(void)
++{
++	size_t i;
++	int ret;
++
++	for (i = 0; i < (sizeof(g_sig_to_test) / sizeof(g_sig_to_test[0])); i++) {
++		ret = test_signal_sig(g_sig_to_test[i]);
++		if (ret)
++			return ret;
++	}
++
++	return 0;
++}
++
+ /* Run syscall tests between IDs <min> and <max>.
+  * Return 0 on success, non-zero on failure.
+  */
+@@ -669,6 +722,7 @@ int run_syscall(int min, int max)
+ 		CASE_TEST(select_stdout);     EXPECT_SYSNE(1, ({ fd_set fds; FD_ZERO(&fds); FD_SET(1, &fds); select(2, NULL, &fds, NULL, NULL); }), -1); break;
+ 		CASE_TEST(select_fault);      EXPECT_SYSER(1, select(1, (void *)1, NULL, NULL, 0), -1, EFAULT); break;
+ 		CASE_TEST(sigaction);         EXPECT_SYSZR(1, test_sigaction()); break;
++		CASE_TEST(signal);            EXPECT_SYSZR(1, test_signal()); break;
+ 		CASE_TEST(stat_blah);         EXPECT_SYSER(1, stat("/proc/self/blah", &stat_buf), -1, ENOENT); break;
+ 		CASE_TEST(stat_fault);        EXPECT_SYSER(1, stat(NULL, &stat_buf), -1, EFAULT); break;
+ 		CASE_TEST(symlink_root);      EXPECT_SYSER(1, symlink("/", "/"), -1, EEXIST); break;
+-- 
+Ammar Faizi
+
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id 6AEB6C53210
+	for <linux-kselftest@archiver.kernel.org>; Sun,  8 Jan 2023 17:59:02 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S231134AbjAHR7A (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Sun, 8 Jan 2023 12:59:00 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:37634 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S229459AbjAHR66 (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Sun, 8 Jan 2023 12:58:58 -0500
+Received: from 1wt.eu (wtarreau.pck.nerim.net [62.212.114.60])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTP id 001C264D9;
+        Sun,  8 Jan 2023 09:58:55 -0800 (PST)
+Received: (from willy@localhost)
+        by pcw.home.local (8.15.2/8.15.2/Submit) id 308Hwg9X020774;
+        Sun, 8 Jan 2023 18:58:42 +0100
+Date:   Sun, 8 Jan 2023 18:58:42 +0100
+From:   Willy Tarreau <w@1wt.eu>
+To:     Ammar Faizi <ammarfaizi2@gnuweeb.org>
+Cc:     Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>,
+        GNU/Weeb Mailing List <gwml@vger.gnuweeb.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Subject: Re: [PATCH v3 0/5] nolibc signal handling support
+Message-ID: <20230108175842.GB18859@1wt.eu>
+References: <20230108135904.851762-1-ammar.faizi@intel.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <20230108135904.851762-1-ammar.faizi@intel.com>
+User-Agent: Mutt/1.10.1 (2018-07-13)
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+Hi Ammar,
+
+On Sun, Jan 08, 2023 at 08:58:59PM +0700, Ammar Faizi wrote:
+> From: Ammar Faizi <ammarfaizi2@gnuweeb.org>
+> 
+> Hi Willy,
+> 
+> On top of the series titled "nolibc auxiliary vector retrieval support".
+> The prerequisite patches of this series are in that series.
+> 
+> This is v2 of nolibc signal handling support. It adds signal handling
+> support to the nolibc subsystem:
+> 
+> 1)  Initial implementation of nolibc sigaction(2) function.
+> 
+>     `sigaction()` needs an architecture-dependent "signal trampoline"
+>     function that invokes __rt_sigreturn syscall to resume the process
+>     after a signal gets handled.
+> 
+>     The "signal trampoline" function is called `__restore_rt` in this
+>     implementation. The naming `__restore_rt` is important for GDB. It
+>     also has to be given a special optimization attribute
+>     "omit-frame-pointer" to prevent the compiler from creating a stack
+>     frame that makes the `%rsp` value no longer points to the `struct
+>     rt_sigframe` that the kernel constructed.
+> 
+> 
+> 2)  signal(2) function.
+> 
+>     signal() function is the simpler version of sigaction(). Unlike
+>     sigaction(), which fully controls the struct sigaction, the caller
+>     only cares about the sa_handler when calling the signal() function.
+>     signal() internally calls sigaction().
+> 
+> 
+> 3)  More selftests.
+> 
+>     This series also adds selftests for:
+>       - fork(2)
+>       - sigaction(2)
+>       - signal(2)
+> 
+> 
+> Side note for __restore_rt:
+> This has been tested on x86-64 arch and `__restore_rt` generates the
+> correct code. The `__restore_rt` codegen correctness on other
+> architectures need to be evaluated as well. If it can't generate the
+> correct code, it has to be written in inline Assembly.
+
+I'm currently testing it on various archs. For now:
+
+  - x86_64 and arm64 pass the test
+
+  - i386 and arm fail:
+      59 sigactiontest_sigaction_sig(2): Failed to set a signal handler
+       = -1 EINVAL                [FAIL]
+      60 signaltest_signal_sig(2): Failed to set a signal handler
+       = -1 EINVAL                   [FAIL]
+
+  - riscv and mips build are now broken:
+      sysroot/riscv/include/sys.h:1110:18: error: 'struct sigaction' has no member named 'sa_restorer'
+       1110 |         if (!act2.sa_restorer) {
+            |                  ^
+      sysroot/riscv/include/sys.h:1111:34: error: 'SA_RESTORER' undeclared (first use in this function); did you mean 'SA_RESTART'?
+       1111 |                 act2.sa_flags |= SA_RESTORER;
+            |                                  ^~~~~~~~~~~
+            |                                  SA_RESTART
+
+  - s390 segfaults:
+      58 select_fault = -1 EFAULT              [OK]
+      59 sigactionqemu: uncaught target signal 11 (Segmentation fault) - core dumped
+      Segmentation fault
+
+    It dies in __restore_rt at 1006ba4 while performing the syscall,
+    I don't know why, maybe this arch requires an alt stack or whatever :
+
+      0000000001006ba0 <__restore_rt>:
+       1006ba0:       a7 19 00 ad             lghi    %r1,173
+       1006ba4:       0a 00                   svc     0
+       1006ba6:       07 07                   nopr    %r7
+
+At the very least we need to make sure we don't degrade existing tests,
+which means making sure that it builds everywhere and that all those
+which build do work.
+
+It would be nice to figure what's failing on i386. Given that both it
+and arm fail on EINVAL while both x86_64 and arm64 work, I suspect that
+once you figure what breaks i386 it'll fix the problem on arm at the
+same time. I had a quick look but didn't spot anything suspicious.
+Once we've figured this, we could decide to tag archs supporting
+sig_action() and condition the functions definition and the tests to
+these.
+
+The advantage of trying with i386 is that your regular tools and the
+debugger you used for x86_64 will work. I'm proceeding like this with
+the toolchains from https://mirrors.edge.kernel.org/pub/tools/crosstool/ :
+
+ $ make nolibc-test LDFLAGS=-g CFLAGS=-g ARCH=i386 CC=/path/to/gcc-11.3.0-nolibc/i386-linux/bin/i386-linux-gcc
+ $ gdb ./nolibc-test
+ > b sigaction
+ > run
+ > s
+ ...
+ 
+Note that the code looks correct at first glance:
+
+0804b4a0 <__restore_rt>:
+ 804b4a0:       b8 ad 00 00 00          mov    $0xad,%eax
+ 804b4a5:       cd 80                   int    $0x80
+
+I also think that the printf() in test_sigaction_sig() are not welcome
+as they corrupt the output. Maybe one thing you could do to preserve the
+info would be to prepend a space in front of the message and remove the
+LF. For example the simple patch below:
+
+diff --git a/tools/testing/selftests/nolibc/nolibc-test.c b/tools/testing/selftests/nolibc/nolibc-test.c
+index a1883467451a..42f794c646b7 100644
+--- a/tools/testing/selftests/nolibc/nolibc-test.c
++++ b/tools/testing/selftests/nolibc/nolibc-test.c
+@@ -535,7 +535,7 @@ static int test_sigaction_sig(int sig)
+         */
+        ret = sigaction(sig, &new, &old);
+        if (ret) {
+-               printf("test_sigaction_sig(%d): Failed to set a signal handler\n", sig);
++               printf(" (failed to set handler for signal %d)", sig);
+                return ret;
+        }
+ 
+@@ -549,7 +549,7 @@ static int test_sigaction_sig(int sig)
+         * test_signal_handler() must set @g_test_sig to @sig.
+         */
+        if (g_test_sig != sig) {
+-               printf("test_sigaction_sig(%d): Invalid g_test_sig value (%d != %d)\n", sig, g_test_sig, sig);
++               printf(" (invalid g_test_sig value (%d != %d))", sig, g_test_sig);
+                return -1;
+        }
+ 
+@@ -558,7 +558,7 @@ static int test_sigaction_sig(int sig)
+         */
+        ret = sigaction(sig, &old, NULL);
+        if (ret) {
+-               printf("test_sigaction_sig(%d): Failed to restore the signal handler\n", sig);
++               printf(" (Failed to restore handler for signal %d)", sig);
+                return ret;
+        }
+ 
+@@ -574,7 +574,7 @@ static int test_signal_sig(int sig)
+         */
+        old = signal(sig, test_signal_handler);
+        if (old == SIG_ERR) {
+-               printf("test_signal_sig(%d): Failed to set a signal handler\n", sig);
++               printf(" (failed to set handler for signal %d)", sig);
+                return -1;
+        }
+ 
+@@ -588,7 +588,7 @@ static int test_signal_sig(int sig)
+         * test_signal_handler() must set @g_test_sig to @sig.
+         */
+        if (g_test_sig != sig) {
+-               printf("test_signal_sig(%d): Invalid g_test_sig value (%d != %d)\n", sig, g_test_sig, sig);
++               printf(" (invalid g_test_sig value (%d != %d))", sig, g_test_sig);
+                return -1;
+        }
+ 
+@@ -597,7 +597,7 @@ static int test_signal_sig(int sig)
+         */
+        old = signal(sig, old);
+        if (old == SIG_ERR) {
+-               printf("test_signal_sig(%d): Failed to restore the signal handler\n", sig);
++               printf(" (Failed to restore handler for signal %d)", sig);
+                return -1;
+        }
+ 
+Gives me this:
+
+...
+56 select_null = 0                       [OK]
+57 select_stdout = 1                     [OK]
+58 select_fault = -1 EFAULT              [OK]
+59 sigaction (failed to set handler for signal 2) = -1 EINVAL                [FAIL]
+60 signal (failed to set handler for signal 2) = -1 EINVAL                   [FAIL]
+61 stat_blah = -1 ENOENT                 [OK]
+62 stat_fault = -1 EFAULT                [OK]
+63 symlink_root = -1 EEXIST              [OK]
+...
+
+Which is way more readable and still grep-friendly.
+
+Thanks!
+Willy
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id 590BCC67871
+	for <linux-kselftest@archiver.kernel.org>; Sun,  8 Jan 2023 18:31:58 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S233656AbjAHSb5 (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Sun, 8 Jan 2023 13:31:57 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:56198 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S236306AbjAHSbZ (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Sun, 8 Jan 2023 13:31:25 -0500
+Received: from gnuweeb.org (gnuweeb.org [51.81.211.47])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTPS id BE1E6BE08;
+        Sun,  8 Jan 2023 10:31:24 -0800 (PST)
+Received: from biznet-home.integral.gnuweeb.org (unknown [182.253.183.184])
+        by gnuweeb.org (Postfix) with ESMTPSA id 8BBAF7E375;
+        Sun,  8 Jan 2023 18:31:21 +0000 (UTC)
+X-GW-Data: lPqxHiMPbJw1wb7CM9QUryAGzr0yq5atzVDdxTR0iA==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=gnuweeb.org;
+        s=default; t=1673202684;
+        bh=9umJdbd5KJp+UAquobmdtoTrKKFWq86YVx9C36KKXTM=;
+        h=Date:From:To:Cc:Subject:References:In-Reply-To:From;
+        b=Y7NWNwnRsbgY/ky7Pr0tGgXFs9PhWyZ7zoHECB+EhKwbBt+dhqloDjPfoaP5niaUW
+         96fqfpIMvsASqaE8lCwVaOVhEh+Fd/fgIDgt4/YychEgZiPABIFatwbl+YEkEGwP8S
+         04KzDsYS4rGpvVISxChA7vjerSQxjXd4FxJkC0ruAZXXx33qPfsgkncN0or3oXl5Z7
+         C7EHWCESCTlPOHQLq+XyFvRdqZAoNOCu5SM/ZEDy4z2XhzjAKEXMm0BX7VtLhkDRpD
+         41/cXCqsUAeyj8vKDGOJZsIft4owS6YNUvoazObcyXK+h4FCXIHtUZ/7BQ1TmGAIel
+         +qDcepXBz8V6g==
+Date:   Mon, 9 Jan 2023 01:31:17 +0700
+From:   Ammar Faizi <ammarfaizi2@gnuweeb.org>
+To:     Willy Tarreau <w@1wt.eu>
+Cc:     Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>,
+        GNU/Weeb Mailing List <gwml@vger.gnuweeb.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Subject: Re: [PATCH v3 0/5] nolibc signal handling support
+Message-ID: <Y7sL9U1dYkuWJ8rS@biznet-home.integral.gnuweeb.org>
+References: <20230108135904.851762-1-ammar.faizi@intel.com>
+ <20230108175842.GB18859@1wt.eu>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <20230108175842.GB18859@1wt.eu>
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+On Sun, Jan 08, 2023 at 06:58:42PM +0100, Willy Tarreau wrote:
+> I'm currently testing it on various archs. For now:
+> 
+>   - x86_64 and arm64 pass the test
+
+Thanks for testing.
+
+>   - i386 and arm fail:
+>       59 sigactiontest_sigaction_sig(2): Failed to set a signal handler
+>        = -1 EINVAL                [FAIL]
+>       60 signaltest_signal_sig(2): Failed to set a signal handler
+>        = -1 EINVAL                   [FAIL]
+
+I'll take a look at i386 for now.
+
+>   - riscv and mips build are now broken:
+>       sysroot/riscv/include/sys.h:1110:18: error: 'struct sigaction' has no member named 'sa_restorer'
+>        1110 |         if (!act2.sa_restorer) {
+>             |                  ^
+>       sysroot/riscv/include/sys.h:1111:34: error: 'SA_RESTORER' undeclared (first use in this function); did you mean 'SA_RESTART'?
+>        1111 |                 act2.sa_flags |= SA_RESTORER;
+>             |                                  ^~~~~~~~~~~
+>             |                                  SA_RESTART
+
+Just a speculation:
+This is probably because not all architectures have a SA_RESTORER. I'll
+need to figure out how Linux handles signal on those architectures.
+
+>   - s390 segfaults:
+>       58 select_fault = -1 EFAULT              [OK]
+>       59 sigactionqemu: uncaught target signal 11 (Segmentation fault) - core dumped
+>       Segmentation fault
+> 
+>     It dies in __restore_rt at 1006ba4 while performing the syscall,
+>     I don't know why, maybe this arch requires an alt stack or whatever :
+> 
+>       0000000001006ba0 <__restore_rt>:
+>        1006ba0:       a7 19 00 ad             lghi    %r1,173
+>        1006ba4:       0a 00                   svc     0
+>        1006ba6:       07 07                   nopr    %r7
+
+Bah, no clue on this. I'll CC s390 people in the next version and ask
+them to shed some light.
+
+> At the very least we need to make sure we don't degrade existing tests,
+> which means making sure that it builds everywhere and that all those
+> which build do work.
+
+Understand.
+
+> It would be nice to figure what's failing on i386. Given that both it
+> and arm fail on EINVAL while both x86_64 and arm64 work, I suspect that
+> once you figure what breaks i386 it'll fix the problem on arm at the
+> same time. I had a quick look but didn't spot anything suspicious.
+> Once we've figured this, we could decide to tag archs supporting
+> sig_action() and condition the functions definition and the tests to
+> these.
+
+I'll be pondering this code this week (to follow what actually the
+rt_sigaction wants on i386 and arm):
+
+  https://github.com/torvalds/linux/blob/v6.2-rc3/kernel/signal.c#L4404-L4434
+
+Hopefully, I can get it sorted before the weekend.
+
+> The advantage of trying with i386 is that your regular tools and the
+> debugger you used for x86_64 will work. I'm proceeding like this with
+> the toolchains from https://mirrors.edge.kernel.org/pub/tools/crosstool/ :
+> 
+>  $ make nolibc-test LDFLAGS=-g CFLAGS=-g ARCH=i386 CC=/path/to/gcc-11.3.0-nolibc/i386-linux/bin/i386-linux-gcc
+>  $ gdb ./nolibc-test
+>  > b sigaction
+>  > run
+>  > s
+>  ...
+
+Nice tip! I'll be playing with that.
+
+> Note that the code looks correct at first glance:
+> 
+> 0804b4a0 <__restore_rt>:
+>  804b4a0:       b8 ad 00 00 00          mov    $0xad,%eax
+>  804b4a5:       cd 80                   int    $0x80
+> 
+> I also think that the printf() in test_sigaction_sig() are not welcome
+> as they corrupt the output. Maybe one thing you could do to preserve the
+> info would be to prepend a space in front of the message and remove the
+> LF. For example the simple patch below:
+[...]
+> Which is way more readable and still grep-friendly.
+
+Yeah, that looks much better. Applied to my local git tree with
+attribution.
+
+-- 
+Ammar Faizi
+
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id 65B04C54EBE
+	for <linux-kselftest@archiver.kernel.org>; Sun,  8 Jan 2023 18:49:48 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S229503AbjAHStr (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Sun, 8 Jan 2023 13:49:47 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:33168 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S235282AbjAHStn (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Sun, 8 Jan 2023 13:49:43 -0500
+Received: from 1wt.eu (wtarreau.pck.nerim.net [62.212.114.60])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTP id 2E1A1EE23;
+        Sun,  8 Jan 2023 10:49:40 -0800 (PST)
+Received: (from willy@localhost)
+        by pcw.home.local (8.15.2/8.15.2/Submit) id 308InU0f021062;
+        Sun, 8 Jan 2023 19:49:30 +0100
+Date:   Sun, 8 Jan 2023 19:49:30 +0100
+From:   Willy Tarreau <w@1wt.eu>
+To:     Ammar Faizi <ammarfaizi2@gnuweeb.org>
+Cc:     Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>,
+        GNU/Weeb Mailing List <gwml@vger.gnuweeb.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Subject: Re: [PATCH v3 0/5] nolibc signal handling support
+Message-ID: <20230108184930.GC18859@1wt.eu>
+References: <20230108135904.851762-1-ammar.faizi@intel.com>
+ <20230108175842.GB18859@1wt.eu>
+ <Y7sL9U1dYkuWJ8rS@biznet-home.integral.gnuweeb.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <Y7sL9U1dYkuWJ8rS@biznet-home.integral.gnuweeb.org>
+User-Agent: Mutt/1.10.1 (2018-07-13)
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+On Mon, Jan 09, 2023 at 01:31:17AM +0700, Ammar Faizi wrote:
+> >   - riscv and mips build are now broken:
+> >       sysroot/riscv/include/sys.h:1110:18: error: 'struct sigaction' has no member named 'sa_restorer'
+> >        1110 |         if (!act2.sa_restorer) {
+> >             |                  ^
+> >       sysroot/riscv/include/sys.h:1111:34: error: 'SA_RESTORER' undeclared (first use in this function); did you mean 'SA_RESTART'?
+> >        1111 |                 act2.sa_flags |= SA_RESTORER;
+> >             |                                  ^~~~~~~~~~~
+> >             |                                  SA_RESTART
+> 
+> Just a speculation:
+> This is probably because not all architectures have a SA_RESTORER. I'll
+> need to figure out how Linux handles signal on those architectures.
+
+Yes that's the case, there's even some ifdef around it in the generic
+code. I have no idea how it works there, at least it seems worth having
+a look to make sure we don't miss something easy.
+
+> >   - s390 segfaults:
+> >       58 select_fault = -1 EFAULT              [OK]
+> >       59 sigactionqemu: uncaught target signal 11 (Segmentation fault) - core dumped
+> >       Segmentation fault
+> > 
+> >     It dies in __restore_rt at 1006ba4 while performing the syscall,
+> >     I don't know why, maybe this arch requires an alt stack or whatever :
+> > 
+> >       0000000001006ba0 <__restore_rt>:
+> >        1006ba0:       a7 19 00 ad             lghi    %r1,173
+> >        1006ba4:       0a 00                   svc     0
+> >        1006ba6:       07 07                   nopr    %r7
+> 
+> Bah, no clue on this. I'll CC s390 people in the next version and ask
+> them to shed some light.
+
+OK.
+
+> I'll be pondering this code this week (to follow what actually the
+> rt_sigaction wants on i386 and arm):
+> 
+>   https://github.com/torvalds/linux/blob/v6.2-rc3/kernel/signal.c#L4404-L4434
+
+Seems like it could simply be a matter of sigsetsize, which is the
+first one returning -EINVAL.
+
+> Hopefully, I can get it sorted before the weekend.
+
+OK!
+
+> > I also think that the printf() in test_sigaction_sig() are not welcome
+> > as they corrupt the output. Maybe one thing you could do to preserve the
+> > info would be to prepend a space in front of the message and remove the
+> > LF. For example the simple patch below:
+> [...]
+> > Which is way more readable and still grep-friendly.
+> 
+> Yeah, that looks much better. Applied to my local git tree with
+> attribution.
+
+Don't worry with attribution for such patches from me. I'd rather see
+the first patch looking good at once than having an extra one change
+the output just for the sake of attribution! It was just a suggestion
+anyway and whatever solution you find that improves the output will be
+fine.
+
+Thank you!
+Willy
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id 43A6AC3DA78
+	for <linux-kselftest@archiver.kernel.org>; Sun, 15 Jan 2023 16:03:39 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S231378AbjAOQDh (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Sun, 15 Jan 2023 11:03:37 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:60760 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S231605AbjAOQDF (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Sun, 15 Jan 2023 11:03:05 -0500
+Received: from gnuweeb.org (gnuweeb.org [51.81.211.47])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTPS id 9A12B1815A;
+        Sun, 15 Jan 2023 08:01:23 -0800 (PST)
+Received: from biznet-home.integral.gnuweeb.org (unknown [182.253.183.184])
+        by gnuweeb.org (Postfix) with ESMTPSA id 5318E7E795;
+        Sun, 15 Jan 2023 16:01:10 +0000 (UTC)
+X-GW-Data: lPqxHiMPbJw1wb7CM9QUryAGzr0yq5atzVDdxTR0iA==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=gnuweeb.org;
+        s=default; t=1673798473;
+        bh=CV1abQ9gGejZbJXQ/TOIyi+DJk5vgSgg0ar02f3kMKc=;
+        h=Date:From:To:Cc:Subject:References:In-Reply-To:From;
+        b=dFsocE8EW0qbhPz0n26OQwMnwu76IzrCvnr4FOc4u5uziFcMMynAhfQ4Zc6w+P4Tr
+         aHymi2PXurC5HHVEt2e5UONi/CvZx+IKvg1En8NTgUTJkPH8XxNrFue57W6zpKdujz
+         OPx4EcOS+7SUEau5p3KZ4PWQAea576m7P18DipeA9uWIxwNeGzkbsI+UQEZgjjCQ+T
+         I9e7XgxNebR5TxGb2jQsDlz6uVGTSGI8eHpu5rEEz9pIhOsjqcjIddLUEIm/hr2/TG
+         CBJ1xd+VdLgbkRZB2/NKeoEmOMAMnMWuoALxY2bFHgiAscBhP6/nhAjVcsDiu5XA44
+         ors9p4Tsg1y9g==
+Date:   Sun, 15 Jan 2023 23:01:06 +0700
+From:   Ammar Faizi <ammarfaizi2@gnuweeb.org>
+To:     Willy Tarreau <w@1wt.eu>
+Cc:     Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>,
+        GNU/Weeb Mailing List <gwml@vger.gnuweeb.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Subject: Re: [PATCH v3 0/5] nolibc signal handling support
+Message-ID: <Y8QjQnkPxVyEOxPz@biznet-home.integral.gnuweeb.org>
+References: <20230108135904.851762-1-ammar.faizi@intel.com>
+ <20230108175842.GB18859@1wt.eu>
+ <Y7sL9U1dYkuWJ8rS@biznet-home.integral.gnuweeb.org>
+ <20230108184930.GC18859@1wt.eu>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <20230108184930.GC18859@1wt.eu>
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+On Sun, Jan 08, 2023 at 07:49:30PM +0100, Willy Tarreau wrote:
+> On Mon, Jan 09, 2023 at 01:31:17AM +0700, Ammar Faizi wrote:
+> > I'll be pondering this code this week (to follow what actually the
+> > rt_sigaction wants on i386 and arm):
+> > 
+> >   https://github.com/torvalds/linux/blob/v6.2-rc3/kernel/signal.c#L4404-L4434
+> 
+> Seems like it could simply be a matter of sigsetsize, which is the
+> first one returning -EINVAL.
+> 
+> > Hopefully, I can get it sorted before the weekend.
+> 
+> OK!
+
+I couldn't dedicate much time to this, but I looked into it, and here's
+my report on the progress. I didn't manage to find a proper solution to
+this. But yes, you're right. It's a matter of 'sizeof(sigset_t)'.
+
+So here is my observation. Currently, nolibc's sys.h includes this:
+
+    #include <asm/signal.h>
+
+The definition of 'sigset_t' in that header is: 
+
+    typedef unsigned long sigset_t;
+
+On i386, 'sizeof(unsigned long)' is 4, but on x86-64 it's 8.
+
+That is not the 'sigset_t' that the kernel wants. The kernel wants the
+'sigset_t' that is in <asm-generic/signal.h>:
+
+    #define _NSIG       64
+    #define _NSIG_BPW   __BITS_PER_LONG      // this 64 on x86-64, but 32 on i386.
+    #define _NSIG_WORDS (_NSIG / _NSIG_BPW)
+
+    typedef struct {
+        unsigned long sig[_NSIG_WORDS];
+    } sigset_t;
+
+The above struct is always 8 bytes in size. In other words:
+
+    _NSIG_WORDS == 2 on i386
+    _NSIG_WORDS == 1 on x86-64
+    sizeof(unsigned long) == 4 on i386
+    sizeof(unsigned long) == 8 on x86-64
+
+Therefore, sizeof(unsigned long [_NSIG_WORDS]) is always 8 on both
+architectures. That's the correct size.
+
+I tried to #include <asm-generic/signal.h> but it conflicts with the
+other 'sigset_t' definition. So I can't do that.
+
+Why are there two different definitions of 'sigset_t'? I don't know.
+
+I probably should read the story behind this syscall to get it
+implemented right. Let me ponder this again on Monday. But at least I
+tell what I have found so people can give some comments on it...
+
+-- 
+Ammar Faizi
+
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id D9E4EC3DA78
+	for <linux-kselftest@archiver.kernel.org>; Sun, 15 Jan 2023 17:07:30 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S231484AbjAORH3 (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Sun, 15 Jan 2023 12:07:29 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:52052 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S231487AbjAORHN (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Sun, 15 Jan 2023 12:07:13 -0500
+Received: from gnuweeb.org (gnuweeb.org [51.81.211.47])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTPS id EC00612840;
+        Sun, 15 Jan 2023 09:06:57 -0800 (PST)
+Received: from mail-lf1-f41.google.com (mail-lf1-f41.google.com [209.85.167.41])
+        by gnuweeb.org (Postfix) with ESMTPSA id 850E581870;
+        Sun, 15 Jan 2023 17:06:57 +0000 (UTC)
+X-GW-Data: lPqxHiMPbJw1wb7CM9QUryAGzr0yq5atzVDdxTR0iA==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=gnuweeb.org;
+        s=default; t=1673802417;
+        bh=dcakJR7qlaPRzeX+cbXVY0AH02DQvlsTZgd8qrY95Xw=;
+        h=References:In-Reply-To:From:Date:Subject:To:Cc:From;
+        b=YENzDR2BXOxMKqQZzEeXT2Hry+3iEzqlrZG7JNsx5WLBLxVCe6wPjTkCKUTwBkTY4
+         SkKZvi5afylGxCkms6UA1NmA3GzAKh/nyoTxXbspkLPeun/Z1GJoaUYACwVVPjAgWf
+         ssKF2r/xFuq83zEN7smPYnHDBGN+WGVsAoZAMXnyRpz6rfRBMp3KEv3zpTMprjFifI
+         B2ok2g1ynlnzPR095GYckVfHk7V59lEMCBV5n1Hi6RE1VF/oGvqyS5gwyQa/0WfKvD
+         /7vb+8ZQjyAOEHrJM+Yj+WssJxYW9hKUXOzN/rEhVJ41RUO9X42WTtGMkzkeFadyQp
+         TWLOpdiucK1gg==
+Received: by mail-lf1-f41.google.com with SMTP id o20so7810627lfk.5;
+        Sun, 15 Jan 2023 09:06:57 -0800 (PST)
+X-Gm-Message-State: AFqh2kr948a1htGx5MpZwvGizMEhsfaaU6adrPs0s+/d0M0XKdkTjfEi
+        ysZ7yUfroXCKCQCu3h2sVY/WRjKaYhk/bwgE/Ws=
+X-Google-Smtp-Source: AMrXdXt+ONtp8KGOj1DXG2x4qJeG/whOylQhdguLA1D7PE5APKMLbsoAM/lnwgcmZcvGx847LMWTklp/38FUaL4U2YU=
+X-Received: by 2002:ac2:4c32:0:b0:4b5:798a:9087 with SMTP id
+ u18-20020ac24c32000000b004b5798a9087mr6093252lfq.314.1673802415554; Sun, 15
+ Jan 2023 09:06:55 -0800 (PST)
+MIME-Version: 1.0
+References: <20230108135904.851762-1-ammar.faizi@intel.com>
+ <20230108175842.GB18859@1wt.eu> <Y7sL9U1dYkuWJ8rS@biznet-home.integral.gnuweeb.org>
+ <20230108184930.GC18859@1wt.eu> <Y8QjQnkPxVyEOxPz@biznet-home.integral.gnuweeb.org>
+In-Reply-To: <Y8QjQnkPxVyEOxPz@biznet-home.integral.gnuweeb.org>
+From:   Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>
+Date:   Mon, 16 Jan 2023 00:06:44 +0700
+X-Gmail-Original-Message-ID: <CAOG64qMcvd==jfHc22q2=n79siixqbKOxb7N8i6SXjqCJtnZpw@mail.gmail.com>
+Message-ID: <CAOG64qMcvd==jfHc22q2=n79siixqbKOxb7N8i6SXjqCJtnZpw@mail.gmail.com>
+Subject: Re: [PATCH v3 0/5] nolibc signal handling support
+To:     Ammar Faizi <ammarfaizi2@gnuweeb.org>
+Cc:     Willy Tarreau <w@1wt.eu>, Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        "GNU/Weeb Mailing List" <gwml@vger.gnuweeb.org>,
+        VNLX Kernel Department <kernel@vnlx.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+On Sun, Jan 15, 2023 at 11:01 PM Ammar Faizi wrote:
+> That is not the 'sigset_t' that the kernel wants. The kernel wants the
+> 'sigset_t' that is in <asm-generic/signal.h>:
+>
+>     #define _NSIG       64
+>     #define _NSIG_BPW   __BITS_PER_LONG      // this 64 on x86-64, but 32=
+ on i386.
+>     #define _NSIG_WORDS (_NSIG / _NSIG_BPW)
+>
+>     typedef struct {
+>         unsigned long sig[_NSIG_WORDS];
+>     } sigset_t;
+>
+> The above struct is always 8 bytes in size. In other words:
+>
+>     _NSIG_WORDS =3D=3D 2 on i386
+>     _NSIG_WORDS =3D=3D 1 on x86-64
+>     sizeof(unsigned long) =3D=3D 4 on i386
+>     sizeof(unsigned long) =3D=3D 8 on x86-64
+>
+> Therefore, sizeof(unsigned long [_NSIG_WORDS]) is always 8 on both
+> architectures. That's the correct size.
+>
+> I tried to #include <asm-generic/signal.h> but it conflicts with the
+> other 'sigset_t' definition. So I can't do that.
+
+Read the glibc sigaction implementation, it has different struct
+sigaction definitions for user and kernel too.
+
+https://sourceware.org/git/?p=3Dglibc.git;a=3Dblob;f=3Dsysdeps/unix/sysv/li=
+nux/libc_sigaction.c;h=3D3cbf241a5fa28296c910fa40a41b09d2b6113b05;hb=3D7e31=
+d166510ac4adbf53d5e8144c709a37dd8c7a
+
+Since nolibc compiles everything in a single translation unit, you
+can't have a different sigset_t definition. You need to copy the
+definition to nolibc header and change the type name to something else
+for internal use only.
+
+> Why are there two different definitions of 'sigset_t'? I don't know.
+>
+> I probably should read the story behind this syscall to get it
+> implemented right. Let me ponder this again on Monday. But at least I
+> tell what I have found so people can give some comments on it...
+
+`man 2 rt_sigaction` tells the story. Here is the bedtime story, have
+a nice dream :-)
+
+The original Linux system call was named sigaction(). However, with
+the addition of real-time signals in Linux 2.2, the fixed-size, 32-bit
+sigset_t type supported by that system call was no longer fit for
+purpose.
+Consequently, a new system call, rt_sigaction(), was added to support
+an enlarged sigset_t type. The new system call takes a fourth
+argument, size_t sigsetsize, which specifies the size in bytes of the
+signal sets
+in act.sa_mask and oldact.sa_mask. This argument is currently required
+to have the value sizeof(sigset_t) (or the error EINVAL results). The
+glibc sigaction() wrapper function hides these details from us,
+transpar=E2=80=90
+ently calling rt_sigaction() when the kernel provides it.
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Return-Path: <linux-kselftest-owner@vger.kernel.org>
+X-Spam-Checker-Version: SpamAssassin 3.4.0 (2014-02-07) on
+	aws-us-west-2-korg-lkml-1.web.codeaurora.org
+Received: from vger.kernel.org (vger.kernel.org [23.128.96.18])
+	by smtp.lore.kernel.org (Postfix) with ESMTP id 84693C00A5A
+	for <linux-kselftest@archiver.kernel.org>; Wed, 18 Jan 2023 00:04:48 +0000 (UTC)
+Received: (majordomo@vger.kernel.org) by vger.kernel.org via listexpand
+        id S229716AbjARAEq (ORCPT
+        <rfc822;linux-kselftest@archiver.kernel.org>);
+        Tue, 17 Jan 2023 19:04:46 -0500
+Received: from lindbergh.monkeyblade.net ([23.128.96.19]:51566 "EHLO
+        lindbergh.monkeyblade.net" rhost-flags-OK-OK-OK-OK) by vger.kernel.org
+        with ESMTP id S229740AbjARAEU (ORCPT
+        <rfc822;linux-kselftest@vger.kernel.org>);
+        Tue, 17 Jan 2023 19:04:20 -0500
+Received: from gnuweeb.org (gnuweeb.org [51.81.211.47])
+        by lindbergh.monkeyblade.net (Postfix) with ESMTPS id 6B39ABF5DB;
+        Tue, 17 Jan 2023 15:17:14 -0800 (PST)
+Received: from biznet-home.integral.gnuweeb.org (unknown [182.253.183.184])
+        by gnuweeb.org (Postfix) with ESMTPSA id B47B47F937;
+        Tue, 17 Jan 2023 23:17:10 +0000 (UTC)
+X-GW-Data: lPqxHiMPbJw1wb7CM9QUryAGzr0yq5atzVDdxTR0iA==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=gnuweeb.org;
+        s=default; t=1673997433;
+        bh=PPaTURbD1g7mkfJxDqc8AFxivfwcGWlKFRRMlZyAylQ=;
+        h=Date:From:To:Cc:Subject:References:In-Reply-To:From;
+        b=tx34+WaqDfs77RMaoY3vxBj7pfSJWKlxMrlLHFUxQ+WdNHM8tX83lJcqVXHXyahYb
+         iqWBx6nxgrZJz7qwR+SdyC5m2oi1Id4Ura5GJ2YFkkpQ3Q20y5pu6NvTpsmTkwwzys
+         n8U+bONK096mJko+uWVtPQQ7jAavbpf2GaoyPaMaiNwO593rALUMBJF4KF9KZ1TLas
+         tDhPd7pn3FRr+H70+SfA2dT7m11zHHNGIV9OYWZRq2K5aFsYXu56KCCiLxdMjYdPQu
+         JqcCTT2DptvQLhrK34egeHcW4XE9x8pm22yuzYFtu6whXYH3uqeNv+btz0nZ3WUUa6
+         /1pvM0fDuFPoQ==
+Date:   Wed, 18 Jan 2023 06:17:06 +0700
+From:   Ammar Faizi <ammarfaizi2@gnuweeb.org>
+To:     Alviro Iskandar Setiawan <alviro.iskandar@gnuweeb.org>
+Cc:     Willy Tarreau <w@1wt.eu>, Shuah Khan <shuah@kernel.org>,
+        "Paul E. McKenney" <paulmck@kernel.org>,
+        Gilang Fachrezy <gilang4321@gmail.com>,
+        GNU/Weeb Mailing List <gwml@vger.gnuweeb.org>,
+        VNLX Kernel Department <kernel@vnlx.org>,
+        Linux Kernel Mailing List <linux-kernel@vger.kernel.org>,
+        Linux Kselftest Mailing List 
+        <linux-kselftest@vger.kernel.org>
+Subject: Re: [PATCH v3 0/5] nolibc signal handling support
+Message-ID: <Y8cscp3BOdAqgkAq@biznet-home.integral.gnuweeb.org>
+References: <20230108135904.851762-1-ammar.faizi@intel.com>
+ <20230108175842.GB18859@1wt.eu>
+ <Y7sL9U1dYkuWJ8rS@biznet-home.integral.gnuweeb.org>
+ <20230108184930.GC18859@1wt.eu>
+ <Y8QjQnkPxVyEOxPz@biznet-home.integral.gnuweeb.org>
+ <CAOG64qMcvd==jfHc22q2=n79siixqbKOxb7N8i6SXjqCJtnZpw@mail.gmail.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+In-Reply-To: <CAOG64qMcvd==jfHc22q2=n79siixqbKOxb7N8i6SXjqCJtnZpw@mail.gmail.com>
+Precedence: bulk
+List-ID: <linux-kselftest.vger.kernel.org>
+X-Mailing-List: linux-kselftest@vger.kernel.org
+
+On Mon, Jan 16, 2023 at 12:06:44AM +0700, Alviro Iskandar Setiawan wrote:
+> Read the glibc sigaction implementation, it has different struct
+> sigaction definitions for user and kernel too.
+> 
+> https://sourceware.org/git/?p=glibc.git;a=blob;f=sysdeps/unix/sysv/linux/libc_sigaction.c;h=3cbf241a5fa28296c910fa40a41b09d2b6113b05;hb=7e31d166510ac4adbf53d5e8144c709a37dd8c7a
+> 
+> Since nolibc compiles everything in a single translation unit, you
+> can't have a different sigset_t definition. You need to copy the
+> definition to nolibc header and change the type name to something else
+> for internal use only.
+
+I'll give it a try.
+
+-- 
+Ammar Faizi
+
+
