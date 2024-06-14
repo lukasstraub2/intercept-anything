@@ -14,13 +14,13 @@
 #include <linux/filter.h>
 #include <linux/seccomp.h>
 
-int _open64(const char *path, int flags, mode_t mode) {
+static int handle_open(const char *path, int flags, mode_t mode) {
+	trace("open(%s)\n", path);
 	return __sysret(sys_open(path, flags, mode));
 }
 
 static __attribute__((unused))
-int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
-{
+int sys_openat(int dirfd, const char *path, int flags, mode_t mode) {
 #ifdef __NR_openat
 	return my_syscall4(__NR_openat, dirfd, path, flags, mode);
 #else
@@ -28,25 +28,90 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode)
 #endif
 }
 
-int _openat64(int dirfd, const char *path, int flags, mode_t mode) {
+static int handle_openat(int dirfd, const char *path, int flags, mode_t mode) {
+	trace("openat(%s)\n", path);
 	return __sysret(sys_openat(dirfd, path, flags, mode));
 }
 
-unsigned long handle_syscall(SysArgs *args) {
+static int sys_stat(const char *path, void *statbuf) {
+	return my_syscall2(__NR_stat, path, statbuf);
+}
+
+static int handle_stat(const char *path, void *statbuf) {
+	trace("stat(%s)\n", path);
+	return __sysret(sys_stat(path, statbuf));
+}
+
+static int sys_fstat(int fd, void *statbuf) {
+	return my_syscall2(__NR_fstat, fd, statbuf);
+}
+
+static int handle_fstat(int fd, void *statbuf) {
+	trace("fstat(%u)\n", fd);
+	return __sysret(sys_fstat(fd, statbuf));
+}
+
+static int sys_lstat(const char *path, void *statbuf) {
+	return my_syscall2(__NR_lstat, path, statbuf);
+}
+
+static int handle_lstat(const char *path, void *statbuf) {
+	trace("lstat(%s)\n", path);
+	return __sysret(sys_lstat(path, statbuf));
+}
+
+static int sys_newfstatat(int dirfd, const char *path, void *statbuf,
+						  int flags) {
+	return my_syscall4(__NR_newfstatat, dirfd, path, statbuf, flags);
+}
+
+static int handle_newfstatat(int dirfd, const char *path, void *statbuf,
+							 int flags) {
+	trace("newfstatat(%s)\n", path);
+	return __sysret(sys_newfstatat(dirfd, path, statbuf, flags));
+}
+
+static int handle_statx(int dirfd, const char *path, int flags,
+						unsigned int mask, void *statbuf) {
+	trace("statx(%s)\n", path);
+	return __sysret(sys_statx(dirfd, path, flags, mask, statbuf));
+}
+
+static unsigned long handle_syscall(SysArgs *args) {
 	int ret;
 
 	switch (args->num) {
 #ifdef __NR_open
 		case __NR_open:
-			trace("open(%s)\n", (const char *)args->arg1);
-			ret = _open64((const char *)args->arg1, args->arg2, args->arg3);
+			ret = handle_open((const char *)args->arg1, args->arg2, args->arg3);
 		break;
 #endif
 
 		case __NR_openat:
-			trace("openat(%s)\n", (const char *)args->arg2);
-			ret = _openat64(args->arg1, (const char *)args->arg2, args->arg3,
-							args->arg4);
+			ret = handle_openat(args->arg1, (const char *)args->arg2,
+								args->arg3, args->arg4);
+		break;
+
+		case __NR_stat:
+			ret = handle_stat((const char *)args->arg1, (void *)args->arg2);
+		break;
+
+		case __NR_fstat:
+			ret = handle_fstat(args->arg1, (void *)args->arg2);
+		break;
+
+		case __NR_lstat:
+			ret = handle_lstat((const char *)args->arg1, (void *)args->arg2);
+		break;
+
+		case __NR_newfstatat:
+			ret = handle_newfstatat(args->arg1, (const char *)args->arg2,
+									(void *)args->arg3, args->arg4);
+		break;
+
+		case __NR_statx:
+			ret = handle_statx(args->arg1, (const char *)args->arg2,
+							   args->arg3, args->arg4, (void *)args->arg5);
 		break;
 
 		default:
@@ -89,11 +154,16 @@ static int install_filter() {
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
 #ifdef __NR_open
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 2, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 1, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 7, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 1, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 7, 0),
 #endif
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 6, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 5, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 4, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 3, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 2, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer) + 4)),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)&__start_text) >> 32, 0, 3),
