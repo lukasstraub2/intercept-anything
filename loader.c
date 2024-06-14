@@ -218,6 +218,7 @@ int main(int argc, char **argv, char **envp)
 	/* Shift argv, env and av. */
 	memcpy(&argv[0], &argv[1],
 		 (unsigned long)av - (unsigned long)&argv[1]);
+	environ--;
 	/* SP points to argc. */
 	(*sp)--;
 
