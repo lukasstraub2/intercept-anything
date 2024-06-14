@@ -2,14 +2,12 @@
 
 #include "nolibc.h"
 #include "mysignal.h"
+#include "myseccomp.h"
 
 #include <asm/siginfo.h>
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
-
-#include <asm/sigcontext.h>
-#include <asm/ucontext.h>
 
 #include <linux/audit.h>
 #include <linux/bpf.h>
@@ -34,33 +32,25 @@ int _openat64(int dirfd, const char *path, int flags, mode_t mode) {
 	return __sysret(sys_openat(dirfd, path, flags, mode));
 }
 
-typedef struct SysArgs SysArgs;
-struct SysArgs {
-	unsigned long num;
-	unsigned long arg1;
-	unsigned long arg2;
-	unsigned long arg3;
-	unsigned long arg4;
-	unsigned long arg5;
-	unsigned long arg6;
-};
-
 unsigned long handle_syscall(SysArgs *args) {
 	int ret;
 
 	switch (args->num) {
+#ifdef __NR_open
 		case __NR_open:
-			trace(": open(%s)\n", (const char *)args->arg1);
+			trace("open(%s)\n", (const char *)args->arg1);
 			ret = _open64((const char *)args->arg1, args->arg2, args->arg3);
 		break;
+#endif
 
 		case __NR_openat:
-			trace(": openat(%s)\n", (const char *)args->arg2);
+			trace("openat(%s)\n", (const char *)args->arg2);
 			ret = _openat64(args->arg1, (const char *)args->arg2, args->arg3,
 							args->arg4);
 		break;
 
 		default:
+			debug("Unhandled syscall no. %lu\n", args->num);
 			errno = ENOSYS;
 			ret = -1;
 		break;
@@ -74,32 +64,17 @@ unsigned long handle_syscall(SysArgs *args) {
 }
 
 static void handler(int sig, siginfo_t *info, void *ucontext) {
-	struct ucontext* ctx = (struct ucontext*)ucontext;
-	int old_errno = errno;
-
-	trace(": caught SIGSYS by syscall no. %u\n", info->si_syscall);
+	if (info->si_errno) {
+		fprintf(stderr, "Invalid arch, terminating\n");
+		exit(1);
+	}
 
 	unsigned long ret;
-	SysArgs args = {
-		.num = ctx->uc_mcontext.rax,
-		.arg1 = ctx->uc_mcontext.rdi,
-		.arg2 = ctx->uc_mcontext.rsi,
-		.arg3 = ctx->uc_mcontext.rdx,
-		.arg4 = ctx->uc_mcontext.r10,
-		.arg5 = ctx->uc_mcontext.r8,
-		.arg6 = ctx->uc_mcontext.r9
-	};
+	SysArgs args;
+	fill_sysargs(&args, ucontext);
 	ret = handle_syscall(&args);
 
-#ifdef __aarch64__
-	ctx->uc_mcontext.regs[0] = ret;
-#elifdef __amd64__
-	ctx->uc_mcontext.rax = ret;
-#else
-#error "No architecture-specific code for your plattform"
-#endif
-
-	errno = old_errno;
+	set_return(ucontext, ret);
 }
 
 extern char __start_text;
@@ -108,13 +83,18 @@ extern char __etext;
 static int install_filter() {
 	int ret;
 
-	const int arch = AUDIT_ARCH_X86_64;
 	struct sock_filter filter[] = {
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, arch))),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, arch, 0, 9),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
+		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 1, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 0, 6),
+#ifdef __NR_open
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 2, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 1, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 1, 0),
+#endif
+		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer) + 4)),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)&__start_text) >> 32, 0, 3),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer))),

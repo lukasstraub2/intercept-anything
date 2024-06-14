@@ -45,14 +45,16 @@ struct Elf64_auxv_t {
 	} a_un;
 };
 
-#if ELFCLASS == ELFCLASS64
-#  define Elf_Ehdr	Elf64_Ehdr
-#  define Elf_Phdr	Elf64_Phdr
-#  define Elf_auxv_t	Elf64_auxv_t
-#elif ELFCLASS == ELFCLASS32
-#  define Elf_Ehdr	Elf32_Ehdr
-#  define Elf_Phdr	Elf32_Phdr
-#  define Elf_auxv_t	Elf32_auxv_t
+#if defined(__x86_64__) || defined(__aarch64__)
+#define Elf_Ehdr Elf64_Ehdr
+#define Elf_Phdr Elf64_Phdr
+#define Elf_auxv_t Elf64_auxv_t
+#define ELFCLASS ELFCLASS64
+#elif defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
+#define Elf_Ehdr Elf32_Ehdr
+#define Elf_Phdr Elf32_Phdr
+#define Elf_auxv_t Elf32_auxv_t
+#define ELFCLASS ELFCLASS32
 #else
-#  error "ELFCLASS is not defined"
+#error Unsupported Architecture
 #endif
