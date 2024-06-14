@@ -77,6 +77,30 @@ static int handle_statx(int dirfd, const char *path, int flags,
 	return __sysret(sys_statx(dirfd, path, flags, mask, statbuf));
 }
 
+static signed
+long sys_readlink(const char *path, char *buf, unsigned long bufsiz) {
+	return my_syscall3(__NR_readlink, path, buf, bufsiz);
+}
+
+static signed
+long handle_readlink(const char *path, char *buf, unsigned long bufsiz) {
+	trace("readlink(%s)\n", path);
+	return __sysret(sys_readlink(path, buf, bufsiz));
+}
+
+static signed
+long sys_readlinkat(int dirfd, const char *path, char *buf,
+					unsigned long bufsiz) {
+	return my_syscall4(__NR_readlinkat, dirfd, path, buf, bufsiz);
+}
+
+static signed
+long handle_readlinkat(int dirfd, const char *path, char *buf,
+					   unsigned long bufsiz) {
+	trace("readlinkat(%s)\n", path);
+	return __sysret(sys_readlinkat(dirfd, path, buf, bufsiz));
+}
+
 static unsigned long handle_syscall(SysArgs *args) {
 	int ret;
 
@@ -114,6 +138,16 @@ static unsigned long handle_syscall(SysArgs *args) {
 							   args->arg3, args->arg4, (void *)args->arg5);
 		break;
 
+		case __NR_readlink:
+			ret = handle_readlink((const char *)args->arg1, (char *)args->arg2,
+								  args->arg3);
+		break;
+
+		case __NR_readlinkat:
+			ret = handle_readlinkat(args->arg1, (const char *)args->arg2,
+									(char *)args->arg3, args->arg4);
+		break;
+
 		default:
 			debug("Unhandled syscall no. %lu\n", args->num);
 			errno = ENOSYS;
@@ -129,6 +163,8 @@ static unsigned long handle_syscall(SysArgs *args) {
 }
 
 static void handler(int sig, siginfo_t *info, void *ucontext) {
+	(void) sig;
+
 	if (info->si_errno) {
 		fprintf(stderr, "Invalid arch, terminating\n");
 		exit(1);
@@ -154,16 +190,18 @@ static int install_filter() {
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
 #ifdef __NR_open
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 7, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 9, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 7, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 9, 0),
 #endif
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 6, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 5, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 4, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 3, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 2, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 1, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 8, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 7, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 6, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 5, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 4, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 3, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 2, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer) + 4)),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)&__start_text) >> 32, 0, 3),
