@@ -39,6 +39,7 @@ static void exit_error(const char *format, ...) {
 	va_start(ap, format);
 	vfprintf(stderr, format, ap);
 	va_end(ap);
+	fputc('\n', stderr);
 
 	exit(1);
 }

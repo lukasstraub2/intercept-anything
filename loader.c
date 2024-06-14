@@ -63,7 +63,7 @@ static unsigned long loadelf_anon(int fd, Elf_Ehdr *ehdr, Elf_Phdr *phdr)
 	unsigned long minva, maxva;
 	Elf_Phdr *iter;
 	ssize_t sz;
-	int flags, dyn = ehdr->e_type == ET_DYN;
+	int dyn = ehdr->e_type == ET_DYN;
 	unsigned char *p, *base, *hint;
 
 	minva = (unsigned long)-1;
@@ -83,16 +83,22 @@ static unsigned long loadelf_anon(int fd, Elf_Ehdr *ehdr, Elf_Phdr *phdr)
 
 	/* For dynamic ELF let the kernel chose the address. */	
 	hint = dyn ? NULL : (void *)minva;
-	flags = dyn ? 0 : MAP_FIXED;
-	flags |= (MAP_PRIVATE | MAP_ANONYMOUS);
 
 	/* Check that we can hold the whole image. */
-	base = mmap(hint, maxva - minva, PROT_NONE, flags, -1, 0);
-	if (base == (void *)-1)
-		return -1;
+	base = mmap(hint, maxva - minva, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS,
+				-1, 0);
+	if (base == MAP_FAILED) {
+		return LOAD_ERR;
+	}
 	munmap(base, maxva - minva);
+	/* For !dyn, we want MAP_FIXED_NOREPLACE behaviour, but older kernels do
+	 * not support it. So check if the kernel modified the mapping due to
+	 * collisions.
+	 */
+	if (!dyn && base != hint) {
+		return LOAD_ERR;
+	}
 
-	flags = MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE;
 	/* Now map each segment separately in precalculated address. */
 	for (iter = phdr; iter < &phdr[ehdr->e_phnum]; iter++) {
 		unsigned long off, start;
@@ -103,7 +109,8 @@ static unsigned long loadelf_anon(int fd, Elf_Ehdr *ehdr, Elf_Phdr *phdr)
 		start += TRUNC_PG(iter->p_vaddr);
 		sz = ROUND_PG(iter->p_memsz + off);
 
-		p = mmap((void *)start, sz, PROT_WRITE, flags, -1, 0);
+		p = mmap((void *)start, sz, PROT_WRITE, MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE,
+				 -1, 0);
 		if (p == (void *)-1)
 			goto err;
 		if (lseek(fd, iter->p_offset, SEEK_SET) < 0)
