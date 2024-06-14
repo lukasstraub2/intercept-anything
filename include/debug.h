@@ -15,14 +15,14 @@ static void debug(int level, const char *format, ...) {
     const char *dlevel_s;
     int dlevel;
 
-	dlevel_s = getenv(DEBUG_ENV);
-	if (!dlevel_s)
-		return;
+    dlevel_s = getenv(DEBUG_ENV);
+    if (!dlevel_s)
+        return;
 
-	dlevel = atoi(dlevel_s);
+    dlevel = atoi(dlevel_s);
 
-	if (dlevel < level)
-		return;
+    if (dlevel < level)
+        return;
 
     va_start(ap, format);
     vfprintf(stderr, format, ap);
