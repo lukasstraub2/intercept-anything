@@ -101,6 +101,24 @@ long handle_readlinkat(int dirfd, const char *path, char *buf,
 	return __sysret(sys_readlinkat(dirfd, path, buf, bufsiz));
 }
 
+static int sys_faccessat(int dirfd, const char *path, int mode) {
+	return my_syscall3(__NR_faccessat, dirfd, path, mode);
+}
+
+static int handle_faccessat(int dirfd, const char *path, int mode) {
+	trace("faccessat(%s)\n", path);
+	return __sysret(sys_faccessat(dirfd, path, mode));
+}
+
+static int sys_access(const char *path, int mode) {
+	return my_syscall2(__NR_faccessat, path, mode);
+}
+
+static int handle_access(const char *path, int mode) {
+	trace("access(%s)\n", path);
+	return __sysret(sys_access(path, mode));
+}
+
 static unsigned long handle_syscall(SysArgs *args) {
 	int ret;
 
@@ -148,6 +166,14 @@ static unsigned long handle_syscall(SysArgs *args) {
 									(char *)args->arg3, args->arg4);
 		break;
 
+		case __NR_faccessat:
+			ret = handle_faccessat(args->arg1, (const char *)args->arg2, args->arg3);
+		break;
+
+		case __NR_access:
+			ret = handle_access((const char *)args->arg1, args->arg2);
+		break;
+
 		default:
 			debug("Unhandled syscall no. %lu\n", args->num);
 			errno = ENOSYS;
@@ -190,18 +216,20 @@ static int install_filter() {
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
 #ifdef __NR_open
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 9, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 11, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 9, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 11, 0),
 #endif
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 8, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 7, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 6, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 5, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 4, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 3, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 2, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 1, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 10, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 9, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 8, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 7, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 6, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 5, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 4, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 3, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 2, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer) + 4)),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)&__start_text) >> 32, 0, 3),
