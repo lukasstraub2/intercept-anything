@@ -21,7 +21,6 @@
 #include "parent_exec.h"
 #include "parent_glob.h"
 #include "parent_link.h"
-#include "parent_misc.h"
 #include "parent_xattr.h"
 
 #include "intercept.h"
@@ -53,7 +52,6 @@ static void init() {
 	parent_open_load();
 	parent_stat_load();
 	parent_link_load();
-	parent_misc_load();
 	parent_xattr_load();
 
 	_next = main_init(&bottom);
@@ -1871,105 +1869,6 @@ int renameat2(int olddirfd, const char *oldpath,
 	return ret.ret;
 }
 
-__attribute__((visibility("default")))
-int scandir(const char *restrict dirp, struct dirent ***restrict namelist,
-			int (*filter)(const struct dirent *),
-			int (*compar)(const struct dirent **, const struct dirent **)) {
-
-	init();
-	trace(": scandir(%s)\n", dirp ? dirp : "NULL");
-
-	if (!dirp) {
-		return _scandir(dirp, namelist, filter, compar);
-	}
-
-	Context ctx;
-	RetInt ret = { ._errno = errno };
-	CallScandir call = {
-		.dirfd = -1,
-		.dirp = dirp,
-		.namelist = namelist,
-		.filter = filter,
-		.compar = compar,
-		.ret = &ret
-	};
-	_next->scandir(&ctx, _next->scandir_next, &call);
-	errno = call.ret->_errno;
-	return call.ret->ret;
-}
-
-#ifdef _GNU_SOURCE
-__attribute__((visibility("default")))
-int scandirat(int dirfd, const char *restrict dirp, struct dirent ***restrict namelist,
-			  int (*filter)(const struct dirent *),
-			  int (*compar)(const struct dirent **, const struct dirent **)) {
-
-	init();
-	trace(": scandirat(%s)\n", dirp ? dirp : "NULL");
-
-	if (!dirp) {
-		return _scandirat(dirfd, dirp, namelist, filter, compar);
-	}
-
-	Context ctx;
-	RetInt ret = { ._errno = errno };
-	CallScandir call = {
-		.dirfd = dirfd,
-		.dirp = dirp,
-		.namelist = namelist,
-		.filter = filter,
-		.compar = compar,
-		.ret = &ret
-	};
-	_next->scandir(&ctx, _next->scandir_next, &call);
-	errno = call.ret->_errno;
-	return call.ret->ret;
-}
-#endif
-
-__attribute__((visibility("default")))
-int chdir(const char *path) {
-
-	init();
-	trace(": chdir(%s)\n", path ? path : "NULL");
-
-	if (!path) {
-		return _chdir(path);
-	}
-
-	Context ctx;
-	RetInt ret = { ._errno = errno };
-	CallChdir call = {
-		.fd = 0,
-		.path = path,
-		.ret = &ret
-	};
-	_next->chdir(&ctx, _next->chdir_next, &call);
-	errno = call.ret->_errno;
-	return call.ret->ret;
-}
-
-__attribute__((visibility("default")))
-int fchdir(int fd) {
-
-	init();
-	trace(": fchdir(%d)\n", fd);
-
-	if (fd < 0) {
-		return _fchdir(fd);
-	}
-
-	Context ctx;
-	RetInt ret = { ._errno = errno };
-	CallChdir call = {
-		.fd = fd,
-		.ret = &ret
-	};
-	_next->chdir(&ctx, _next->chdir_next, &call);
-	errno = call.ret->_errno;
-	return call.ret->ret;
-}
-
 static int bottom_open(Context *ctx, const This *this,
 					   const CallOpen *call) {
 	int ret;
@@ -2477,41 +2376,6 @@ static int bottom_rename(Context *ctx, const This *this,
 	return ret;
 }
 
-static int bottom_scandir(Context *ctx, const This *this,
-						  const CallScandir *call) {
-	int ret;
-
-	if (call->at) {
-		ret = _scandirat(call->dirfd, call->dirp, call->namelist, call->filter,
-						 call->compar);
-	} else {
-		ret = _scandir(call->dirp, call->namelist, call->filter, call->compar);
-	}
-
-	call->ret->ret = ret;
-	if (ret < 0) {
-		call->ret->_errno = errno;
-	}
-	return ret;
-}
-
-static int bottom_chdir(Context *ctx, const This *this,
-						const CallChdir *call) {
-	int ret;
-
-	if (call->fd) {
-		ret = _fchdir(call->fd);
-	} else {
-		ret = _chdir(call->path);
-	}
-
-	call->ret->ret = ret;
-	if (ret < 0) {
-		call->ret->_errno = errno;
-	}
-	return ret;
-}
-
 static const CallHandler bottom = {
 	bottom_open,
 	NULL,
@@ -2542,9 +2406,5 @@ static const CallHandler bottom = {
 	bottom_getxattr,
 	NULL,
 	bottom_rename,
-	NULL,
-	bottom_scandir,
-	NULL,
-	bottom_chdir,
 	NULL
 };

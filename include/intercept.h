@@ -431,24 +431,6 @@ static void callrename_copy(CallRename *dst, const CallRename *call) {
 	dst->ret = call->ret;
 }
 
-typedef struct CallScandir CallScandir;
-struct CallScandir {
-	int at;
-	int dirfd;
-	const char *restrict dirp;
-	struct dirent ***restrict namelist;
-	int (*filter)(const struct dirent *);
-	int (*compar)(const struct dirent **, const struct dirent **);
-	RetInt *ret;
-};
-
-typedef struct CallChdir CallChdir;
-struct CallChdir {
-	int fd;
-	const char *path;
-	RetInt *ret;
-};
-
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -482,10 +464,6 @@ struct CallHandler {
 	const This *getxattr_next;
 	int (*rename)(Context *ctx, const This *this, const CallRename *call);
 	const This *rename_next;
-	int (*scandir)(Context *ctx, const This *this, const CallScandir *call);
-	const This *scandir_next;
-	int (*chdir)(Context *ctx, const This *this, const CallChdir *call);
-	const This *chdir_next;
 };
 
 const CallHandler *main_init(const CallHandler *bottom);
