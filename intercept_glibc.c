@@ -2085,30 +2085,6 @@ int mkostemps(char *template, int suffixlen, int flags) {
 	return ptr_to_int(ret.ret);
 }
 
-__attribute__((visibility("default")))
-FILE *tmpfile(void) {
-	char template[] = "/tmp/.tmpfile-XXXXXX";
-	int fd;
-	FILE *ret;
-
-	init();
-	trace(": tmpfile()\n");
-
-	fd = mkstemp(template);
-	if (fd < 0) {
-		return NULL;
-	}
-	unlink(template);
-
-	ret = fdopen(fd, "w+b");
-	if (!ret) {
-		close(fd);
-		return NULL;
-	}
-
-	return ret;
-}
-
 static int bottom_open(Context *ctx, const This *this,
 					   const CallOpen *call) {
 	int ret;
