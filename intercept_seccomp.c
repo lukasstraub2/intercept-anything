@@ -106,6 +106,8 @@ extern char __start_text;
 extern char __etext;
 
 static int install_filter() {
+	int ret;
+
 	const int arch = AUDIT_ARCH_X86_64;
 	struct sock_filter filter[] = {
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, arch))),
@@ -126,12 +128,20 @@ static int install_filter() {
 		.filter = filter,
 	};
 
-	if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
+	/* First try without dropping privileges */
+	ret = prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0);
+	if (ret == 0) {
+		return 0;
+	}
+
+	ret = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
+	if (ret < 0) {
 		exit_error("prctl(NO_NEW_PRIVS)");
 		return 1;
 	}
 
-	if (prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0)) {
+	ret = prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0);
+	if (ret < 0) {
 		exit_error("prctl(PR_SET_SECCOMP)");
 		return 1;
 	}
