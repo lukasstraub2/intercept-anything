@@ -433,6 +433,20 @@ static int handle_renameat2(int olddirfd, const char *oldpath, int newdirfd, con
 	return __sysret(sys_renameat2(olddirfd, oldpath, newdirfd, newpath, flags));
 }
 
+static int handle_chdir(const char *path) {
+	trace("chdir(%s)\n", path);
+	return __sysret(sys_chdir(path));
+}
+
+static int sys_fchdir(int fd) {
+	return my_syscall1(__NR_fchdir, fd);
+}
+
+static int handle_fchdir(int fd) {
+	trace("fchdir(%d)\n", fd);
+	return __sysret(sys_fchdir(fd));
+}
+
 static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 	ssize_t ret;
 
@@ -619,6 +633,14 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 								   args->arg3, (const char *)args->arg4, args->arg5);
 		break;
 
+		case __NR_chdir:
+			ret = handle_chdir((const char *)args->arg1);
+		break;
+
+		case __NR_fchdir:
+			ret = handle_fchdir(args->arg1);
+		break;
+
 		default:
 			debug("Unhandled syscall no. %lu\n", args->num);
 			errno = ENOSYS;
@@ -660,6 +682,8 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_chdir, 38, 1),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchdir, 37, 1),
 #ifdef __NR_open
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 36, 0),
 #else
