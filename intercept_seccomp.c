@@ -110,7 +110,7 @@ static int handle_faccessat(int dirfd, const char *path, int mode) {
 }
 
 static int sys_access(const char *path, int mode) {
-	return my_syscall2(__NR_faccessat, path, mode);
+	return my_syscall2(__NR_access, path, mode);
 }
 
 static int handle_access(const char *path, int mode) {
