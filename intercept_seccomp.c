@@ -290,12 +290,14 @@ static int handle_rename(const char *oldpath, const char *newpath) {
 	return __sysret(sys_rename(oldpath, newpath));
 }
 
-static int handle_renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
+static int handle_renameat(int olddirfd, const char *oldpath,
+						   int newdirfd, const char *newpath) {
 	trace("renameat(%s, %s)\n", oldpath, newpath);
 	return __sysret(sys_renameat(olddirfd, oldpath, newdirfd, newpath));
 }
 
-static int handle_renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags) {
+static int handle_renameat2(int olddirfd, const char *oldpath,
+							int newdirfd, const char *newpath, unsigned int flags) {
 	trace("renameat2(%s, %s)\n", oldpath, newpath);
 	return __sysret(sys_renameat2(olddirfd, oldpath, newdirfd, newpath, flags));
 }
