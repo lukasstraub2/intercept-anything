@@ -297,8 +297,144 @@ static int handle_unlinkat(int dirfd, const char *pathname, int flags) {
 	return __sysret(sys_unlinkat(dirfd, pathname, flags));
 }
 
+static int sys_setxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
+	return my_syscall5(__NR_setxattr, path, name, value, size, flags);
+}
+
+static int handle_setxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
+	trace("setxattr(%s, %s)\n", path, name);
+	return __sysret(sys_setxattr(path, name, value, size, flags));
+}
+
+static int sys_lsetxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
+	return my_syscall5(__NR_lsetxattr, path, name, value, size, flags);
+}
+
+static int handle_lsetxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
+	trace("lsetxattr(%s, %s)\n", path, name);
+	return __sysret(sys_lsetxattr(path, name, value, size, flags));
+}
+
+static int sys_fsetxattr(int fd, const char *name, const void *value, size_t size, int flags) {
+	return my_syscall5(__NR_fsetxattr, fd, name, value, size, flags);
+}
+
+static int handle_fsetxattr(int fd, const char *name, const void *value, size_t size, int flags) {
+	trace("fsetxattr(%d, %s)\n", fd, name);
+	return __sysret(sys_fsetxattr(fd, name, value, size, flags));
+}
+
+static ssize_t sys_getxattr(const char *path, const char *name, void *value, size_t size) {
+	return my_syscall4(__NR_getxattr, path, name, value, size);
+}
+
+static ssize_t handle_getxattr(const char *path, const char *name, void *value, size_t size) {
+	trace("getxattr(%s, %s)\n", path, name);
+	return __sysret(sys_getxattr(path, name, value, size));
+}
+
+static ssize_t sys_lgetxattr(const char *path, const char *name, void *value, size_t size) {
+	return my_syscall4(__NR_lgetxattr, path, name, value, size);
+}
+
+static ssize_t handle_lgetxattr(const char *path, const char *name, void *value, size_t size) {
+	trace("lgetxattr(%s, %s)\n", path, name);
+	return __sysret(sys_lgetxattr(path, name, value, size));
+}
+
+static ssize_t sys_fgetxattr(int fd, const char *name, void *value, size_t size) {
+	return my_syscall4(__NR_fgetxattr, fd, name, value, size);
+}
+
+static ssize_t handle_fgetxattr(int fd, const char *name, void *value, size_t size) {
+	trace("fgetxattr(%d, %s)\n", fd, name);
+	return __sysret(sys_fgetxattr(fd, name, value, size));
+}
+
+static ssize_t sys_listxattr(const char *path, char *list, size_t size) {
+	return my_syscall3(__NR_listxattr, path, list, size);
+}
+
+static ssize_t handle_listxattr(const char *path, char *list, size_t size) {
+	trace("listxattr(%s)\n", path);
+	return __sysret(sys_listxattr(path, list, size));
+}
+
+static ssize_t sys_llistxattr(const char *path, char *list, size_t size) {
+	return my_syscall3(__NR_llistxattr, path, list, size);
+}
+
+static ssize_t handle_llistxattr(const char *path, char *list, size_t size) {
+	trace("llistxattr(%s)\n", path);
+	return __sysret(sys_llistxattr(path, list, size));
+}
+
+
+static ssize_t sys_flistxattr(int fd, char *list, size_t size) {
+	return my_syscall3(__NR_flistxattr, fd, list, size);
+}
+
+static ssize_t handle_flistxattr(int fd, char *list, size_t size) {
+	trace("flistxattr(%d)\n", fd);
+	return __sysret(sys_flistxattr(fd, list, size));
+}
+
+static int sys_removexattr(const char *path, const char *name) {
+	return my_syscall2(__NR_removexattr, path, name);
+}
+
+static int handle_removexattr(const char *path, const char *name) {
+	trace("removexattr(%s, %s)\n", path, name);
+	return __sysret(sys_removexattr(path, name));
+}
+
+static int sys_lremovexattr(const char *path, const char *name) {
+	return my_syscall2(__NR_lremovexattr, path, name);
+}
+
+static int handle_lremovexattr(const char *path, const char *name) {
+	trace("lremovexattr(%s, %s)\n", path, name);
+	return __sysret(sys_lremovexattr(path, name));
+}
+
+static int sys_fremovexattr(int fd, const char *name) {
+	return my_syscall2(__NR_fremovexattr, fd, name);
+}
+
+static int handle_fremovexattr(int fd, const char *name) {
+	trace("fremovexattr(%d, %s)\n", fd, name);
+	return __sysret(sys_fremovexattr(fd, name));
+}
+
+static int sys_rename(const char *oldpath, const char *newpath) {
+	return my_syscall2(__NR_rename, oldpath, newpath);
+}
+
+static int handle_rename(const char *oldpath, const char *newpath) {
+	trace("rename(%s, %s)\n", oldpath, newpath);
+	return __sysret(sys_rename(oldpath, newpath));
+}
+
+static int sys_renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
+	return my_syscall4(__NR_renameat, olddirfd, oldpath, newdirfd, newpath);
+}
+
+static int handle_renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
+	trace("renameat(%s, %s)\n", oldpath, newpath);
+	return __sysret(sys_renameat(olddirfd, oldpath, newdirfd, newpath));
+}
+
+static int sys_renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags) {
+	return my_syscall5(__NR_renameat2, olddirfd, oldpath, newdirfd, newpath, flags);
+}
+
+static int handle_renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags) {
+	trace("renameat2(%s, %s)\n", oldpath, newpath);
+	return __sysret(sys_renameat2(olddirfd, oldpath, newdirfd, newpath, flags));
+}
+
 static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
-	int ret;
+	ssize_t ret;
 
 	switch (args->num) {
 #ifdef __NR_open
@@ -404,6 +540,85 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 			ret = handle_unlinkat(args->arg1, (const char *)args->arg2, args->arg3);
 		break;
 
+		case __NR_setxattr:
+			ret = handle_setxattr((const char *)args->arg1,
+								  (const char *)args->arg2,
+								  (const void *)args->arg3,
+								  args->arg4, args->arg5);
+		break;
+
+		case __NR_lsetxattr:
+			ret = handle_lsetxattr((const char *)args->arg1,
+								   (const char *)args->arg2,
+								   (const void *)args->arg3,
+								   args->arg4, args->arg5);
+		break;
+
+		case __NR_fsetxattr:
+			ret = handle_fsetxattr(args->arg1, (const char *)args->arg2,
+								   (const void *)args->arg3, args->arg4,
+								   args->arg5);
+		break;
+
+		case __NR_getxattr:
+			ret = handle_getxattr((const char *)args->arg1,
+								  (const char *)args->arg2,
+								  (void *)args->arg3, args->arg4);
+		break;
+
+		case __NR_lgetxattr:
+			ret = handle_lgetxattr((const char *)args->arg1,
+								   (const char *)args->arg2,
+								   (void *)args->arg3, args->arg4);
+		break;
+
+		case __NR_fgetxattr:
+			ret = handle_fgetxattr(args->arg1, (const char *)args->arg2,
+								   (void *)args->arg3, args->arg4);
+		break;
+
+		case __NR_listxattr:
+			ret = handle_listxattr((const char *)args->arg1,
+								   (char *)args->arg2, args->arg3);
+		break;
+
+		case __NR_llistxattr:
+			ret = handle_llistxattr((const char *)args->arg1,
+									(char *)args->arg2, args->arg3);
+		break;
+
+		case __NR_flistxattr:
+			ret = handle_flistxattr(args->arg1, (char *)args->arg2, args->arg3);
+		break;
+
+		case __NR_removexattr:
+			ret = handle_removexattr((const char*)args->arg1,
+									 (const char*)args->arg2);
+		break;
+
+		case __NR_lremovexattr:
+			ret = handle_lremovexattr((const char*)args->arg1,
+									  (const char*)args->arg2);
+		break;
+
+		case __NR_fremovexattr:
+			ret = handle_fremovexattr(args->arg1, (const char*)args->arg2);
+		break;
+
+		case __NR_rename:
+			ret = handle_rename((const char *)args->arg1, (const char *)args->arg2);
+		break;
+
+		case __NR_renameat:
+			ret = handle_renameat(args->arg1, (const char *)args->arg2,
+								  args->arg3, (const char *)args->arg4);
+		break;
+
+		case __NR_renameat2:
+			ret = handle_renameat2(args->arg1, (const char *)args->arg2,
+								   args->arg3, (const char *)args->arg4, args->arg5);
+		break;
+
 		default:
 			debug("Unhandled syscall no. %lu\n", args->num);
 			errno = ENOSYS;
@@ -426,7 +641,7 @@ static void handler(int sig, siginfo_t *info, void *ucontext) {
 		exit(1);
 	}
 
-	unsigned long ret;
+	ssize_t ret;
 	SysArgs args;
 	fill_sysargs(&args, ucontext);
 	ret = handle_syscall(&args, ucontext);
@@ -446,30 +661,45 @@ static int install_filter() {
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
 #ifdef __NR_open
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 21, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 36, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 21, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 36, 0),
 #endif
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 20, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 19, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 18, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 17, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 16, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 15, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 14, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 13, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 12, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 11, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 10, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execveat, 9, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigprocmask, 8, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigaction, 7, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_link, 6, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_linkat, 5, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlink, 4, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlinkat, 3, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlink, 2, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlinkat, 1, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 35, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 34, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 33, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 32, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 31, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 30, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 29, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 28, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 27, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 26, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 25, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execveat, 24, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigprocmask, 23, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigaction, 22, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_link, 21, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_linkat, 20, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlink, 19, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlinkat, 18, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlink, 17, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlinkat, 16, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_setxattr, 15, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lsetxattr, 14, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fsetxattr, 13, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getxattr, 12, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lgetxattr, 11, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fgetxattr, 10, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_listxattr, 9, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_llistxattr, 8, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_flistxattr, 7, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_removexattr, 6, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lremovexattr, 5, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fremovexattr, 4, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rename, 3, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat, 2, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat2, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer) + 4)),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)&__start_text) >> 32, 0, 3),
