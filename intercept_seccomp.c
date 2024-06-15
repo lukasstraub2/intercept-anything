@@ -13,6 +13,22 @@
 #include <linux/filter.h>
 #include <linux/seccomp.h>
 
+static int64_t array_len(char *const array[]) {
+	int64_t len;
+
+	for (len = 0; array[len]; len++) {
+		if (len == INT_MAX) {
+			return -1;
+		}
+	}
+
+	return len;
+}
+
+static void array_copy(char *dest[], char *const source[], int64_t len) {
+	memcpy(dest, source, len * sizeof(char *));
+}
+
 static int handle_open(const char *path, int flags, mode_t mode) {
 	trace("open(%s)\n", path);
 	return __sysret(sys_open(path, flags, mode));
@@ -120,7 +136,25 @@ static int handle_access(const char *path, int mode) {
 
 static int handle_execve(const char *path, char *const argv[], char *const envp[]) {
 	trace("execve(%s)\n", path);
-	return __sysret(sys_execve(path, argv, envp));
+
+	int64_t argc;
+
+	argc = array_len(argv);
+	if (argc >= INT_MAX -1) {
+		errno = E2BIG;
+		return -1;
+	}
+
+	char *new_argv[argc > 1 ? 2 + argc : 3];
+	new_argv[0] = (char *) "loader_recurse";
+	new_argv[1] = (char *) path;
+	if (argc > 1) {
+		array_copy(new_argv + 2, argv + 1, argc);
+	} else {
+		new_argv[2] = NULL;
+	}
+
+	return __sysret(sys_execve("/home/lukas/rootlink/loader", new_argv, envp));
 }
 
 static int sys_execveat(int dirfd, const char *path, char *const argv[],
@@ -140,9 +174,49 @@ static int sys_rt_sigprocmask(int how, const sigset_t *set,
 }
 
 static int handle_rt_sigprocmask(int how, const sigset_t *set,
-								 sigset_t *oldset, size_t sigsetsize) {
+								 sigset_t *oldset, size_t sigsetsize,
+								 void *ucontext) {
+	struct ucontext* ctx = (struct ucontext*)ucontext;
+	char *cur_set = (char *)&ctx->uc_sigmask;
+
 	trace("rt_sigprocmask()\n");
-	return __sysret(sys_rt_sigprocmask(how, set, oldset, sigsetsize));
+
+	if (!set) {
+		return __sysret(sys_rt_sigprocmask(how, set, oldset, sigsetsize));
+	}
+
+	unsigned char copy[sigsetsize];
+	memcpy(copy, set, sigsetsize);
+	copy[3] &= ~(0x40); // Clear SIGSYS
+
+	// Any changes to sigprocmask will be reset on sigreturn
+	// return __sysret(sys_rt_sigprocmask(how, (sigset_t *)copy, oldset, sigsetsize));
+
+	switch (how) {
+		case SIG_BLOCK:
+			for (unsigned int i = 0; i < sigsetsize; i++) {
+				cur_set[i] |= copy[i];
+			}
+			return 0;
+		break;
+
+		case SIG_UNBLOCK:
+			for (unsigned int i = 0; i < sigsetsize; i++) {
+				cur_set[i] &= ~copy[i];
+			}
+			return 0;
+		break;
+
+		case SIG_SETMASK:
+			memcpy(cur_set, copy, sigsetsize);
+			return 0;
+		break;
+
+		default:
+			errno = EINVAL;
+			return -1;
+		break;
+	}
 }
 
 static long sys_rt_sigaction(int signum, const struct sigaction *act,
@@ -159,10 +233,21 @@ static long handle_rt_sigaction(int signum, const struct sigaction *act,
 		return 0;
 	}
 
-	return __sysret(sys_rt_sigaction(signum, act, oldact, sigsetsize));
+	if (!act) {
+		return __sysret(sys_rt_sigaction(signum, act, oldact, sigsetsize));
+	}
+
+	size_t size = sizeof(struct sigaction) + sigsetsize - sizeof(sigset_t);
+	unsigned char _copy[size];
+	memcpy(_copy, act, size);
+	struct sigaction *copy = (struct sigaction *)_copy;
+	char *sa_mask = (char *)&copy->sa_mask;
+	sa_mask[3] &= ~(0x40); // Clear SIGSYS
+
+	return __sysret(sys_rt_sigaction(signum, copy, oldact, sigsetsize));
 }
 
-static unsigned long handle_syscall(SysArgs *args) {
+static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 	int ret;
 
 	switch (args->num) {
@@ -232,7 +317,8 @@ static unsigned long handle_syscall(SysArgs *args) {
 
 		case __NR_rt_sigprocmask:
 			ret = handle_rt_sigprocmask(args->arg1, (const sigset_t *)args->arg2,
-										(sigset_t *)args->arg3, args->arg4);
+										(sigset_t *)args->arg3, args->arg4,
+										ucontext);
 		break;
 
 		case __NR_rt_sigaction:
@@ -266,7 +352,7 @@ static void handler(int sig, siginfo_t *info, void *ucontext) {
 	unsigned long ret;
 	SysArgs args;
 	fill_sysargs(&args, ucontext);
-	ret = handle_syscall(&args);
+	ret = handle_syscall(&args, ucontext);
 
 	set_return(ucontext, ret);
 }
@@ -336,7 +422,12 @@ static int install_filter() {
 	return 0;
 }
 
-void intercept_init() {
+static void unblock_sigsys() {
+	sigset_t unblock = (1u << (SIGSYS -1));
+	sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, NULL, sizeof(sigset_t));
+}
+
+void intercept_init(int recursing) {
 	struct sigaction sig = {0};
 	static int initialized = 0;
 
@@ -345,12 +436,15 @@ void intercept_init() {
 	}
 	initialized = 1;
 
-	trace("registering signal handler\n");
-
 	sig.sa_handler = handler;
 	//sigemptyset(&sig.sa_mask);
 	sig.sa_flags = SA_SIGINFO;
 
 	sigaction(SIGSYS, &sig, NULL);
-	install_filter();
+	unblock_sigsys();
+	trace("registered signal handler\n");
+
+	if (!recursing) {
+		install_filter();
+	}
 }

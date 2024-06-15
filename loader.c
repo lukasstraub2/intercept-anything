@@ -215,14 +215,15 @@ int main(int argc, char **argv, char **envp)
 #undef AVSET
 	++av;
 
+	int recursing = !strcmp(argv[0], "loader_recurse");
+	intercept_init(recursing);
+
 	/* Shift argv, env and av. */
 	memcpy(&argv[0], &argv[1],
 		 (unsigned long)av - (unsigned long)&argv[1]);
 	environ--;
 	/* SP points to argc. */
 	(*sp)--;
-
-	intercept_init();
 
 	z_trampo((void (*)(void))(elf_interp ?
 			entry[Z_INTERP] : entry[Z_PROG]), sp, z_fini);
