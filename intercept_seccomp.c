@@ -178,6 +178,7 @@ static int handle_rt_sigprocmask(int how, const sigset_t *set,
 								 void *ucontext) {
 	struct ucontext* ctx = (struct ucontext*)ucontext;
 	char *cur_set = (char *)&ctx->uc_sigmask;
+	int ret;
 
 	trace("rt_sigprocmask()\n");
 
@@ -189,9 +190,12 @@ static int handle_rt_sigprocmask(int how, const sigset_t *set,
 	memcpy(copy, set, sigsetsize);
 	copy[3] &= ~(0x40); // Clear SIGSYS
 
-	// Any changes to sigprocmask will be reset on sigreturn
-	// return __sysret(sys_rt_sigprocmask(how, (sigset_t *)copy, oldset, sigsetsize));
+	ret = __sysret(sys_rt_sigprocmask(how, (sigset_t *)copy, oldset, sigsetsize));
+	if (ret < 0) {
+		return -1;
+	}
 
+	// Any changes to sigprocmask would be reset on sigreturn
 	switch (how) {
 		case SIG_BLOCK:
 			for (unsigned int i = 0; i < sigsetsize; i++) {
