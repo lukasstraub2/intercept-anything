@@ -2,6 +2,7 @@
 #include "nolibc.h"
 #include "mysignal.h"
 #include "myseccomp.h"
+#include "mysys.h"
 
 #include <asm/siginfo.h>
 
@@ -34,22 +35,9 @@ static int handle_open(const char *path, int flags, mode_t mode) {
 	return __sysret(sys_open(path, flags, mode));
 }
 
-static __attribute__((unused))
-int sys_openat(int dirfd, const char *path, int flags, mode_t mode) {
-#ifdef __NR_openat
-	return my_syscall4(__NR_openat, dirfd, path, flags, mode);
-#else
-	return __nolibc_enosys(__func__, path, flags, mode);
-#endif
-}
-
 static int handle_openat(int dirfd, const char *path, int flags, mode_t mode) {
 	trace("openat(%s)\n", path);
 	return __sysret(sys_openat(dirfd, path, flags, mode));
-}
-
-static int sys_stat(const char *path, void *statbuf) {
-	return my_syscall2(__NR_stat, path, statbuf);
 }
 
 static int handle_stat(const char *path, void *statbuf) {
@@ -57,27 +45,14 @@ static int handle_stat(const char *path, void *statbuf) {
 	return __sysret(sys_stat(path, statbuf));
 }
 
-static int sys_fstat(int fd, void *statbuf) {
-	return my_syscall2(__NR_fstat, fd, statbuf);
-}
-
 static int handle_fstat(int fd, void *statbuf) {
 	trace("fstat(%u)\n", fd);
 	return __sysret(sys_fstat(fd, statbuf));
 }
 
-static int sys_lstat(const char *path, void *statbuf) {
-	return my_syscall2(__NR_lstat, path, statbuf);
-}
-
 static int handle_lstat(const char *path, void *statbuf) {
 	trace("lstat(%s)\n", path);
 	return __sysret(sys_lstat(path, statbuf));
-}
-
-static int sys_newfstatat(int dirfd, const char *path, void *statbuf,
-						  int flags) {
-	return my_syscall4(__NR_newfstatat, dirfd, path, statbuf, flags);
 }
 
 static int handle_newfstatat(int dirfd, const char *path, void *statbuf,
@@ -93,20 +68,9 @@ static int handle_statx(int dirfd, const char *path, int flags,
 }
 
 static signed
-long sys_readlink(const char *path, char *buf, unsigned long bufsiz) {
-	return my_syscall3(__NR_readlink, path, buf, bufsiz);
-}
-
-static signed
 long handle_readlink(const char *path, char *buf, unsigned long bufsiz) {
 	trace("readlink(%s)\n", path);
 	return __sysret(sys_readlink(path, buf, bufsiz));
-}
-
-static signed
-long sys_readlinkat(int dirfd, const char *path, char *buf,
-					unsigned long bufsiz) {
-	return my_syscall4(__NR_readlinkat, dirfd, path, buf, bufsiz);
 }
 
 static signed
@@ -116,17 +80,9 @@ long handle_readlinkat(int dirfd, const char *path, char *buf,
 	return __sysret(sys_readlinkat(dirfd, path, buf, bufsiz));
 }
 
-static int sys_faccessat(int dirfd, const char *path, int mode) {
-	return my_syscall3(__NR_faccessat, dirfd, path, mode);
-}
-
 static int handle_faccessat(int dirfd, const char *path, int mode) {
 	trace("faccessat(%s)\n", path);
 	return __sysret(sys_faccessat(dirfd, path, mode));
-}
-
-static int sys_access(const char *path, int mode) {
-	return my_syscall2(__NR_access, path, mode);
 }
 
 static int handle_access(const char *path, int mode) {
@@ -157,20 +113,10 @@ static int handle_execve(const char *path, char *const argv[], char *const envp[
 	return __sysret(sys_execve("/home/lukas/rootlink/loader", new_argv, envp));
 }
 
-static int sys_execveat(int dirfd, const char *path, char *const argv[],
-						char *const envp[], int flags) {
-	return my_syscall5(__NR_execveat, dirfd, path, argv, envp, flags);
-}
-
 static int handle_execveat(int dirfd, const char *path, char *const argv[],
 						   char *const envp[], int flags) {
 	trace("execveat(%s)\n", path);
 	return __sysret(sys_execveat(dirfd, path, argv, envp, flags));
-}
-
-static int sys_rt_sigprocmask(int how, const sigset_t *set,
-							  sigset_t *oldset, size_t sigsetsize) {
-	return my_syscall4(__NR_rt_sigprocmask, how, set, oldset, sigsetsize);
 }
 
 static int handle_rt_sigprocmask(int how, const sigset_t *set,
@@ -223,11 +169,6 @@ static int handle_rt_sigprocmask(int how, const sigset_t *set,
 	}
 }
 
-static long sys_rt_sigaction(int signum, const struct sigaction *act,
-							 struct sigaction *oldact, size_t sigsetsize) {
-	return my_syscall4(__NR_rt_sigaction, signum, act, oldact, sigsetsize);
-}
-
 static long handle_rt_sigaction(int signum, const struct sigaction *act,
 								struct sigaction *oldact, size_t sigsetsize) {
 	trace("rt_sigaction(%d)\n", signum);
@@ -256,11 +197,6 @@ static int handle_link(const char *oldpath, const char *newpath) {
 	return __sysret(sys_link(oldpath, newpath));
 }
 
-static int sys_linkat(int olddirfd, const char *oldpath, int newdirfd,
-					  const char *newpath, int flags) {
-	return my_syscall5(__NR_linkat, olddirfd, oldpath, newdirfd, newpath, flags);
-}
-
 static int handle_linkat(int olddirfd, const char *oldpath, int newdirfd,
 						 const char *newpath, int flags) {
 	trace("linkat(%s, %s)\n", oldpath, newpath);
@@ -270,11 +206,6 @@ static int handle_linkat(int olddirfd, const char *oldpath, int newdirfd,
 static int handle_symlink(const char *oldpath, const char *newpath) {
 	trace("symlink(%s, %s)\n", oldpath, newpath);
 	return __sysret(sys_symlink(oldpath, newpath));
-}
-
-static int sys_symlinkat(const char *oldpath, int newdirfd,
-						 const char *newpath) {
-	return my_syscall3(__NR_symlinkat, oldpath, newdirfd, newpath);
 }
 
 static int handle_symlinkat(const char *oldpath, int newdirfd,
@@ -288,17 +219,9 @@ static int handle_unlink(const char *pathname) {
 	return __sysret(sys_unlink(pathname));
 }
 
-static int sys_unlinkat(int dirfd, const char *pathname, int flags) {
-	return my_syscall3(__NR_unlinkat, dirfd, pathname, flags);
-}
-
 static int handle_unlinkat(int dirfd, const char *pathname, int flags) {
 	trace("unlinkat(%s)\n", pathname);
 	return __sysret(sys_unlinkat(dirfd, pathname, flags));
-}
-
-static int sys_setxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
-	return my_syscall5(__NR_setxattr, path, name, value, size, flags);
 }
 
 static int handle_setxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
@@ -306,17 +229,9 @@ static int handle_setxattr(const char *path, const char *name, const void *value
 	return __sysret(sys_setxattr(path, name, value, size, flags));
 }
 
-static int sys_lsetxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
-	return my_syscall5(__NR_lsetxattr, path, name, value, size, flags);
-}
-
 static int handle_lsetxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
 	trace("lsetxattr(%s, %s)\n", path, name);
 	return __sysret(sys_lsetxattr(path, name, value, size, flags));
-}
-
-static int sys_fsetxattr(int fd, const char *name, const void *value, size_t size, int flags) {
-	return my_syscall5(__NR_fsetxattr, fd, name, value, size, flags);
 }
 
 static int handle_fsetxattr(int fd, const char *name, const void *value, size_t size, int flags) {
@@ -324,17 +239,9 @@ static int handle_fsetxattr(int fd, const char *name, const void *value, size_t 
 	return __sysret(sys_fsetxattr(fd, name, value, size, flags));
 }
 
-static ssize_t sys_getxattr(const char *path, const char *name, void *value, size_t size) {
-	return my_syscall4(__NR_getxattr, path, name, value, size);
-}
-
 static ssize_t handle_getxattr(const char *path, const char *name, void *value, size_t size) {
 	trace("getxattr(%s, %s)\n", path, name);
 	return __sysret(sys_getxattr(path, name, value, size));
-}
-
-static ssize_t sys_lgetxattr(const char *path, const char *name, void *value, size_t size) {
-	return my_syscall4(__NR_lgetxattr, path, name, value, size);
 }
 
 static ssize_t handle_lgetxattr(const char *path, const char *name, void *value, size_t size) {
@@ -342,26 +249,15 @@ static ssize_t handle_lgetxattr(const char *path, const char *name, void *value,
 	return __sysret(sys_lgetxattr(path, name, value, size));
 }
 
-static ssize_t sys_fgetxattr(int fd, const char *name, void *value, size_t size) {
-	return my_syscall4(__NR_fgetxattr, fd, name, value, size);
-}
-
 static ssize_t handle_fgetxattr(int fd, const char *name, void *value, size_t size) {
 	trace("fgetxattr(%d, %s)\n", fd, name);
 	return __sysret(sys_fgetxattr(fd, name, value, size));
 }
 
-static ssize_t sys_listxattr(const char *path, char *list, size_t size) {
-	return my_syscall3(__NR_listxattr, path, list, size);
-}
 
 static ssize_t handle_listxattr(const char *path, char *list, size_t size) {
 	trace("listxattr(%s)\n", path);
 	return __sysret(sys_listxattr(path, list, size));
-}
-
-static ssize_t sys_llistxattr(const char *path, char *list, size_t size) {
-	return my_syscall3(__NR_llistxattr, path, list, size);
 }
 
 static ssize_t handle_llistxattr(const char *path, char *list, size_t size) {
@@ -369,18 +265,9 @@ static ssize_t handle_llistxattr(const char *path, char *list, size_t size) {
 	return __sysret(sys_llistxattr(path, list, size));
 }
 
-
-static ssize_t sys_flistxattr(int fd, char *list, size_t size) {
-	return my_syscall3(__NR_flistxattr, fd, list, size);
-}
-
 static ssize_t handle_flistxattr(int fd, char *list, size_t size) {
 	trace("flistxattr(%d)\n", fd);
 	return __sysret(sys_flistxattr(fd, list, size));
-}
-
-static int sys_removexattr(const char *path, const char *name) {
-	return my_syscall2(__NR_removexattr, path, name);
 }
 
 static int handle_removexattr(const char *path, const char *name) {
@@ -388,17 +275,9 @@ static int handle_removexattr(const char *path, const char *name) {
 	return __sysret(sys_removexattr(path, name));
 }
 
-static int sys_lremovexattr(const char *path, const char *name) {
-	return my_syscall2(__NR_lremovexattr, path, name);
-}
-
 static int handle_lremovexattr(const char *path, const char *name) {
 	trace("lremovexattr(%s, %s)\n", path, name);
 	return __sysret(sys_lremovexattr(path, name));
-}
-
-static int sys_fremovexattr(int fd, const char *name) {
-	return my_syscall2(__NR_fremovexattr, fd, name);
 }
 
 static int handle_fremovexattr(int fd, const char *name) {
@@ -406,26 +285,14 @@ static int handle_fremovexattr(int fd, const char *name) {
 	return __sysret(sys_fremovexattr(fd, name));
 }
 
-static int sys_rename(const char *oldpath, const char *newpath) {
-	return my_syscall2(__NR_rename, oldpath, newpath);
-}
-
 static int handle_rename(const char *oldpath, const char *newpath) {
 	trace("rename(%s, %s)\n", oldpath, newpath);
 	return __sysret(sys_rename(oldpath, newpath));
 }
 
-static int sys_renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
-	return my_syscall4(__NR_renameat, olddirfd, oldpath, newdirfd, newpath);
-}
-
 static int handle_renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
 	trace("renameat(%s, %s)\n", oldpath, newpath);
 	return __sysret(sys_renameat(olddirfd, oldpath, newdirfd, newpath));
-}
-
-static int sys_renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags) {
-	return my_syscall5(__NR_renameat2, olddirfd, oldpath, newdirfd, newpath, flags);
 }
 
 static int handle_renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags) {
@@ -436,10 +303,6 @@ static int handle_renameat2(int olddirfd, const char *oldpath, int newdirfd, con
 static int handle_chdir(const char *path) {
 	trace("chdir(%s)\n", path);
 	return __sysret(sys_chdir(path));
-}
-
-static int sys_fchdir(int fd) {
-	return my_syscall1(__NR_fchdir, fd);
 }
 
 static int handle_fchdir(int fd) {
