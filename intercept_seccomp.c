@@ -247,6 +247,52 @@ static long handle_rt_sigaction(int signum, const struct sigaction *act,
 	return __sysret(sys_rt_sigaction(signum, copy, oldact, sigsetsize));
 }
 
+static int handle_link(const char *oldpath, const char *newpath) {
+	trace("link(%s, %s)\n", oldpath, newpath);
+	return __sysret(sys_link(oldpath, newpath));
+}
+
+static int sys_linkat(int olddirfd, const char *oldpath, int newdirfd,
+					  const char *newpath, int flags) {
+	return my_syscall5(__NR_linkat, olddirfd, oldpath, newdirfd, newpath, flags);
+}
+
+static int handle_linkat(int olddirfd, const char *oldpath, int newdirfd,
+						 const char *newpath, int flags) {
+	trace("linkat(%s, %s)\n", oldpath, newpath);
+	return __sysret(sys_linkat(olddirfd, oldpath, newdirfd, newpath, flags));
+}
+
+static int handle_symlink(const char *oldpath, const char *newpath) {
+	trace("symlink(%s, %s)\n", oldpath, newpath);
+	return __sysret(sys_symlink(oldpath, newpath));
+}
+
+static int sys_symlinkat(const char *oldpath, int newdirfd,
+						 const char *newpath) {
+	return my_syscall3(__NR_symlinkat, oldpath, newdirfd, newpath);
+}
+
+static int handle_symlinkat(const char *oldpath, int newdirfd,
+							const char *newpath) {
+	trace("symlinkat(%s, %s)\n", oldpath, newpath);
+	return __sysret(sys_symlinkat(oldpath, newdirfd, newpath));
+}
+
+static int handle_unlink(const char *pathname) {
+	trace("unlink(%s)\n", pathname);
+	return __sysret(sys_unlink(pathname));
+}
+
+static int sys_unlinkat(int dirfd, const char *pathname, int flags) {
+	return my_syscall3(__NR_unlinkat, dirfd, pathname, flags);
+}
+
+static int handle_unlinkat(int dirfd, const char *pathname, int flags) {
+	trace("unlinkat(%s)\n", pathname);
+	return __sysret(sys_unlinkat(dirfd, pathname, flags));
+}
+
 static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 	int ret;
 
@@ -327,6 +373,33 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 									  (struct sigaction *)args->arg3, args->arg4);
 		break;
 
+		case __NR_link:
+			ret = handle_link((const char *)args->arg1, (const char *)args->arg2);
+		break;
+
+		case __NR_linkat:
+			ret = handle_linkat(args->arg1, (const char *)args->arg2, args->arg3,
+								(const char *)args->arg4, args->arg5);
+		break;
+
+		case __NR_symlink:
+			ret = handle_symlink((const char *)args->arg1,
+								 (const char *)args->arg2);
+		break;
+
+		case __NR_symlinkat:
+			ret = handle_symlinkat((const char *)args->arg1, args->arg2,
+								   (const char *)args->arg3);
+		break;
+
+		case __NR_unlink:
+			ret = handle_unlink((const char *)args->arg1);
+		break;
+
+		case __NR_unlinkat:
+			ret = handle_unlinkat(args->arg1, (const char *)args->arg2, args->arg3);
+		break;
+
 		default:
 			debug("Unhandled syscall no. %lu\n", args->num);
 			errno = ENOSYS;
@@ -369,24 +442,30 @@ static int install_filter() {
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
 #ifdef __NR_open
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 15, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 21, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 15, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 21, 0),
 #endif
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 14, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 13, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 12, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 11, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 10, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 9, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 8, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 7, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 6, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 5, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 4, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execveat, 3, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigprocmask, 2, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigaction, 1, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 20, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 19, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 18, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 17, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 16, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 15, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 14, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 13, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 12, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 11, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 10, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execveat, 9, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigprocmask, 8, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigaction, 7, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_link, 6, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_linkat, 5, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlink, 4, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlinkat, 3, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlink, 2, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlinkat, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer) + 4)),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)&__start_text) >> 32, 0, 3),
