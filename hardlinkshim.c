@@ -1,30 +1,26 @@
 
-#include "common.h"
-
 #define DEBUG_ENV "HARDLINK_DEBUG"
 #include "debug.h"
 #include "config.h"
 #include "util.h"
 
 #include "hardlinkshim.h"
-#include "parent_close.h"
-#include "parent_link.h"
-#include "parent_open.h"
-#include "parent_stat.h"
 #include "intercept.h"
 
-#include <stdlib.h>
-#include <errno.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/file.h>
+#include "nolibc.h"
+#include "mysys.h"
+#include "mytypes.h"
+
+#define stat wonky_stat
+#include "asm/stat.h"
+#undef stat
 
 struct This {
 	CallHandler this;
 	const CallHandler *next;
 	const CallHandler *bottom;
 	dev_t prefix_dev;
-	ino64_t prefix_ino;
+	ino_t prefix_ino;
 };
 
 #define HARDLINK_PREFIX PREFIX "/tmp/hardlinkshim/"
@@ -33,7 +29,7 @@ struct This {
 static int lock(const This *this, int operation) {
 	int ret, fd;
 
-	ret = _open64(HARDLINK_PREFIX LOCKFILE, O_RDWR | O_CLOEXEC, 0777);
+	ret = open(HARDLINK_PREFIX LOCKFILE, O_RDWR | O_CLOEXEC, 0777);
 	if (ret < 0) {
 		return ret;
 	}
@@ -46,7 +42,7 @@ static int lock(const This *this, int operation) {
 				continue;
 			}
 
-			_close(fd);
+			close(fd);
 			return -1;
 		}
 
@@ -61,7 +57,7 @@ static int unlock(int fd) {
 
 	ret = flock(fd, LOCK_UN);
 	errno_bak = errno;
-	_close(fd);
+	close(fd);
 	if (ret < 0) {
 		errno = errno_bak;
 		return -1;
@@ -102,7 +98,7 @@ static int cnt_read(char *linkname) {
 		return -1;
 	}
 
-	ret = _readlink(linkname, buf, SCRATCH_SIZE);
+	ret = readlink(linkname, buf, SCRATCH_SIZE);
 	if (ret < 0) {
 		goto err;
 	} else if (ret == SCRATCH_SIZE) {
@@ -129,7 +125,7 @@ static int cnt_write(char *linkname, int cnt) {
 	int tmp;
 	ssize_t ret;
 	size_t len = strlen(linkname) +1;
-	char buf[SCRATCH_SIZE];
+	char cnt_buf[21];
 	char tmpname[len];
 	memcpy(tmpname, linkname, len);
 
@@ -139,19 +135,15 @@ static int cnt_write(char *linkname, int cnt) {
 	}
 	changeprefix(tmpname, "tmp");
 
-	ret = snprintf(buf, SCRATCH_SIZE, "%d", cnt);
-	if (ret >= SCRATCH_SIZE) {
-		errno = ENAMETOOLONG;
-		goto err;
-	}
+	itoa_r(cnt, cnt_buf);
 
-	_unlink(tmpname);
-	ret = _symlink(buf, tmpname);
+	unlink(tmpname);
+	ret = symlink(cnt_buf, tmpname);
 	if (ret < 0) {
 		goto err;
 	}
 
-	ret = _rename(tmpname, linkname);
+	ret = rename(tmpname, linkname);
 	if (ret < 0) {
 		goto err;
 	}
@@ -162,7 +154,7 @@ static int cnt_write(char *linkname, int cnt) {
 err:
 	tmp = errno;
 	changeprefix(linkname, "ino");
-	_unlink(tmpname);
+	unlink(tmpname);
 	errno = tmp;
 	return -1;
 }
@@ -175,7 +167,7 @@ static int cnt_del(char *linkname) {
 		return -1;
 	}
 
-	ret = _unlink(linkname);
+	ret = unlink(linkname);
 	changeprefix(linkname, "ino");
 	if (ret < 0) {
 		return -1;
@@ -207,7 +199,7 @@ static int cnt_add(char *linkname, int add) {
 static ssize_t readlink_scratch(Context *ctx, int dirfd, const char *path) {
 	ssize_t ret;
 
-	ret = _readlinkat(dirfd, path, ctx->scratch, SCRATCH_SIZE);
+	ret = readlinkat(dirfd, path, ctx->scratch, SCRATCH_SIZE);
 	if (ret < 0) {
 		return -1;
 	} else if (ret == SCRATCH_SIZE) {
@@ -239,10 +231,10 @@ static int is_hardlinkat(Context *ctx, int dirfd, const char *path) {
 }
 
 static int _is_inside_prefix(const This *this, const char *component) {
-	struct stat64 statbuf;
+	struct stat statbuf;
 	int ret;
 
-	ret = _stat64(component, &statbuf);
+	ret = stat(component, &statbuf);
 	if (ret < 0) {
 		return -1;
 	}
@@ -322,23 +314,23 @@ static int is_inside_prefix(const This *this, const char *_file_path) {
 static int is_inside_prefixat(Context *ctx, const This *this, int dirfd,
 							  const char *path) {
 	int ret;
+	char dirfd_buf[21];
 	char buf[SCRATCH_SIZE];
 
 	if (path[0] == '/') {
 		return is_inside_prefix(this, path);
 	}
 
-	ret = snprintf(buf, SCRATCH_SIZE, "/proc/self/fd/%u", dirfd);
+	const char *prefix = "/proc/self/fd/";
+	itoa_r(dirfd, dirfd_buf);
+	ret = concat(buf, SCRATCH_SIZE, prefix, dirfd_buf);
 	if (ret >= SCRATCH_SIZE) {
 		errno = ENAMETOOLONG;
 		return -1;
 	}
 
 	if (dirfd == AT_FDCWD) {
-		char *cwd = getcwd(ctx->scratch, SCRATCH_SIZE);
-		if (!cwd) {
-			ret = -1;
-		}
+		ret = getcwd(ctx->scratch, SCRATCH_SIZE);
 	} else {
 		ret = readlink_scratch(ctx, AT_FDCWD, buf);
 	}
@@ -385,7 +377,7 @@ static int ab_inside_prefixat(Context *ctx, const This *this,
 
 	if (!a_inprefix || !b_inprefix) {
 		if (a_inprefix == b_inprefix) {
-			errno = ENOTSUP;
+			errno = EOPNOTSUPP;
 			return -1;
 		} else {
 			errno = EXDEV;
@@ -405,7 +397,7 @@ static int _copy_symlink(Context *ctx, int olddirfd, const char *oldpath,
 		return -1;
 	}
 
-	ret = _symlinkat(ctx->scratch, newdirfd, newpath);
+	ret = symlinkat(ctx->scratch, newdirfd, newpath);
 	if (ret < 0) {
 		return -1;
 	}
@@ -432,7 +424,7 @@ static int _add_hardlink(Context *ctx, int olddirfd, const char *oldpath,
 		return -1;
 	}
 
-	ret = _symlinkat(ctx->scratch, newdirfd, newpath);
+	ret = symlinkat(ctx->scratch, newdirfd, newpath);
 	if (ret < 0) {
 		return -1;
 	}
@@ -467,7 +459,7 @@ static int del_hardlink(char *linkname) {
 		return 0;
 	}
 
-	ret = _unlink(linkname);
+	ret = unlink(linkname);
 	if (ret < 0) {
 		return -1;
 	}
@@ -493,8 +485,7 @@ static int hardlink_open(Context *ctx, const This *this,
 	}
 	lock_fd = ret;
 
-	ret = is_hardlinkat(ctx, (opentype_is_at(call->type)? call->dirfd: AT_FDCWD),
-						call->path);
+	ret = is_hardlinkat(ctx, (call->at? call->dirfd: AT_FDCWD), call->path);
 	if (ret < 0) {
 		goto err;
 	}
@@ -522,54 +513,6 @@ err:
 	return -1;
 }
 
-static FILE *hardlink_fopen(Context *ctx, const This *this,
-							const CallFOpen *call) {
-	int ret, lock_fd;
-	RetPtr *_ret = call->ret;
-
-	ret = lock(this, LOCK_SH);
-	if (ret < 0) {
-		_ret->_errno = errno;
-		_ret->ret = NULL;
-		return NULL;
-	}
-	lock_fd = ret;
-
-	this->next->fopen(ctx, this->next->fopen_next, call);
-
-	ret = unlock(lock_fd);
-	if (ret < 0) {
-		_ret->_errno = errno;
-		_ret->ret = NULL;
-		return NULL;
-	}
-	return _ret->ret;
-}
-
-static DIR *hardlink_opendir(Context *ctx, const This *this,
-							 const CallOpendir *call) {
-	int ret, lock_fd;
-	RetPtr *_ret = call->ret;
-
-	ret = lock(this, LOCK_SH);
-	if (ret < 0) {
-		_ret->_errno = errno;
-		_ret->ret = NULL;
-		return NULL;
-	}
-	lock_fd = ret;
-
-	this->next->opendir(ctx, this->next->opendir_next, call);
-
-	ret = unlock(lock_fd);
-	if (ret < 0) {
-		_ret->_errno = errno;
-		_ret->ret = NULL;
-		return NULL;
-	}
-	return _ret->ret;
-}
-
 static int hardlink_stat(Context *ctx, const This *this,
 						 const CallStat *call) {
 	int ret, lock_fd;
@@ -583,16 +526,19 @@ static int hardlink_stat(Context *ctx, const This *this,
 	}
 	lock_fd = ret;
 
-	ret = is_hardlinkat(ctx, (stattype_is_at(call->type)? call->dirfd: AT_FDCWD),
-						call->path);
+	if (call->type == STATTYPE_F) {
+		ret = 0;
+	} else {
+		ret = is_hardlinkat(ctx, (stattype_is_at(call->type)? call->dirfd: AT_FDCWD),
+							call->path);
+	}
 	if (ret < 0) {
 		goto err;
 	}
 
 	if (ret) {
 		int cnt;
-		struct stat *statbuf_plain;
-		struct stat64 *statbuf_64;
+		struct wonky_stat *statbuf_plain;
 		struct statx *statbuf_x;
 		CallStat _call;
 		callstat_copy(&_call, call);
@@ -612,8 +558,6 @@ static int hardlink_stat(Context *ctx, const This *this,
 
 		if (call->type == STATTYPE_L) {
 			_call.type = STATTYPE_PLAIN;
-		} else if (call->type == STATTYPE_L_64) {
-			_call.type = STATTYPE_64;
 		} else if (stattype_is_at(call->type)) {
 			_call.flags &= ~AT_SYMLINK_NOFOLLOW;
 		}
@@ -626,24 +570,19 @@ static int hardlink_stat(Context *ctx, const This *this,
 
 		switch (_call.type) {
 			case STATTYPE_PLAIN:
-			case STATTYPE___X:
 			case STATTYPE_L:
 			case STATTYPE_AT:
 				statbuf_plain = _call.statbuf;
 				statbuf_plain->st_nlink = cnt;
 			break;
 
-			case STATTYPE_64:
-			case STATTYPE___X_64:
-			case STATTYPE_L_64:
-			case STATTYPE_AT_64:
-				statbuf_64 = _call.statbuf;
-				statbuf_64->st_nlink = cnt;
-			break;
-
 			case STATTYPE_X:
 				statbuf_x = _call.statbuf;
 				statbuf_x->stx_nlink = cnt;
+			break;
+
+			default:
+				abort();
 			break;
 		}
 	} else {
@@ -734,9 +673,7 @@ static int hardlink_exec(Context *ctx, const This *this, const CallExec *call) {
 	RetInt *_ret = call->ret;
 
 	// Do not take lock since exec may recurse
-	ret = is_hardlinkat(ctx, (exectype_is_at(call->type)?
-								  call->dirfd: AT_FDCWD),
-						call->path);
+	ret = is_hardlinkat(ctx, (call->at? call->dirfd: AT_FDCWD), call->path);
 	if (ret < 0) {
 		_ret->_errno = errno;
 		_ret->ret = -1;
@@ -747,7 +684,7 @@ static int hardlink_exec(Context *ctx, const This *this, const CallExec *call) {
 		CallExec _call;
 		callexec_copy(&_call, call);
 
-		if (exectype_is_at(call->type)) {
+		if (call->at) {
 			_call.flags &= ~AT_SYMLINK_NOFOLLOW;
 		}
 
@@ -757,58 +694,6 @@ static int hardlink_exec(Context *ctx, const This *this, const CallExec *call) {
 	}
 
 	return _ret->ret;
-}
-
-static char *hardlink_realpath(Context *ctx, const This *this,
-							   const CallRealpath *call) {
-	int ret, lock_fd;
-	RetPtr *_ret = call->ret;
-
-	ret = lock(this, LOCK_SH);
-	if (ret < 0) {
-		_ret->_errno = errno;
-		_ret->ret = NULL;
-		return NULL;
-	}
-	lock_fd = ret;
-
-	ret = is_hardlinkat(ctx, AT_FDCWD, call->path);
-	if (ret < 0) {
-		goto err;
-	}
-
-	if (ret) {
-		size_t len = strlen(call->path) +1;
-		if (call->out) {
-			if (len >= PATH_MAX) {
-				errno = ENAMETOOLONG;
-				goto err;
-			}
-			memcpy(call->out, call->path, len);
-		} else {
-			char *out = malloc(len);
-			if (!out) {
-				goto err;
-			}
-
-			memcpy(out, call->path, len);
-			_ret->ret = out;
-		}
-	} else {
-		this->next->realpath(ctx, this->next->realpath_next, call);
-	}
-
-	ret = unlock(lock_fd);
-	if (ret < 0) {
-		goto err;
-	}
-	return _ret->ret;
-
-err:
-	_ret->_errno = errno;
-	unlock(lock_fd);
-	_ret->ret = NULL;
-	return NULL;
 }
 
 static int hardlink_link(Context *ctx, const This *this,
@@ -856,42 +741,48 @@ static int hardlink_link(Context *ctx, const This *this,
 			goto err;
 		}
 	} else {
-		struct stat64 statbuf;
-		ret = _fstatat64((call->at? call->olddirfd: AT_FDCWD), call->oldpath,
-						 &statbuf, AT_SYMLINK_NOFOLLOW);
+		struct statx statbuf;
+		ret = __sysret(sys_statx((call->at? call->olddirfd: AT_FDCWD),
+								 call->oldpath,
+								 AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT,
+								 STATX_TYPE | STATX_MODE | STATX_INO,
+								 &statbuf));
 		if (ret < 0) {
 			goto err;
 		}
 
-		if ((statbuf.st_mode & S_IFMT) == S_IFLNK) {
+		if ((statbuf.stx_mode & S_IFMT) == S_IFLNK) {
 			ret = copy_symlink(ctx, call);
 			if (ret < 0) {
 				goto err;
 			}
-		} else if ((statbuf.st_mode & S_IFMT) == S_IFREG) {
+		} else if ((statbuf.stx_mode & S_IFMT) == S_IFREG) {
 			size_t len;
-			len = snprintf(NULL, 0, "ino_%lu", statbuf.st_ino) +1;
+			char ino_buf[21];
+			const char *prefix = "ino_";
+			u64toa_r(statbuf.stx_ino, ino_buf);
+			len = strlen(prefix) + 21;
 			char file[len];
-			snprintf(file, len, "ino_%lu", statbuf.st_ino);
+			concat(file, len, prefix, ino_buf);
 
 			len = concat(NULL, 0, HARDLINK_PREFIX, file);
 			char linkname[len];
 			concat(linkname, len, HARDLINK_PREFIX, file);
 
-			ret = _access(linkname, F_OK);
+			ret = access(linkname, F_OK);
 			if (ret == 0) {
 				errno = EUCLEAN;
 				goto err;
 			}
 
-			ret = _renameat((call->at? call->olddirfd: AT_FDCWD), call->oldpath,
-							AT_FDCWD, linkname);
+			ret = renameat((call->at? call->olddirfd: AT_FDCWD), call->oldpath,
+						   AT_FDCWD, linkname);
 			if (ret < 0) {
 				goto err;
 			}
 
-			ret = _symlinkat(linkname, (call->at? call->olddirfd: AT_FDCWD),
-							 call->oldpath);
+			ret = symlinkat(linkname, (call->at? call->olddirfd: AT_FDCWD),
+							call->oldpath);
 			if (ret < 0) {
 				goto err;
 			}
@@ -901,8 +792,8 @@ static int hardlink_link(Context *ctx, const This *this,
 				goto err;
 			}
 
-			ret = _symlinkat(linkname, (call->at? call->newdirfd: AT_FDCWD),
-							 call->newpath);
+			ret = symlinkat(linkname, (call->at? call->newdirfd: AT_FDCWD),
+							call->newpath);
 			if (ret < 0) {
 				goto err;
 			}
@@ -984,7 +875,7 @@ static int hardlink_unlink(Context *ctx, const This *this,
 			goto err;
 		}
 
-		ret = this->bottom->unlink(ctx, this->next->unlink_next, call);
+		ret = this->bottom->unlink(ctx, NULL, call);
 		if (ret < 0) {
 			goto err;
 		}
@@ -1010,8 +901,8 @@ err:
 	return -1;
 }
 
-static ssize_t hardlink_listxattr(Context *ctx, const This *this,
-								  const CallListXattr *call) {
+static ssize_t hardlink_xattr(Context *ctx, const This *this,
+							  const CallXattr *call) {
 	int ret, lock_fd;
 	RetSSize *_ret = call->ret;
 
@@ -1023,7 +914,7 @@ static ssize_t hardlink_listxattr(Context *ctx, const This *this,
 	}
 	lock_fd = ret;
 
-	if (call->type == XATTRTYPE_F) {
+	if (call->type2 == XATTRTYPE_F) {
 		ret = 0;
 	} else {
 		ret = is_hardlinkat(ctx, AT_FDCWD, call->path);
@@ -1033,112 +924,16 @@ static ssize_t hardlink_listxattr(Context *ctx, const This *this,
 	}
 
 	if (ret) {
-		CallListXattr _call;
-		calllistxattr_copy(&_call, call);
+		CallXattr _call;
+		callxattr_copy(&_call, call);
 
-		if (call->type == XATTRTYPE_L) {
-			_call.type = XATTRTYPE_PLAIN;
+		if (call->type2 == XATTRTYPE_L) {
+			_call.type2 = XATTRTYPE_PLAIN;
 		}
 
-		this->next->listxattr(ctx, this->next->listxattr_next, &_call);
+		this->next->xattr(ctx, this->next->xattr_next, &_call);
 	} else {
-		this->next->listxattr(ctx, this->next->listxattr_next, call);
-	}
-
-	ret = unlock(lock_fd);
-	if (ret < 0) {
-		goto err;
-	}
-	return _ret->ret;
-
-err:
-	_ret->_errno = errno;
-	unlock(lock_fd);
-	_ret->ret = -1;
-	return -1;
-}
-
-static int hardlink_setxattr(Context *ctx, const This *this,
-							 const CallSetXattr *call) {
-	int ret, lock_fd;
-	RetInt *_ret = call->ret;
-
-	ret = lock(this, LOCK_SH);
-	if (ret < 0) {
-		_ret->_errno = errno;
-		_ret->ret = -1;
-		return -1;
-	}
-	lock_fd = ret;
-
-	if (call->type == XATTRTYPE_F) {
-		ret = 0;
-	} else {
-		ret = is_hardlinkat(ctx, AT_FDCWD, call->path);
-		if (ret < 0) {
-			goto err;
-		}
-	}
-
-	if (ret) {
-		CallSetXattr _call;
-		callsetxattr_copy(&_call, call);
-
-		if (call->type == XATTRTYPE_L) {
-			_call.type = XATTRTYPE_PLAIN;
-		}
-
-		this->next->setxattr(ctx, this->next->setxattr_next, &_call);
-	} else {
-		this->next->setxattr(ctx, this->next->setxattr_next, call);
-	}
-
-	ret = unlock(lock_fd);
-	if (ret < 0) {
-		goto err;
-	}
-	return _ret->ret;
-
-err:
-	_ret->_errno = errno;
-	unlock(lock_fd);
-	_ret->ret = -1;
-	return -1;
-}
-
-static ssize_t hardlink_getxattr(Context *ctx, const This *this,
-								 const CallGetXattr *call) {
-	int ret, lock_fd;
-	RetSSize *_ret = call->ret;
-
-	ret = lock(this, LOCK_SH);
-	if (ret < 0) {
-		_ret->_errno = errno;
-		_ret->ret = -1;
-		return -1;
-	}
-	lock_fd = ret;
-
-	if (call->type == XATTRTYPE_F) {
-		ret = 0;
-	} else {
-		ret = is_hardlinkat(ctx, AT_FDCWD, call->path);
-		if (ret < 0) {
-			goto err;
-		}
-	}
-
-	if (ret) {
-		CallGetXattr _call;
-		callgetxattr_copy(&_call, call);
-
-		if (call->type == XATTRTYPE_L) {
-			_call.type = XATTRTYPE_PLAIN;
-		}
-
-		this->next->getxattr(ctx, this->next->getxattr_next, &_call);
-	} else {
-		this->next->getxattr(ctx, this->next->getxattr_next, call);
+		this->next->xattr(ctx, this->next->xattr_next, call);
 	}
 
 	ret = unlock(lock_fd);
@@ -1168,7 +963,7 @@ static int hardlink_rename(Context *ctx, const This *this,
 								 AT_FDCWD, call->newpath);
 	}
 	if (ret < 0) {
-		if (errno != ENOTSUP) {
+		if (errno != EOPNOTSUPP) {
 			_ret->_errno = errno;
 			_ret->ret = -1;
 			return -1;
@@ -1203,7 +998,7 @@ static int hardlink_rename(Context *ctx, const This *this,
 			goto err;
 		}
 
-		ret = this->bottom->rename(ctx, this->next->rename_next, call);
+		ret = this->bottom->rename(ctx, NULL, call);
 		if (ret < 0) {
 			goto err;
 		}
@@ -1253,7 +1048,7 @@ const CallHandler *hardlinkshim_init(const CallHandler *next,
 									 const CallHandler *bottom) {
 	static This this;
 	static int initialized = 0;
-	struct stat64 statbuf;
+	struct stat statbuf;
 	int ret;
 
 	if (initialized) {
@@ -1267,10 +1062,6 @@ const CallHandler *hardlinkshim_init(const CallHandler *next,
 
 	this.this.open = hardlink_open;
 	this.this.open_next = &this;
-	this.this.fopen = hardlink_fopen;
-	this.this.fopen_next = &this;
-	this.this.opendir = hardlink_opendir;
-	this.this.opendir_next = &this;
 	this.this.stat = hardlink_stat;
 	this.this.stat_next = &this;
 	this.this.readlink = hardlink_readlink;
@@ -1279,40 +1070,33 @@ const CallHandler *hardlinkshim_init(const CallHandler *next,
 	this.this.access_next = &this;
 	this.this.exec = hardlink_exec;
 	this.this.exec_next = &this;
-	this.this.realpath = hardlink_realpath;
-	this.this.realpath_next = &this;
 	this.this.link = hardlink_link;
 	this.this.link_next = &this;
 	this.this.symlink = hardlink_symlink;
 	this.this.symlink_next = &this;
 	this.this.unlink = hardlink_unlink;
 	this.this.unlink_next = &this;
-	this.this.listxattr = hardlink_listxattr;
-	this.this.listxattr_next = &this;
-	this.this.setxattr = hardlink_setxattr;
-	this.this.setxattr_next = &this;
-	this.this.getxattr = hardlink_getxattr;
-	this.this.getxattr_next = &this;
+	this.this.xattr = hardlink_xattr;
+	this.this.xattr_next = &this;
 	this.this.rename = hardlink_rename;
 	this.this.rename_next = &this;
 
 	ret = mkpath(HARDLINK_PREFIX LOCKFILE, 0777);
 	if (ret < 0) {
-		exit_error("mkpath(%s): %s", LOCKFILE, strerror(errno));
+		exit_error("mkpath(%s): %d", LOCKFILE, errno);
 		return NULL;
 	}
 
-	ret = _open64(HARDLINK_PREFIX LOCKFILE, O_CREAT | O_RDWR, 0777);
+	ret = open(HARDLINK_PREFIX LOCKFILE, O_CREAT | O_RDWR, 0777);
 	if (ret < 0) {
-		exit_error("open64(%s): %s", HARDLINK_PREFIX LOCKFILE,
-				   strerror(errno));
+		exit_error("open64(%s): %d", HARDLINK_PREFIX LOCKFILE, errno);
 		return NULL;
 	}
-	_close(ret);
+	close(ret);
 
-	ret = _stat64(PREFIX, &statbuf);
+	ret = stat(PREFIX, &statbuf);
 	if (ret < 0) {
-		exit_error("stat64(%s): %s", PREFIX, strerror(errno));
+		exit_error("stat64(%s): %d", PREFIX, errno);
 		return NULL;
 	}
 	this.prefix_dev = statbuf.st_dev;

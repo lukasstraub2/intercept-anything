@@ -79,7 +79,8 @@ static int rootlink_stat(Context *ctx, const This *this,
 	CallStat _call;
 	callstat_copy(&_call, call);
 
-	if (stattype_is_at(call->type) && call->path[0] != '/') {
+	if ((stattype_is_at(call->type) && call->path[0] != '/') ||
+			call->type == STATTYPE_F) {
 		return this->next->stat(ctx, this->next->stat_next, call);
 	}
 

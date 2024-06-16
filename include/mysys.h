@@ -37,9 +37,20 @@ ssize_t sys_readlink(const char *path, char *buf, unsigned long bufsiz) {
 }
 
 static __attribute__((unused))
+ssize_t readlink(const char *path, char *buf, unsigned long bufsiz) {
+	return __sysret(sys_readlink(path, buf, bufsiz));
+}
+
+static __attribute__((unused))
 ssize_t sys_readlinkat(int dirfd, const char *path, char *buf,
 					   unsigned long bufsiz) {
 	return my_syscall4(__NR_readlinkat, dirfd, path, buf, bufsiz);
+}
+
+static __attribute__((unused))
+ssize_t readlinkat(int dirfd, const char *path, char *buf,
+				   unsigned long bufsiz) {
+	return __sysret(sys_readlinkat(dirfd, path, buf, bufsiz));
 }
 
 static __attribute__((unused))
@@ -84,6 +95,11 @@ int sys_linkat(int olddirfd, const char *oldpath, int newdirfd,
 static __attribute__((unused))
 int sys_symlinkat(const char *oldpath, int newdirfd, const char *newpath) {
 	return my_syscall3(__NR_symlinkat, oldpath, newdirfd, newpath);
+}
+
+static __attribute__((unused))
+int symlinkat(const char *oldpath, int newdirfd, const char *newpath) {
+	return __sysret(sys_symlinkat(oldpath, newdirfd, newpath));
 }
 
 static __attribute__((unused)) int sys_unlinkat(int dirfd, const char *pathname, int flags) {
@@ -156,8 +172,18 @@ int sys_rename(const char *oldpath, const char *newpath) {
 }
 
 static __attribute__((unused))
+int rename(const char *oldpath, const char *newpath) {
+	return __sysret(sys_rename(oldpath, newpath));
+}
+
+static __attribute__((unused))
 int sys_renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
 	return my_syscall4(__NR_renameat, olddirfd, oldpath, newdirfd, newpath);
+}
+
+static __attribute__((unused))
+int renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
+	return __sysret(sys_renameat(olddirfd, oldpath, newdirfd, newpath));
 }
 
 static __attribute__((unused))
@@ -170,3 +196,22 @@ int sys_fchdir(int fd) {
 	return my_syscall1(__NR_fchdir, fd);
 }
 
+static __attribute__((unused))
+int sys_getcwd(char *buf, size_t size) {
+	return my_syscall2(__NR_getcwd, buf, size);
+}
+
+static __attribute__((unused))
+int getcwd(char *buf, size_t size) {
+	return __sysret(sys_getcwd(buf, size));
+}
+
+static __attribute__((unused))
+int sys_flock(int fd, int operation) {
+	return my_syscall2(__NR_flock, fd, operation);
+}
+
+static __attribute__((unused))
+int flock(int fd, int operation) {
+	return __sysret(sys_flock(fd, operation));
+}
