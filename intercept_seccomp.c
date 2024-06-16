@@ -5,6 +5,7 @@
 #include "mysys.h"
 #include "intercept.h"
 #include "loader.h"
+#include "mytypes.h"
 
 #include <asm/siginfo.h>
 
@@ -17,7 +18,144 @@
 #include <linux/seccomp.h>
 
 static const CallHandler bottom;
-static const CallHandler *_next = &bottom;
+static const CallHandler *_next = NULL;
+
+static int install_filter();
+static void handler(int sig, siginfo_t *info, void *ucontext);
+static unsigned long handle_syscall(SysArgs *args, void *ucontext);
+
+static void unblock_sigsys() {
+	sigset_t unblock = (1u << (SIGSYS -1));
+	sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, NULL, sizeof(sigset_t));
+}
+
+void intercept_init(int recursing) {
+	struct sigaction sig = {0};
+	static int initialized = 0;
+
+	if (initialized) {
+		return;
+	}
+	initialized = 1;
+
+	sig.sa_handler = handler;
+	//sigemptyset(&sig.sa_mask);
+	sig.sa_flags = SA_SIGINFO;
+
+	sigaction(SIGSYS, &sig, NULL);
+	unblock_sigsys();
+	trace("registered signal handler\n");
+
+	if (!recursing) {
+		install_filter();
+	}
+
+	_next = main_init(&bottom);
+}
+
+static void handler(int sig, siginfo_t *info, void *ucontext) {
+	(void) sig;
+
+	if (info->si_errno) {
+		fprintf(stderr, "Invalid arch, terminating\n");
+		exit(1);
+	}
+
+	ssize_t ret;
+	SysArgs args;
+	fill_sysargs(&args, ucontext);
+	ret = handle_syscall(&args, ucontext);
+
+	set_return(ucontext, ret);
+}
+
+extern char __start_text;
+extern char __etext;
+
+static int install_filter() {
+	int ret;
+
+	struct sock_filter filter[] = {
+		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, arch))),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
+		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
+		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_chdir, 38, 1),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchdir, 37, 1),
+#ifdef __NR_open
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 36, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 36, 0),
+#endif
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 35, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 34, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 33, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 32, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 31, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 30, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 29, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 28, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 27, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 26, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 25, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execveat, 24, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigprocmask, 23, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigaction, 22, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_link, 21, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_linkat, 20, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlink, 19, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlinkat, 18, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlink, 17, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlinkat, 16, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_setxattr, 15, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lsetxattr, 14, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fsetxattr, 13, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getxattr, 12, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lgetxattr, 11, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fgetxattr, 10, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_listxattr, 9, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_llistxattr, 8, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_flistxattr, 7, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_removexattr, 6, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lremovexattr, 5, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fremovexattr, 4, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rename, 3, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat, 2, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat2, 1, 0),
+		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
+		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer) + 4)),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)&__start_text) >> 32, 0, 3),
+		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer))),
+		BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (unsigned long)&__start_text, 0, 1),
+		BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (unsigned long)&__etext, 0, 1),
+		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
+		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
+	};
+	struct sock_fprog prog = {
+		.len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
+		.filter = filter,
+	};
+
+	/* First try without dropping privileges */
+	ret = prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0);
+	if (ret == 0) {
+		return 0;
+	}
+
+	ret = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
+	if (ret < 0) {
+		exit_error("prctl(NO_NEW_PRIVS)");
+		return 1;
+	}
+
+	ret = prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0);
+	if (ret < 0) {
+		exit_error("prctl(PR_SET_SECCOMP)");
+		return 1;
+	}
+
+	return 0;
+}
 
 static int64_t array_len(char *const array[]) {
 	int64_t len;
@@ -1057,137 +1195,6 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 	return ret;
 }
 
-static void handler(int sig, siginfo_t *info, void *ucontext) {
-	(void) sig;
-
-	if (info->si_errno) {
-		fprintf(stderr, "Invalid arch, terminating\n");
-		exit(1);
-	}
-
-	ssize_t ret;
-	SysArgs args;
-	fill_sysargs(&args, ucontext);
-	ret = handle_syscall(&args, ucontext);
-
-	set_return(ucontext, ret);
-}
-
-extern char __start_text;
-extern char __etext;
-
-static int install_filter() {
-	int ret;
-
-	struct sock_filter filter[] = {
-		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, arch))),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
-		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
-		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_chdir, 38, 1),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchdir, 37, 1),
-#ifdef __NR_open
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 36, 0),
-#else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 36, 0),
-#endif
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 35, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 34, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 33, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 32, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 31, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 30, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 29, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 28, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 27, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 26, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 25, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execveat, 24, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigprocmask, 23, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigaction, 22, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_link, 21, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_linkat, 20, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlink, 19, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlinkat, 18, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlink, 17, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlinkat, 16, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_setxattr, 15, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lsetxattr, 14, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fsetxattr, 13, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getxattr, 12, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lgetxattr, 11, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fgetxattr, 10, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_listxattr, 9, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_llistxattr, 8, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_flistxattr, 7, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_removexattr, 6, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lremovexattr, 5, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fremovexattr, 4, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rename, 3, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat, 2, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat2, 1, 0),
-		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
-		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer) + 4)),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)&__start_text) >> 32, 0, 3),
-		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, instruction_pointer))),
-		BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (unsigned long)&__start_text, 0, 1),
-		BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (unsigned long)&__etext, 0, 1),
-		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
-		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
-	};
-	struct sock_fprog prog = {
-		.len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
-		.filter = filter,
-	};
-
-	/* First try without dropping privileges */
-	ret = prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0);
-	if (ret == 0) {
-		return 0;
-	}
-
-	ret = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
-	if (ret < 0) {
-		exit_error("prctl(NO_NEW_PRIVS)");
-		return 1;
-	}
-
-	ret = prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0);
-	if (ret < 0) {
-		exit_error("prctl(PR_SET_SECCOMP)");
-		return 1;
-	}
-
-	return 0;
-}
-
-static void unblock_sigsys() {
-	sigset_t unblock = (1u << (SIGSYS -1));
-	sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, NULL, sizeof(sigset_t));
-}
-
-void intercept_init(int recursing) {
-	struct sigaction sig = {0};
-	static int initialized = 0;
-
-	if (initialized) {
-		return;
-	}
-	initialized = 1;
-
-	sig.sa_handler = handler;
-	//sigemptyset(&sig.sa_mask);
-	sig.sa_flags = SA_SIGINFO;
-
-	sigaction(SIGSYS, &sig, NULL);
-	unblock_sigsys();
-	trace("registered signal handler\n");
-
-	if (!recursing) {
-		install_filter();
-	}
-}
-
 static int bottom_open(Context *ctx, const This *this, const CallOpen *call) {
 	int ret;
 	RetInt *_ret = call->ret;
@@ -1338,7 +1345,7 @@ static int bottom_exec(Context *ctx, const This *this,
 		goto out;
 	}
 
-	ret = access(call->path, S_IXOTH);
+	ret = access(call->path, X_OK);
 	if (ret < 0) {
 		_ret->_errno = errno;
 		_ret->ret = -1;

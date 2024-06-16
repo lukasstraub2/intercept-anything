@@ -1,8 +1,6 @@
 #pragma once
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include "types.h"
 
 #define SCRATCH_SIZE (64*1024)
 _Static_assert(SCRATCH_SIZE >= PATH_MAX, "SCRATCH_SIZE");
@@ -238,7 +236,7 @@ static void callxattr_copy(CallXattr *dst, const CallXattr *call) {
 	switch (call->type) {
 		case XATTRTYPE_SET:
 			dst->flags = call->flags;
-
+		/*fallthrough*/
 		case XATTRTYPE_GET:
 			dst->name = call->name;
 			dst->value = call->value;

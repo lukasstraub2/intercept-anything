@@ -1,8 +1,6 @@
 
-#include "common.h"
-
 #include "util.h"
-#include <string.h>
+#include "nolibc.h"
 
 size_t concat(char *out, size_t out_len, const char *a, const char *b) {
 	const size_t a_len = strlen(a);

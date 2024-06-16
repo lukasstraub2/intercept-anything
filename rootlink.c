@@ -1,6 +1,4 @@
 
-#include "common.h"
-
 #include "rootlink.h"
 #include "config.h"
 #include "intercept.h"
@@ -9,8 +7,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include <limits.h>
-#include <assert.h>
 
 struct This {
 	CallHandler this;
@@ -22,7 +18,7 @@ static int handle_path(const char *path) {
 			!strcmp_prefix(path, "/bin");
 }
 
-static size_t mangle_path(char *out, size_t out_len, const char *path) {
+static ssize_t mangle_path(char *out, size_t out_len, const char *path) {
     size_t len;
 
 	if (!handle_path(path)) {
@@ -53,7 +49,7 @@ static size_t mangle_path(char *out, size_t out_len, const char *path) {
 }
 
 #define MANGLE_PATH(__path, errret) \
-	size_t len = mangle_path(NULL, 0, (__path)); \
+	ssize_t len = mangle_path(NULL, 0, (__path)); \
 	if (len > (64 * 1024)) { \
 		call->ret->_errno = ENAMETOOLONG; \
 		call->ret->ret = (errret); \
@@ -70,30 +66,12 @@ static int rootlink_open(Context *ctx, const This *this,
 	CallOpen _call;
 	callopen_copy(&_call, call);
 
-	if (opentype_is_at(call->type) && call->path[0] != '/') {
+	if (call->at && call->path[0] != '/') {
 		return this->next->open(ctx, this->next->open_next, call);
 	}
 
 	MANGLE_PATH(_call.path, -1);
 	return this->next->open(ctx, this->next->open_next, &_call);
-}
-
-static FILE *rootlink_fopen(Context *ctx, const This *this,
-							const CallFOpen *call) {
-	CallFOpen _call;
-	callfopen_copy(&_call, call);
-
-	MANGLE_PATH(_call.path, NULL);
-	return this->next->fopen(ctx, this->next->fopen_next, &_call);
-}
-
-static DIR *rootlink_opendir(Context *ctx, const This *this,
-							 const CallOpendir *call) {
-	CallOpendir _call;
-	callopendir_copy(&_call, call);
-
-	MANGLE_PATH(_call.path, NULL);
-	return this->next->opendir(ctx, this->next->opendir_next, &_call);
 }
 
 static int rootlink_stat(Context *ctx, const This *this,
@@ -127,7 +105,7 @@ static int rootlink_access(Context *ctx, const This *this,
 	CallAccess _call;
 	callaccess_copy(&_call, call);
 
-	if (accesstype_is_at(call->type) && call->path[0] != '/') {
+	if (call->at && call->path[0] != '/') {
 		return this->next->access(ctx, this->next->access_next, call);
 	}
 
@@ -140,7 +118,7 @@ static int rootlink_exec(Context *ctx, const This *this,
 	CallExec _call;
 	callexec_copy(&_call, call);
 
-	if (exectype_is_at(call->type) && call->path[0] != '/') {
+	if (call->at && call->path[0] != '/') {
 		return this->next->exec(ctx, this->next->exec_next, call);
 	}
 
@@ -148,39 +126,17 @@ static int rootlink_exec(Context *ctx, const This *this,
 	return this->next->exec(ctx, this->next->exec_next, &_call);
 }
 
-static char *rootlink_realpath(Context *ctx, const This *this,
-							   const CallRealpath *call) {
-	CallRealpath _call;
-	callrealpath_copy(&_call, call);
+static ssize_t rootlink_xattr(Context *ctx, const This *this,
+							  const CallXattr *call) {
+	CallXattr _call;
+	callxattr_copy(&_call, call);
 
-	MANGLE_PATH(_call.path, NULL);
-	return this->next->realpath(ctx, this->next->realpath_next, &_call);
-}
-
-static ssize_t rootlink_listxattr(Context *ctx, const This *this,
-								  const CallListXattr *call) {
-	CallListXattr _call;
-	calllistxattr_copy(&_call, call);
-
-	if (call->type == XATTRTYPE_F) {
-		return this->next->listxattr(ctx, this->next->listxattr_next, call);
+	if (call->type2 == XATTRTYPE_F) {
+		return this->next->xattr(ctx, this->next->xattr_next, call);
 	}
 
 	MANGLE_PATH(_call.path, -1);
-	return this->next->listxattr(ctx, this->next->listxattr_next, &_call);
-}
-
-static ssize_t rootlink_getxattr(Context *ctx, const This *this,
-								 const CallGetXattr *call) {
-	CallGetXattr _call;
-	callgetxattr_copy(&_call, call);
-
-	if (call->type == XATTRTYPE_F) {
-		return this->next->getxattr(ctx, this->next->getxattr_next, call);
-	}
-
-	MANGLE_PATH(_call.path, -1);
-	return this->next->getxattr(ctx, this->next->getxattr_next, &_call);
+	return this->next->xattr(ctx, this->next->xattr_next, &_call);
 }
 
 // Provide only readonly functions for now
@@ -204,10 +160,6 @@ const CallHandler *rootlink_init(const CallHandler *next) {
 
 	this.this.open = rootlink_open;
 	this.this.open_next = &this;
-	this.this.fopen = rootlink_fopen;
-	this.this.fopen_next = &this;
-	this.this.opendir = rootlink_opendir;
-	this.this.opendir_next = &this;
 	this.this.stat = rootlink_stat;
 	this.this.stat_next = &this;
 	this.this.readlink = rootlink_readlink;
@@ -216,12 +168,8 @@ const CallHandler *rootlink_init(const CallHandler *next) {
 	this.this.access_next = &this;
 	this.this.exec = rootlink_exec;
 	this.this.exec_next = &this;
-	this.this.realpath = rootlink_realpath;
-	this.this.realpath_next = &this;
-	this.this.listxattr = rootlink_listxattr;
-	this.this.listxattr_next = &this;
-	this.this.getxattr = rootlink_getxattr;
-	this.this.getxattr_next = &this;
+	this.this.xattr = rootlink_xattr;
+	this.this.xattr_next = &this;
 
 	return &this.this;
 }
