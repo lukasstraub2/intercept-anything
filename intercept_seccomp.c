@@ -89,24 +89,52 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 36, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 35, 0),
+#ifdef __NR_stat
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 34, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 34, 0),
+#endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 33, 0),
+#ifdef __NR_lstat
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 32, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 32, 0),
+#endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 31, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 30, 0),
+#ifdef __NR_readlink
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 29, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 29, 0),
+#endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 28, 0),
+#ifdef __NR_access
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 27, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 27, 0),
+#endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 26, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 25, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execveat, 24, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigprocmask, 23, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigaction, 22, 0),
+#ifdef __NR_link
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_link, 21, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 21, 0),
+#endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_linkat, 20, 0),
+#ifdef __NR_symlink
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlink, 19, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 19, 0),
+#endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlinkat, 18, 0),
+#ifdef __NR_unlink
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlink, 17, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 17, 0),
+#endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlinkat, 16, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_setxattr, 15, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lsetxattr, 14, 0),
@@ -120,7 +148,11 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_removexattr, 6, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lremovexattr, 5, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fremovexattr, 4, 0),
+#ifdef __NR_rename
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rename, 3, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 3, 0),
+#endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat, 2, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat2, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
@@ -302,6 +334,7 @@ static int handle_openat(int dirfd, const char *path, int flags, mode_t mode) {
 	return ret.ret;
 }
 
+__attribute__((unused))
 static int handle_stat(const char *path, void *statbuf) {
 	trace("stat(%s)\n", path);
 
@@ -336,6 +369,7 @@ static int handle_fstat(int fd, void *statbuf) {
 	return ret.ret;
 }
 
+__attribute__((unused))
 static int handle_lstat(const char *path, void *statbuf) {
 	trace("lstat(%s)\n", path);
 
@@ -394,6 +428,7 @@ static int handle_statx(int dirfd, const char *path, int flags,
 	return ret.ret;
 }
 
+__attribute__((unused))
 static ssize_t handle_readlink(const char *path, char *buf, size_t bufsiz) {
 	trace("readlink(%s)\n", path);
 
@@ -431,6 +466,7 @@ static ssize_t handle_readlinkat(int dirfd, const char *path, char *buf, size_t 
 	return ret.ret;
 }
 
+__attribute__((unused))
 static int handle_access(const char *path, int mode) {
 	trace("access(%s)\n", path);
 
@@ -578,6 +614,7 @@ static long handle_rt_sigaction(int signum, const struct sigaction *act,
 	return __sysret(sys_rt_sigaction(signum, copy, oldact, sigsetsize));
 }
 
+__attribute__((unused))
 static int handle_link(const char *oldpath, const char *newpath) {
 	trace("link(%s, %s)\n", oldpath, newpath);
 
@@ -616,6 +653,7 @@ static int handle_linkat(int olddirfd, const char *oldpath, int newdirfd,
 	return ret.ret;
 }
 
+__attribute__((unused))
 static int handle_symlink(const char *oldpath, const char *newpath) {
 	trace("symlink(%s, %s)\n", oldpath, newpath);
 
@@ -652,6 +690,7 @@ static int handle_symlinkat(const char *oldpath, int newdirfd,
 	return ret.ret;
 }
 
+__attribute__((unused))
 static int handle_unlink(const char *pathname) {
 	trace("unlink(%s)\n", pathname);
 
@@ -920,6 +959,7 @@ static int handle_fremovexattr(int fd, const char *name) {
 	return ret.ret;
 }
 
+__attribute__((unused))
 static int handle_rename(const char *oldpath, const char *newpath) {
 	trace("rename(%s, %s)\n", oldpath, newpath);
 
@@ -1003,17 +1043,21 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 								args->arg3, args->arg4);
 		break;
 
+#ifdef __NR_stat
 		case __NR_stat:
 			ret = handle_stat((const char *)args->arg1, (void *)args->arg2);
 		break;
+#endif
 
 		case __NR_fstat:
 			ret = handle_fstat(args->arg1, (void *)args->arg2);
 		break;
 
+#ifdef __NR_lstat
 		case __NR_lstat:
 			ret = handle_lstat((const char *)args->arg1, (void *)args->arg2);
 		break;
+#endif
 
 		case __NR_newfstatat:
 			ret = handle_newfstatat(args->arg1, (const char *)args->arg2,
@@ -1025,22 +1069,26 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 							   args->arg3, args->arg4, (void *)args->arg5);
 		break;
 
+#ifdef __NR_readlink
 		case __NR_readlink:
 			ret = handle_readlink((const char *)args->arg1, (char *)args->arg2,
 								  args->arg3);
 		break;
+#endif
 
 		case __NR_readlinkat:
 			ret = handle_readlinkat(args->arg1, (const char *)args->arg2,
 									(char *)args->arg3, args->arg4);
 		break;
 
-		case __NR_faccessat:
-			ret = handle_faccessat(args->arg1, (const char *)args->arg2, args->arg3);
-		break;
-
+#ifdef __NR_access
 		case __NR_access:
 			ret = handle_access((const char *)args->arg1, args->arg2);
+		break;
+#endif
+
+		case __NR_faccessat:
+			ret = handle_faccessat(args->arg1, (const char *)args->arg2, args->arg3);
 		break;
 
 		case __NR_execve:
@@ -1068,28 +1116,34 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 									  (struct sigaction *)args->arg3, args->arg4);
 		break;
 
+#ifdef __NR_link
 		case __NR_link:
 			ret = handle_link((const char *)args->arg1, (const char *)args->arg2);
 		break;
+#endif
 
 		case __NR_linkat:
 			ret = handle_linkat(args->arg1, (const char *)args->arg2, args->arg3,
 								(const char *)args->arg4, args->arg5);
 		break;
 
+#ifdef __NR_symlink
 		case __NR_symlink:
 			ret = handle_symlink((const char *)args->arg1,
 								 (const char *)args->arg2);
 		break;
+#endif
 
 		case __NR_symlinkat:
 			ret = handle_symlinkat((const char *)args->arg1, args->arg2,
 								   (const char *)args->arg3);
 		break;
 
+#ifdef __NR_unlink
 		case __NR_unlink:
 			ret = handle_unlink((const char *)args->arg1);
 		break;
+#endif
 
 		case __NR_unlinkat:
 			ret = handle_unlinkat(args->arg1, (const char *)args->arg2, args->arg3);
@@ -1160,9 +1214,11 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 			ret = handle_fremovexattr(args->arg1, (const char*)args->arg2);
 		break;
 
+#ifdef __NR_rename
 		case __NR_rename:
 			ret = handle_rename((const char *)args->arg1, (const char *)args->arg2);
 		break;
+#endif
 
 		case __NR_renameat:
 			ret = handle_renameat(args->arg1, (const char *)args->arg2,
