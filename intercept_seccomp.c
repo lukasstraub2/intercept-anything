@@ -26,8 +26,8 @@ static void handler(int sig, siginfo_t *info, void *ucontext);
 static unsigned long handle_syscall(SysArgs *args, void *ucontext);
 
 static void unblock_sigsys() {
-	sigset_t unblock = (1u << (SIGSYS -1));
-	sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, NULL, sizeof(sigset_t));
+	unsigned long unblock = (1u << (SIGSYS -1));
+	sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, NULL, sizeof(unblock));
 }
 
 void intercept_init(int recursing) {
