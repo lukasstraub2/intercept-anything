@@ -3,6 +3,8 @@
 #include "mysignal.h"
 #include "myseccomp.h"
 #include "mysys.h"
+#include "intercept.h"
+#include "loader.h"
 
 #include <asm/siginfo.h>
 
@@ -13,6 +15,9 @@
 #include <linux/bpf.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
+
+static const CallHandler bottom;
+static const CallHandler *_next = &bottom;
 
 static int64_t array_len(char *const array[]) {
 	int64_t len;
@@ -30,93 +35,335 @@ static void array_copy(char *dest[], char *const source[], int64_t len) {
 	memcpy(dest, source, len * sizeof(char *));
 }
 
+static int line_size(char *buf, ssize_t size) {
+	for (int i = 0; i < size; i++) {
+		if (buf[i] == '\r' || buf[i] == '\n') {
+			return i + 1;
+		}
+	}
+
+	return size;
+}
+
+static int cmdline_argc(char *buf, ssize_t size) {
+	int argc = 0;
+	int whitespace = 1;
+
+	for (int i = 2; i < size; i++) {
+		if (buf[i] == '\r' || buf[i] == '\n') {
+			return argc;
+		} else if (buf[i] != ' ' && buf[i] != '\t') {
+			if (whitespace) {
+				argc++;
+				whitespace = 0;
+			}
+		} else {
+			whitespace = 1;
+		}
+	}
+
+	return argc;
+}
+
+static void cmdline_extract(char *buf, ssize_t size, char **dest) {
+	int argc = 0;
+	int whitespace = 1;
+
+	for (int i = 2; i < size; i++) {
+		if (buf[i] == '\r' || buf[i] == '\n') {
+			buf[i] = '\0';
+			return;
+		} else if (buf[i] != ' ' && buf[i] != '\t') {
+			if (whitespace) {
+				dest[argc] = buf + i;
+				argc++;
+				whitespace = 0;
+			}
+		} else {
+			buf[i] = '\0';
+			whitespace = 1;
+		}
+	}
+
+	buf[size -1] = '\0';
+	return;
+}
+
+static void debug_exec(const char *pathname, char *const argv[],
+					   char *const envp[]) {
+	int64_t i;
+
+	trace(": recurse execve(%s, [ ", pathname?pathname:"NULL");
+
+	for (i = 0; argv[i]; i++) {
+		trace( "%s, ", argv[i]);
+	}
+
+	trace( "], envp)\n");
+}
+
+static ssize_t read_full(int fd, char *buf, size_t count)
+{
+	ssize_t ret = 0;
+	ssize_t total = 0;
+
+	while (count) {
+		ret = read(fd, buf, count);
+		if (ret < 0) {
+			if (errno == EINTR)
+				continue;
+			return -1;
+		} else if (ret == 0) {
+			break;
+		}
+
+		count -= ret;
+		buf += ret;
+		total += ret;
+	}
+
+	return total;
+}
+
+__attribute__((unused))
 static int handle_open(const char *path, int flags, mode_t mode) {
 	trace("open(%s)\n", path);
-	return __sysret(sys_open(path, flags, mode));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallOpen call = {
+		.at = 0,
+		.path = path,
+		.flags = flags,
+		.mode = mode,
+		.ret = &ret
+	};
+
+	_next->open(&ctx, _next->open_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_openat(int dirfd, const char *path, int flags, mode_t mode) {
 	trace("openat(%s)\n", path);
-	return __sysret(sys_openat(dirfd, path, flags, mode));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallOpen call = {
+		.at = 1,
+		.dirfd = dirfd,
+		.path = path,
+		.flags = flags,
+		.mode = mode,
+		.ret = &ret
+	};
+
+	_next->open(&ctx, _next->open_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_stat(const char *path, void *statbuf) {
 	trace("stat(%s)\n", path);
-	return __sysret(sys_stat(path, statbuf));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallStat call = {
+		.type = STATTYPE_PLAIN,
+		.path = path,
+		.statbuf = statbuf,
+		.ret = &ret
+	};
+
+	_next->stat(&ctx, _next->stat_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_fstat(int fd, void *statbuf) {
-	trace("fstat(%u)\n", fd);
-	return __sysret(sys_fstat(fd, statbuf));
+	trace("fstat()\n");
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallStat call = {
+		.type = STATTYPE_F,
+		.dirfd = fd,
+		.statbuf = statbuf,
+		.ret = &ret
+	};
+
+	_next->stat(&ctx, _next->stat_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_lstat(const char *path, void *statbuf) {
 	trace("lstat(%s)\n", path);
-	return __sysret(sys_lstat(path, statbuf));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallStat call = {
+		.type = STATTYPE_L,
+		.path = path,
+		.statbuf = statbuf,
+		.ret = &ret
+	};
+
+	_next->stat(&ctx, _next->stat_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_newfstatat(int dirfd, const char *path, void *statbuf,
 							 int flags) {
 	trace("newfstatat(%s)\n", path);
-	return __sysret(sys_newfstatat(dirfd, path, statbuf, flags));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallStat call = {
+		.type = STATTYPE_AT,
+		.dirfd = dirfd,
+		.path = path,
+		.statbuf = statbuf,
+		.flags = flags,
+		.ret = &ret
+	};
+
+	_next->stat(&ctx, _next->stat_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_statx(int dirfd, const char *path, int flags,
 						unsigned int mask, void *statbuf) {
 	trace("statx(%s)\n", path);
-	return __sysret(sys_statx(dirfd, path, flags, mask, statbuf));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallStat call = {
+		.type = STATTYPE_X,
+		.dirfd = dirfd,
+		.path = path,
+		.flags = flags,
+		.mask = mask,
+		.statbuf = statbuf,
+		.ret = &ret
+	};
+
+	_next->stat(&ctx, _next->stat_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
-static signed
-long handle_readlink(const char *path, char *buf, unsigned long bufsiz) {
+static ssize_t handle_readlink(const char *path, char *buf, size_t bufsiz) {
 	trace("readlink(%s)\n", path);
-	return __sysret(sys_readlink(path, buf, bufsiz));
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallReadlink call = {
+		.at = 0,
+		.path = path,
+		.buf = buf,
+		.bufsiz = bufsiz,
+		.ret = &ret
+	};
+
+	_next->readlink(&ctx, _next->readlink_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
-static signed
-long handle_readlinkat(int dirfd, const char *path, char *buf,
-					   unsigned long bufsiz) {
+static ssize_t handle_readlinkat(int dirfd, const char *path, char *buf, size_t bufsiz) {
 	trace("readlinkat(%s)\n", path);
-	return __sysret(sys_readlinkat(dirfd, path, buf, bufsiz));
-}
 
-static int handle_faccessat(int dirfd, const char *path, int mode) {
-	trace("faccessat(%s)\n", path);
-	return __sysret(sys_faccessat(dirfd, path, mode));
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallReadlink call = {
+		.at = 1,
+		.dirfd = dirfd,
+		.path = path,
+		.buf = buf,
+		.bufsiz = bufsiz,
+		.ret = &ret
+	};
+
+	_next->readlink(&ctx, _next->readlink_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_access(const char *path, int mode) {
 	trace("access(%s)\n", path);
-	return __sysret(sys_access(path, mode));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallAccess call = {
+		.at = 0,
+		.path = path,
+		.mode = mode,
+		.ret = &ret
+	};
+
+	_next->access(&ctx, _next->access_next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+static int handle_faccessat(int dirfd, const char *path, int mode) {
+	trace("accessat(%s)\n", path);
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallAccess call = {
+		.at = 1,
+		.dirfd = dirfd,
+		.path = path,
+		.mode = mode,
+		.ret = &ret
+	};
+
+	_next->access(&ctx, _next->access_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_execve(const char *path, char *const argv[], char *const envp[]) {
 	trace("execve(%s)\n", path);
 
-	int64_t argc;
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallExec call = {
+		.at = 0,
+		.path = path,
+		.argv = argv,
+		.envp = envp,
+		.ret = &ret
+	};
 
-	argc = array_len(argv);
-	if (argc >= INT_MAX -1) {
-		errno = E2BIG;
-		return -1;
-	}
-
-	char *new_argv[argc > 1 ? 2 + argc : 3];
-	new_argv[0] = (char *) "loader_recurse";
-	new_argv[1] = (char *) path;
-	if (argc > 1) {
-		array_copy(new_argv + 2, argv + 1, argc);
-	} else {
-		new_argv[2] = NULL;
-	}
-
-	return __sysret(sys_execve("/home/lukas/rootlink/loader", new_argv, envp));
+	_next->exec(&ctx, _next->exec_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_execveat(int dirfd, const char *path, char *const argv[],
 						   char *const envp[], int flags) {
-	trace("execveat(%s)\n", path);
-	return __sysret(sys_execveat(dirfd, path, argv, envp, flags));
+	trace("exeveat(%s)\n", path);
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallExec call = {
+		.at = 1,
+		.dirfd = dirfd,
+		.path = path,
+		.argv = argv,
+		.envp = envp,
+		.flags = flags,
+		.ret = &ret
+	};
+
+	_next->exec(&ctx, _next->exec_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_rt_sigprocmask(int how, const sigset_t *set,
@@ -194,112 +441,402 @@ static long handle_rt_sigaction(int signum, const struct sigaction *act,
 
 static int handle_link(const char *oldpath, const char *newpath) {
 	trace("link(%s, %s)\n", oldpath, newpath);
-	return __sysret(sys_link(oldpath, newpath));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallLink call = {
+		.at = 0,
+		.oldpath = oldpath,
+		.newpath = newpath,
+		.ret = &ret
+	};
+
+	_next->link(&ctx, _next->link_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_linkat(int olddirfd, const char *oldpath, int newdirfd,
 						 const char *newpath, int flags) {
 	trace("linkat(%s, %s)\n", oldpath, newpath);
-	return __sysret(sys_linkat(olddirfd, oldpath, newdirfd, newpath, flags));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallLink call = {
+		.at = 1,
+		.olddirfd = olddirfd,
+		.oldpath = oldpath,
+		.newdirfd = newdirfd,
+		.newpath = newpath,
+		.flags = flags,
+		.ret = &ret
+	};
+
+	_next->link(&ctx, _next->link_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_symlink(const char *oldpath, const char *newpath) {
 	trace("symlink(%s, %s)\n", oldpath, newpath);
-	return __sysret(sys_symlink(oldpath, newpath));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallLink call = {
+		.at = 0,
+		.oldpath = oldpath,
+		.newpath = newpath,
+		.ret = &ret
+	};
+
+	_next->symlink(&ctx, _next->symlink_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_symlinkat(const char *oldpath, int newdirfd,
 							const char *newpath) {
 	trace("symlinkat(%s, %s)\n", oldpath, newpath);
-	return __sysret(sys_symlinkat(oldpath, newdirfd, newpath));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallLink call = {
+		.at = 1,
+		.oldpath = oldpath,
+		.newdirfd = newdirfd,
+		.newpath = newpath,
+		.ret = &ret
+	};
+
+	_next->symlink(&ctx, _next->symlink_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_unlink(const char *pathname) {
 	trace("unlink(%s)\n", pathname);
-	return __sysret(sys_unlink(pathname));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallUnlink call = {
+		.at = 0,
+		.path = pathname,
+		.ret = &ret
+	};
+
+	_next->unlink(&ctx, _next->unlink_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_unlinkat(int dirfd, const char *pathname, int flags) {
 	trace("unlinkat(%s)\n", pathname);
-	return __sysret(sys_unlinkat(dirfd, pathname, flags));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallUnlink call = {
+		.at = 1,
+		.dirfd = dirfd,
+		.path = pathname,
+		.flags = flags,
+		.ret = &ret
+	};
+
+	_next->unlink(&ctx, _next->unlink_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_setxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
-	trace("setxattr(%s, %s)\n", path, name);
-	return __sysret(sys_setxattr(path, name, value, size, flags));
+	trace("setxattr(%s)\n", path);
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_SET,
+		.type2 = XATTRTYPE_PLAIN,
+		.path = path,
+		.name = name,
+		.value = (void *)value,
+		.size = size,
+		.flags = flags,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_lsetxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
-	trace("lsetxattr(%s, %s)\n", path, name);
-	return __sysret(sys_lsetxattr(path, name, value, size, flags));
+	trace("lsetxattr(%s)\n", path);
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_SET,
+		.type2 = XATTRTYPE_L,
+		.path = path,
+		.name = name,
+		.value = (void *)value,
+		.size = size,
+		.flags = flags,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_fsetxattr(int fd, const char *name, const void *value, size_t size, int flags) {
-	trace("fsetxattr(%d, %s)\n", fd, name);
-	return __sysret(sys_fsetxattr(fd, name, value, size, flags));
+	trace("fsetxattr(%d)\n", fd);
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_SET,
+		.type2 = XATTRTYPE_F,
+		.fd = fd,
+		.name = name,
+		.value = (void *)value,
+		.size = size,
+		.flags = flags,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static ssize_t handle_getxattr(const char *path, const char *name, void *value, size_t size) {
-	trace("getxattr(%s, %s)\n", path, name);
-	return __sysret(sys_getxattr(path, name, value, size));
+	trace("getxattr(%s)\n", path);
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_GET,
+		.type2 = XATTRTYPE_PLAIN,
+		.path = path,
+		.name = name,
+		.value = value,
+		.size = size,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static ssize_t handle_lgetxattr(const char *path, const char *name, void *value, size_t size) {
-	trace("lgetxattr(%s, %s)\n", path, name);
-	return __sysret(sys_lgetxattr(path, name, value, size));
+	trace("lgetxattr(%s)\n", path);
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_GET,
+		.type2 = XATTRTYPE_L,
+		.path = path,
+		.name = name,
+		.value = value,
+		.size = size,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static ssize_t handle_fgetxattr(int fd, const char *name, void *value, size_t size) {
-	trace("fgetxattr(%d, %s)\n", fd, name);
-	return __sysret(sys_fgetxattr(fd, name, value, size));
-}
+	trace("fgetxattr(%d)\n", fd);
 
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_GET,
+		.type2 = XATTRTYPE_F,
+		.fd = fd,
+		.name = name,
+		.value = value,
+		.size = size,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
 
 static ssize_t handle_listxattr(const char *path, char *list, size_t size) {
 	trace("listxattr(%s)\n", path);
-	return __sysret(sys_listxattr(path, list, size));
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_LIST,
+		.type2 = XATTRTYPE_PLAIN,
+		.path = path,
+		.list = list,
+		.size = size,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static ssize_t handle_llistxattr(const char *path, char *list, size_t size) {
 	trace("llistxattr(%s)\n", path);
-	return __sysret(sys_llistxattr(path, list, size));
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_LIST,
+		.type2 = XATTRTYPE_L,
+		.path = path,
+		.list = list,
+		.size = size,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static ssize_t handle_flistxattr(int fd, char *list, size_t size) {
 	trace("flistxattr(%d)\n", fd);
-	return __sysret(sys_flistxattr(fd, list, size));
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_LIST,
+		.type2 = XATTRTYPE_F,
+		.fd = fd,
+		.list = list,
+		.size = size,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_removexattr(const char *path, const char *name) {
-	trace("removexattr(%s, %s)\n", path, name);
-	return __sysret(sys_removexattr(path, name));
+	trace("removexattr(%s)\n", path);
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_REMOVE,
+		.type2 = XATTRTYPE_PLAIN,
+		.path = path,
+		.name = name,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_lremovexattr(const char *path, const char *name) {
-	trace("lremovexattr(%s, %s)\n", path, name);
-	return __sysret(sys_lremovexattr(path, name));
+	trace("lremovexattr(%s)\n", path);
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_REMOVE,
+		.type2 = XATTRTYPE_L,
+		.path = path,
+		.name = name,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_fremovexattr(int fd, const char *name) {
-	trace("fremovexattr(%d, %s)\n", fd, name);
-	return __sysret(sys_fremovexattr(fd, name));
+	trace("fremovexattr(%d)\n", fd);
+
+	Context ctx;
+	RetSSize ret = { ._errno = errno };
+	CallXattr call = {
+		.type = XATTRTYPE_REMOVE,
+		.type2 = XATTRTYPE_F,
+		.fd = fd,
+		.name = name,
+		.ret = &ret
+	};
+
+	_next->xattr(&ctx, _next->xattr_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_rename(const char *oldpath, const char *newpath) {
 	trace("rename(%s, %s)\n", oldpath, newpath);
-	return __sysret(sys_rename(oldpath, newpath));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallRename call = {
+		.type = RENAMETYPE_PLAIN,
+		.oldpath = oldpath,
+		.newpath = newpath,
+		.ret = &ret
+	};
+
+	_next->rename(&ctx, _next->rename_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_renameat(int olddirfd, const char *oldpath,
 						   int newdirfd, const char *newpath) {
 	trace("renameat(%s, %s)\n", oldpath, newpath);
-	return __sysret(sys_renameat(olddirfd, oldpath, newdirfd, newpath));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallRename call = {
+		.type = RENAMETYPE_AT,
+		.olddirfd = olddirfd,
+		.oldpath = oldpath,
+		.newdirfd = newdirfd,
+		.newpath = newpath,
+		.ret = &ret
+	};
+
+	_next->rename(&ctx, _next->rename_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_renameat2(int olddirfd, const char *oldpath,
 							int newdirfd, const char *newpath, unsigned int flags) {
 	trace("renameat2(%s, %s)\n", oldpath, newpath);
-	return __sysret(sys_renameat2(olddirfd, oldpath, newdirfd, newpath, flags));
+
+	Context ctx;
+	RetInt ret = { ._errno = errno };
+	CallRename call = {
+		.type = RENAMETYPE_AT2,
+		.olddirfd = olddirfd,
+		.oldpath = oldpath,
+		.newdirfd = newdirfd,
+		.newpath = newpath,
+		.flags = flags,
+		.ret = &ret
+	};
+
+	_next->rename(&ctx, _next->rename_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_chdir(const char *path) {
@@ -650,3 +1187,487 @@ void intercept_init(int recursing) {
 		install_filter();
 	}
 }
+
+static int bottom_open(Context *ctx, const This *this, const CallOpen *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	if (call->at) {
+		ret = __sysret(sys_openat(call->dirfd, call->path, call->flags, call->mode));
+	} else {
+		ret = __sysret(sys_open(call->path, call->flags, call->mode));
+	}
+
+	if (ret < 0) {
+		_ret->_errno = errno;
+	}
+	_ret->ret = ret;
+	return ret;
+}
+
+static int bottom_stat(Context *ctx, const This *this, const CallStat *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	switch (call->type) {
+		case STATTYPE_PLAIN:
+			ret = __sysret(sys_stat(call->path, call->statbuf));
+		break;
+
+		case STATTYPE_F:
+			ret = __sysret(sys_fstat(call->dirfd, call->statbuf));
+		break;
+
+		case STATTYPE_L:
+			ret = __sysret(sys_lstat(call->path, call->statbuf));
+		break;
+
+		case STATTYPE_AT:
+			ret = __sysret(sys_newfstatat(call->dirfd, call->path,
+										  call->statbuf, call->flags));
+		break;
+
+		case STATTYPE_X:
+			ret = __sysret(sys_statx(call->dirfd, call->path, call->flags,
+									 call->mask, call->statbuf));
+		break;
+
+		default:
+			abort();
+		break;
+	}
+
+	if (ret < 0) {
+		_ret->_errno = errno;
+	}
+	_ret->ret = ret;
+	return ret;
+}
+
+static ssize_t bottom_readlink(Context *ctx, const This *this,
+							   const CallReadlink *call) {
+	ssize_t ret;
+	RetSSize *_ret = call->ret;
+
+	if (call->at) {
+		ret = __sysret(sys_readlinkat(call->dirfd, call->path, call->buf,
+									  call->bufsiz));
+	} else {
+		ret = __sysret(sys_readlink(call->path, call->buf, call->bufsiz));
+	}
+
+	if (ret < 0) {
+		_ret->_errno = errno;
+	}
+	_ret->ret = ret;
+	return ret;
+}
+
+static int bottom_access(Context *ctx, const This *this,
+						 const CallAccess *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	if (call->at) {
+		ret = __sysret(sys_faccessat(call->dirfd, call->path, call->mode));
+	} else {
+		ret = __sysret(sys_access(call->path, call->mode));
+	}
+
+	if (ret < 0) {
+		_ret->_errno = errno;
+	}
+	_ret->ret = ret;
+	return ret;
+}
+
+static int _bottom_exec(Context *ctx, const This *this, CallExec *call) {
+	int ret;
+	int64_t argc;
+
+	if (call->at && call->path[0] != '/') {
+		exit_error("execveat with relative path");
+	}
+
+	argc = array_len(call->argv);
+	if (argc >= INT_MAX -1) {
+		errno = E2BIG;
+		return -1;
+	}
+
+	char *new_argv[argc > 1 ? 2 + argc : 3];
+	new_argv[0] = (char *) "loader_recurse";
+	new_argv[1] = (char *) call->path;
+	if (argc > 1) {
+		array_copy(new_argv + 2, call->argv + 1, argc);
+	} else {
+		new_argv[2] = NULL;
+	}
+	call->path = "/home/lukas/rootlink/loader";
+	call->argv = new_argv;
+
+	// TODO: Properly emulate execveat
+	ret = __sysret(sys_execve(call->path, call->argv, call->envp));
+
+	call->ret->ret = ret;
+	if (ret < 0) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
+}
+
+static int bottom_exec(Context *ctx, const This *this,
+					   const CallExec *call) {
+	int fd;
+	int _errno = 0;
+	ssize_t ret, size;
+	RetInt *_ret = call->ret;
+	int64_t exec_argc;
+	CallExec _call;
+	callexec_copy(&_call, call);
+
+	if (call->final || (call->at && call->path[0] != '/')) {
+		return _bottom_exec(ctx, this, &_call);
+	}
+
+	exec_argc = array_len(call->argv);
+	if (exec_argc < 0) {
+		_ret->_errno = E2BIG;
+		_ret->ret = -1;
+		goto out;
+	}
+
+	ret = access(call->path, S_IXOTH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		goto out;
+	}
+
+	fd = open(call->path, O_RDONLY | O_CLOEXEC);
+	if (fd < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		goto out;
+	}
+
+	ret = read_full(fd, ctx->scratch, SCRATCH_SIZE);
+	_errno = errno;
+	close(fd);
+	if (ret < 0) {
+		_ret->_errno = _errno;
+		_ret->ret = -1;
+		goto out;
+	}
+	size = ret;
+
+	if (size < 2) {
+		_ret->_errno = ENOEXEC;
+		_ret->ret = -1;
+		goto out;
+	}
+
+	if (ctx->scratch[0] == '#' && ctx->scratch[1] == '!') {
+		size = line_size(ctx->scratch, size) + 1;
+		char buf[size];
+		memcpy(buf, ctx->scratch, size);
+		buf[size - 1] = '\0';
+
+		int sh_argc = cmdline_argc(buf, size);
+		if (sh_argc == 0) {
+			_ret->_errno = ENOEXEC;
+			_ret->ret = -1;
+			goto out;
+		}
+
+		int64_t argc = exec_argc + sh_argc;
+		char *argv[argc +1];
+
+		cmdline_extract(buf, size, argv);
+		array_copy(argv + sh_argc, call->argv, exec_argc);
+		argv[sh_argc] = (char *) call->path;
+		argv[argc] = NULL;
+		const char *pathname = argv[0];
+
+		debug_exec(pathname, argv, call->envp);
+
+		_call.path = pathname;
+		_call.argv = argv;
+
+		return _next->exec(ctx, _next->exec_next, &_call);
+	}
+
+	if ((size_t)size < sizeof(Elf_Ehdr) || !check_ehdr((Elf_Ehdr*)ctx->scratch)) {
+		_ret->_errno = ENOEXEC;
+		_ret->ret = -1;
+		goto out;
+	}
+
+	_call.final = 1;
+	_next->exec(ctx, _next->exec_next, &_call);
+
+out:
+	return _ret->ret;
+}
+
+static int bottom_link(Context *ctx, const This *this, const CallLink *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	if (call->at) {
+		ret = __sysret(sys_linkat(call->olddirfd, call->oldpath, call->newdirfd,
+								  call->newpath, call->flags));
+	} else {
+		ret = __sysret(sys_link(call->oldpath, call->newpath));
+	}
+
+	if (ret < 0) {
+		_ret->_errno = errno;
+	}
+	_ret->ret = ret;
+	return ret;
+}
+
+static int bottom_symlink(Context *ctx, const This *this,
+						  const CallLink *call) {
+	int ret;
+
+	if (call->at) {
+		ret = __sysret(sys_symlinkat(call->oldpath, call->newdirfd,
+									 call->newpath));
+	} else {
+		ret = __sysret(sys_symlink(call->oldpath, call->newpath));
+	}
+
+	call->ret->ret = ret;
+	if (ret < 0) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
+}
+
+static int bottom_unlink(Context *ctx, const This *this,
+						 const CallUnlink *call) {
+	int ret;
+
+	if (call->at) {
+		ret = __sysret(sys_unlinkat(call->dirfd, call->path, call->flags));
+	} else {
+		ret = __sysret(sys_unlink(call->path));
+	}
+
+	call->ret->ret = ret;
+	if (ret < 0) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
+}
+
+static int bottom_setxattr(Context *ctx, const This *this,
+						   const CallXattr *call) {
+	int ret;
+
+	switch (call->type2) {
+		case XATTRTYPE_PLAIN:
+			ret = __sysret(sys_setxattr(call->path, call->name,
+										call->value, call->size, call->flags));
+		break;
+
+		case XATTRTYPE_L:
+			ret = __sysret(sys_lsetxattr(call->path, call->name,
+										 call->value, call->size, call->flags));
+		break;
+
+		case XATTRTYPE_F:
+			ret = __sysret(sys_fsetxattr(call->fd, call->name,
+										 call->value, call->size, call->flags));
+		break;
+
+		default:
+			abort();
+		break;
+	}
+
+	call->ret->ret = ret;
+	if (ret < 0) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
+}
+
+static ssize_t bottom_getxattr(Context *ctx, const This *this,
+							   const CallXattr *call) {
+	ssize_t ret;
+
+	switch (call->type2) {
+		case XATTRTYPE_PLAIN:
+			ret = __sysret(sys_getxattr(call->path, call->name,
+										call->value, call->size));
+		break;
+
+		case XATTRTYPE_L:
+			ret = __sysret(sys_lgetxattr(call->path, call->name,
+										 call->value, call->size));
+		break;
+
+		case XATTRTYPE_F:
+			ret = __sysret(sys_fgetxattr(call->fd, call->name,
+										 call->value, call->size));
+		break;
+
+		default:
+			abort();
+		break;
+	}
+
+	call->ret->ret = ret;
+	if (ret < 0) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
+}
+
+static ssize_t bottom_listxattr(Context *ctx, const This *this,
+								const CallXattr *call) {
+	ssize_t ret;
+
+	switch (call->type2) {
+		case XATTRTYPE_PLAIN:
+			ret = __sysret(sys_listxattr(call->path, call->list, call->size));
+		break;
+
+		case XATTRTYPE_L:
+			ret = __sysret(sys_llistxattr(call->path, call->list, call->size));
+		break;
+
+		case XATTRTYPE_F:
+			ret = __sysret(sys_flistxattr(call->fd, call->list, call->size));
+		break;
+
+		default:
+			abort();
+		break;
+	}
+
+	call->ret->ret = ret;
+	if (ret < 0) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
+}
+
+static int bottom_removexattr(Context *ctx, const This *this,
+							  const CallXattr *call) {
+	int ret;
+
+	switch (call->type2) {
+		case XATTRTYPE_PLAIN:
+			ret = __sysret(sys_removexattr(call->path, call->name));
+		break;
+
+		case XATTRTYPE_L:
+			ret = __sysret(sys_lremovexattr(call->path, call->name));
+		break;
+
+		case XATTRTYPE_F:
+			ret = __sysret(sys_fremovexattr(call->fd, call->name));
+		break;
+
+		default:
+			abort();
+		break;
+	}
+
+	call->ret->ret = ret;
+	if (ret < 0) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
+}
+
+static ssize_t bottom_xattr(Context *ctx, const This *this,
+							const CallXattr *call) {
+	switch (call->type) {
+		case XATTRTYPE_SET:
+			return bottom_setxattr(ctx, this, call);
+		break;
+
+		case XATTRTYPE_GET:
+			return bottom_getxattr(ctx, this, call);
+		break;
+
+		case XATTRTYPE_LIST:
+			return bottom_listxattr(ctx, this, call);
+		break;
+
+		case XATTRTYPE_REMOVE:
+			return bottom_removexattr(ctx, this, call);
+		break;
+
+		default:
+			abort();
+		break;
+	}
+}
+
+static int bottom_rename(Context *ctx, const This *this,
+						 const CallRename *call) {
+	int ret;
+
+	switch (call->type) {
+		case RENAMETYPE_PLAIN:
+			ret = __sysret(sys_rename(call->oldpath, call->newpath));
+		break;
+
+		case RENAMETYPE_AT:
+			ret = __sysret(sys_renameat(call->olddirfd, call->oldpath,
+										call->newdirfd, call->newpath));
+		break;
+
+		case RENAMETYPE_AT2:
+			ret = __sysret(sys_renameat2(call->olddirfd, call->oldpath,
+										 call->newdirfd, call->newpath, call->flags));
+		break;
+
+		default:
+			abort();
+		break;
+	}
+
+	call->ret->ret = ret;
+	if (ret < 0) {
+		call->ret->_errno = errno;
+	}
+
+	return ret;
+}
+
+static const CallHandler bottom = {
+	bottom_open,
+	NULL,
+	bottom_stat,
+	NULL,
+	bottom_readlink,
+	NULL,
+	bottom_access,
+	NULL,
+	bottom_exec,
+	NULL,
+	bottom_link,
+	NULL,
+	bottom_symlink,
+	NULL,
+	bottom_unlink,
+	NULL,
+	bottom_xattr,
+	NULL,
+	bottom_rename,
+	NULL
+};

@@ -28,6 +28,7 @@
 #include "mprotect.h"
 #include "trampo.h"
 #include "myelf.h"
+#include "intercept.h"
 
 #define DEBUG_ENV "DEBUG_LOADER"
 #include "debug.h"
@@ -48,7 +49,7 @@ static void z_fini(void)
 	printf("Fini at work\n");
 }
 
-static int check_ehdr(Elf_Ehdr *ehdr)
+int check_ehdr(Elf_Ehdr *ehdr)
 {
 	unsigned char *e_ident = ehdr->e_ident;
 	return (e_ident[EI_MAG0] != ELFMAG0 || e_ident[EI_MAG1] != ELFMAG1 ||

@@ -53,6 +53,11 @@ int sys_access(const char *path, int mode) {
 }
 
 static __attribute__((unused))
+int access(const char *path, int mode) {
+	return __sysret(sys_access(path, mode));
+}
+
+static __attribute__((unused))
 int sys_execveat(int dirfd, const char *path, char *const argv[],
 				 char *const envp[], int flags) {
 	return my_syscall5(__NR_execveat, dirfd, path, argv, envp, flags);

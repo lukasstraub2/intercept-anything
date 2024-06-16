@@ -20,7 +20,7 @@ ARCH="$1"
 # We load at     0xA0000000
 # since the seccomp filter is inherited by all children
 # and we need to load to the same address in all processes
-cc -g -O1 -pipe -Wall -Wextra -fno-ident -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include" \
+cc -g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-ident -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include" \
 	-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -Wl,--no-undefined -static -o loader \
 	loader.c intercept_seccomp.c
 #LDFLAGS += -Wl,-Bsymbolic,--no-undefined,--build-id=none -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -static
