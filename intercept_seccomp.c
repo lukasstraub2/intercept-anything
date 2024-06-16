@@ -6,6 +6,7 @@
 #include "intercept.h"
 #include "loader.h"
 #include "mytypes.h"
+#include "config.h"
 
 #include <asm/siginfo.h>
 
@@ -1310,7 +1311,7 @@ static int _bottom_exec(Context *ctx, const This *this, CallExec *call) {
 	} else {
 		new_argv[2] = NULL;
 	}
-	call->path = "/home/lukas/rootlink/loader";
+	call->path = PREFIX "/opt/loader";
 	call->argv = new_argv;
 
 	// TODO: Properly emulate execveat
