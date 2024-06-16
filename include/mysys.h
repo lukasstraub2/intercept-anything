@@ -13,7 +13,11 @@ int sys_openat(int dirfd, const char *path, int flags, mode_t mode) {
 
 static __attribute__((unused))
 int sys_stat(const char *path, void *statbuf) {
+#ifdef __NR_stat
 	return my_syscall2(__NR_stat, path, statbuf);
+#else
+	return __nolibc_enosys(__func__, path, statbuf);
+#endif
 }
 
 static __attribute__((unused))
@@ -23,7 +27,11 @@ int sys_fstat(int fd, void *statbuf) {
 
 static __attribute__((unused))
 int sys_lstat(const char *path, void *statbuf) {
+#ifdef __NR_lstat
 	return my_syscall2(__NR_lstat, path, statbuf);
+#else
+	return __nolibc_enosys(__func__, path, statbuf);
+#endif
 }
 
 static __attribute__((unused))
@@ -33,7 +41,11 @@ int sys_newfstatat(int dirfd, const char *path, void *statbuf, int flags) {
 
 static __attribute__((unused))
 ssize_t sys_readlink(const char *path, char *buf, unsigned long bufsiz) {
+#ifdef __NR_readlink
 	return my_syscall3(__NR_readlink, path, buf, bufsiz);
+#else
+	return my_syscall4(__NR_readlinkat, AT_FDCWD, path, buf, bufsiz);
+#endif
 }
 
 static __attribute__((unused))
@@ -60,7 +72,11 @@ int sys_faccessat(int dirfd, const char *path, int mode) {
 
 static __attribute__((unused))
 int sys_access(const char *path, int mode) {
+#ifdef __NR_access
 	return my_syscall2(__NR_access, path, mode);
+#else
+	return my_syscall3(__NR_faccessat, AT_FDCWD, path, mode);
+#endif
 }
 
 static __attribute__((unused))
@@ -168,7 +184,11 @@ int sys_fremovexattr(int fd, const char *name) {
 
 static __attribute__((unused))
 int sys_rename(const char *oldpath, const char *newpath) {
+#ifdef __NR_rename
 	return my_syscall2(__NR_rename, oldpath, newpath);
+#else
+	return my_syscall4(__NR_renameat, AT_FDCWD, oldpath, AT_FDCWD, newpath);
+#endif
 }
 
 static __attribute__((unused))
