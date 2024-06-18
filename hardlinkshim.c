@@ -90,7 +90,7 @@ static int changeprefix(char *linkname, const char *newprefix) {
 
 static int cnt_read(char *linkname) {
 	ssize_t ret;
-	char buf[SCRATCH_SIZE];
+	char cnt_buf[22];
 	int cnt;
 
 	ret = changeprefix(linkname, "cnt");
@@ -98,16 +98,16 @@ static int cnt_read(char *linkname) {
 		return -1;
 	}
 
-	ret = readlink(linkname, buf, SCRATCH_SIZE);
+	ret = readlink(linkname, cnt_buf, 22);
 	if (ret < 0) {
 		goto err;
-	} else if (ret == SCRATCH_SIZE) {
-		errno = ENAMETOOLONG;
+	} else if (ret == 22) {
+		errno = EUCLEAN;
 		goto err;
 	}
-	buf[ret] = '\0';
+	cnt_buf[ret] = '\0';
 
-	cnt = atoi(buf);
+	cnt = atoi(cnt_buf);
 	if (cnt < 0) {
 		errno = EUCLEAN;
 		goto err;

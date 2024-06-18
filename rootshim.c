@@ -53,6 +53,9 @@ int mkostemp_unlink(char *template, int flags, mode_t mode) {
 
 		ret = unlink(template);
 		if (ret < 0) {
+			int _errno = errno;
+			close(fd);
+			errno = _errno;
 			return -1;
 		}
 
