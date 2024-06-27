@@ -4,19 +4,20 @@
 #include "mysys.h"
 #include "linux/futex.h"
 
-typedef uint32_t spinlock_t __attribute__((aligned(8)));
-typedef spinlock_t mutex_t;
+typedef uint32_t Spinlock __attribute__((aligned(8)));
+typedef Spinlock Mutex;
+_Static_assert(__atomic_always_lock_free(sizeof(Spinlock), 0), "Spinlock");
 
 typedef struct wstarving_t wstarving_t;
 struct wstarving_t {
-	mutex_t read_lock;
+	Mutex read_lock;
 	int reader_cnt;
-	mutex_t global_lock;
+	Mutex global_lock;
 };
 
 static __attribute__((unused))
-void spinlock_lock(spinlock_t *lock) {
-	spinlock_t expected = 0;
+void spinlock_lock(Spinlock *lock) {
+	Spinlock expected = 0;
 
 	while (!__atomic_compare_exchange_n(lock, &expected, 1, 0,
 										__ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
@@ -25,8 +26,8 @@ void spinlock_lock(spinlock_t *lock) {
 }
 
 static __attribute__((unused))
-int spinlock_trylock(spinlock_t *lock) {
-	spinlock_t expected = 0;
+int spinlock_trylock(Spinlock *lock) {
+	Spinlock expected = 0;
 
 	if (!__atomic_compare_exchange_n(lock, &expected, 1, 0,
 									 __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
@@ -37,8 +38,8 @@ int spinlock_trylock(spinlock_t *lock) {
 }
 
 static __attribute__((unused))
-int mutex_trylock(mutex_t *lock) {
-	mutex_t expected = 0;
+int mutex_trylock(Mutex *lock) {
+	Mutex expected = 0;
 
 	if (!__atomic_compare_exchange_n(lock, &expected, 1, 0,
 									 __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
@@ -49,13 +50,13 @@ int mutex_trylock(mutex_t *lock) {
 }
 
 static __attribute__((unused))
-void spinlock_unlock(spinlock_t *lock) {
+void spinlock_unlock(Spinlock *lock) {
 	__atomic_store_n(lock, 0, __ATOMIC_RELEASE);
 }
 
 static __attribute__((unused))
-void mutex_lock(mutex_t *mutex) {
-	mutex_t expected = 0;
+void mutex_lock(Mutex *mutex) {
+	Mutex expected = 0;
 	int tries = 0;
 
 	while (!__atomic_compare_exchange_n(mutex, &expected, 1, 0,
@@ -75,7 +76,7 @@ void mutex_lock(mutex_t *mutex) {
 }
 
 static __attribute__((unused))
-void mutex_unlock(mutex_t *mutex) {
+void mutex_unlock(Mutex *mutex) {
 	signed long ret;
 	__atomic_store_n(mutex, 0, __ATOMIC_RELEASE);
 	ret = futex(mutex, FUTEX_WAKE, 1, NULL, NULL, 0);
