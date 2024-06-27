@@ -4,7 +4,7 @@
 
 int main(int argc, char **argv) {
 	for (int i = 1; i <= 4096; i++) {
-		Tls *tls = tls_get(i);
+		Tls *tls = _tls_get(i);
 		if (!tls) {
 			abort();
 		}
@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
 	}
 
 	for (int i = 1; i <= 4096; i++) {
-		Tls *tls = tls_get(i);
+		Tls *tls = _tls_get(i);
 		if (!tls) {
 			abort();
 		}
@@ -45,13 +45,13 @@ int main(int argc, char **argv) {
 			abort();
 		}
 
-		tls_free(i);
+		_tls_free(i);
 	}
 
 	if (!tls_search_binary(1)) {
 		abort();
 	}
-	Tls *tls = tls_get(1);
+	Tls *tls = _tls_get(1);
 	if (!tls) {
 		abort();
 	}
@@ -63,19 +63,19 @@ int main(int argc, char **argv) {
 	}
 
 	for (int i = 4096; i >= 2; i--) {
-		Tls *tls = tls_get(i);
+		Tls *tls = _tls_get(i);
 		if (!tls) {
 			abort();
 		}
 
 		memcpy(tls->data, &i, sizeof(int));
-		if (!tls_get(i)) {
+		if (!_tls_get(i)) {
 			abort();
 		}
 	}
 
 	for (int i = 1; i <= 4096; i++) {
-		Tls *tls = tls_get(i);
+		Tls *tls = _tls_get(i);
 		if (!tls) {
 			abort();
 		}
@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
 			abort();
 		}
 
-		tls_free(i);
+		_tls_free(i);
 	}
 
 	return 0;

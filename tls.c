@@ -127,7 +127,7 @@ static TlsList *tls_alloc_sparse(uint32_t tid) {
 	return NULL;
 }
 
-Tls *tls_get(uint32_t tid) {
+Tls *_tls_get(uint32_t tid) {
 	TlsList *tls;
 
 	if (!tid) {
@@ -154,10 +154,11 @@ Tls *tls_get(uint32_t tid) {
 		return tls->data;
 	}
 
+	abort();
 	return NULL;
 }
 
-void tls_free(uint32_t tid) {
+void _tls_free(uint32_t tid) {
 	TlsList *tls;
 
 	if (!tid) {
@@ -177,4 +178,14 @@ void tls_free(uint32_t tid) {
 		tls->data = NULL;
 		__atomic_store_n(&tls->tid, 0, __ATOMIC_RELEASE);
 	}
+}
+
+Tls *tls_get() {
+	pid_t tid = gettid();
+	return _tls_get(tid);
+}
+
+void tls_free() {
+	pid_t tid = gettid();
+	_tls_free(tid);
 }
