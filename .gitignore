@@ -10,3 +10,4 @@ rootlink.*
 !rootlink.h
 !rootlink.c
 .qtc_clangd
+tls_test

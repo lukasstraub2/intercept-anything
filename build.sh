@@ -24,3 +24,7 @@ cc -g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-ident -fno-stack-protec
 	-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -Wl,--no-undefined -static -o loader \
 	loader.c tls.c intercept_seccomp.c util.c main.c noxattrs.c hardlinkshim.c rootlink.c rootshim.c
 #LDFLAGS += -Wl,-Bsymbolic,--no-undefined,--build-id=none -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -static
+
+cc -g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-ident -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include" \
+	-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -Wl,--no-undefined -static -o tls_test \
+        tls.c tls_test.c

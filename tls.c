@@ -4,7 +4,6 @@
 #include "mylock.h"
 #include "util.h"
 
-typedef struct TlsList TlsList;
 struct TlsList {
 	Spinlock tid;
 	Tls *data;
@@ -18,7 +17,7 @@ static TlsList thread_data[TLS_ALLOC] = {0};
 static int tls_size() {
 	uint32_t size = __atomic_load_n(&thread_data_size, __ATOMIC_RELAXED);
 
-	return max(size, (uint32_t)TLS_ALLOC);
+	return min(size, (uint32_t)TLS_ALLOC);
 }
 
 static TlsList *_tls_search_binary(uint32_t tid, int u, int o) {
@@ -34,6 +33,7 @@ static TlsList *_tls_search_binary(uint32_t tid, int u, int o) {
 		if (!index) {
 			return NULL;
 		}
+		o--;
 		index--;
 		current_entry--;
 		current_tid = __atomic_load_n(&current_entry->tid, __ATOMIC_RELAXED);
@@ -48,7 +48,7 @@ static TlsList *_tls_search_binary(uint32_t tid, int u, int o) {
 	}
 }
 
-static TlsList *tls_search_binary(uint32_t tid) {
+TlsList *tls_search_binary(uint32_t tid) {
 	int size = tls_size();
 
 	if (!size) {
@@ -100,6 +100,7 @@ static TlsList *tls_alloc_append(uint32_t tid) {
 
 		if (!__atomic_compare_exchange_n(&current_entry->tid, &expected, tid, 0,
 										 __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
+			expected = 0;
 			continue;
 		}
 
@@ -116,6 +117,7 @@ static TlsList *tls_alloc_sparse(uint32_t tid) {
 
 		if (!__atomic_compare_exchange_n(&current_entry->tid, &expected, tid, 0,
 										 __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
+			expected = 0;
 			continue;
 		}
 
