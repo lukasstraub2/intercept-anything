@@ -235,3 +235,15 @@ static __attribute__((unused))
 int flock(int fd, int operation) {
 	return __sysret(sys_flock(fd, operation));
 }
+
+static __attribute__((unused))
+signed long sys_futex(uint32_t *uaddr, int futex_op, uint32_t val,
+					  const struct timespec *timeout, uint32_t *uaddr2, uint32_t val3) {
+	return my_syscall6(__NR_futex, uaddr, futex_op, val, timeout, uaddr2, val3);
+}
+
+static __attribute__((unused))
+signed long futex(uint32_t *uaddr, int futex_op, uint32_t val,
+				  const struct timespec *timeout, uint32_t *uaddr2, uint32_t val3) {
+	return __sysret(sys_futex(uaddr, futex_op, val, timeout, uaddr2, val3));
+}
