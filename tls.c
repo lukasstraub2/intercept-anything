@@ -29,11 +29,9 @@ static TlsList *_tls_search_binary(uint32_t tid, int u, int o) {
 	TlsList *current_entry = thread_data + index;
 	uint32_t current_tid = __atomic_load_n(&current_entry->tid, __ATOMIC_RELAXED);
 	while (!current_tid) {
-		if (!index) {
+		if (current_entry == thread_data) {
 			return NULL;
 		}
-		o--;
-		index--;
 		current_entry--;
 		current_tid = __atomic_load_n(&current_entry->tid, __ATOMIC_RELAXED);
 	}
@@ -157,6 +155,23 @@ Tls *_tls_get(uint32_t tid) {
 	return NULL;
 }
 
+static void __tls_free(TlsList *tls) {
+	uint32_t size = __atomic_load_n(&thread_data_size, __ATOMIC_ACQUIRE);
+	uint32_t actual_size = min(size, (uint32_t)TLS_LIST_ALLOC);
+	uint32_t idx = tls - thread_data;
+	Spinlock expected = size;
+
+	free(tls->data);
+	tls->data = NULL;
+
+	if (idx == actual_size -1) {
+		__atomic_compare_exchange_n(&thread_data_size, &expected, actual_size -1,
+									0, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED);
+	}
+
+	__atomic_store_n(&tls->tid, 0, __ATOMIC_RELEASE);
+}
+
 void _tls_free(uint32_t tid) {
 	TlsList *tls;
 
@@ -166,16 +181,14 @@ void _tls_free(uint32_t tid) {
 
 	tls = tls_search_binary(tid);
 	if (tls) {
-		free(tls->data);
-		tls->data = NULL;
-		__atomic_store_n(&tls->tid, 0, __ATOMIC_RELEASE);
+		__tls_free(tls);
+		return;
 	}
 
 	tls = tls_search_linear(tid);
 	if (tls) {
-		free(tls->data);
-		tls->data = NULL;
-		__atomic_store_n(&tls->tid, 0, __ATOMIC_RELEASE);
+		__tls_free(tls);
+		return;
 	}
 }
 
