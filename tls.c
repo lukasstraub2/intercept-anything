@@ -10,14 +10,13 @@ struct TlsList {
 };
 _Static_assert(sizeof(Spinlock) >= sizeof(pid_t), "pid_t > Spinlock");
 
-#define TLS_ALLOC 4096
 static Spinlock thread_data_size = 0;
-static TlsList thread_data[TLS_ALLOC] = {0};
+static TlsList thread_data[TLS_LIST_ALLOC] = {0};
 
 static int tls_size() {
 	uint32_t size = __atomic_load_n(&thread_data_size, __ATOMIC_RELAXED);
 
-	return min(size, (uint32_t)TLS_ALLOC);
+	return min(size, (uint32_t)TLS_LIST_ALLOC);
 }
 
 static TlsList *_tls_search_binary(uint32_t tid, int u, int o) {
@@ -86,7 +85,7 @@ static TlsList *tls_alloc_append(uint32_t tid) {
 	int size = tls_size();
 	Spinlock expected = 0;
 
-	if (size >= TLS_ALLOC) {
+	if (size >= TLS_LIST_ALLOC) {
 		return NULL;
 	}
 
@@ -94,7 +93,7 @@ static TlsList *tls_alloc_append(uint32_t tid) {
 		uint32_t idx = __atomic_fetch_add(&thread_data_size, 1, __ATOMIC_ACQUIRE);
 		TlsList *current_entry = thread_data + idx;
 
-		if (idx >= TLS_ALLOC) {
+		if (idx >= TLS_LIST_ALLOC) {
 			return NULL;
 		}
 

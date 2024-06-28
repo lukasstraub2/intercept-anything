@@ -2,6 +2,8 @@
 
 #include "std.h"
 
+#define TLS_LIST_ALLOC 4096
+
 typedef struct TlsList TlsList;
 typedef struct Tls Tls;
 struct Tls {

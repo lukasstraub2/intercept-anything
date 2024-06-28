@@ -3,7 +3,7 @@
 #include "tls.h"
 
 int main(int argc, char **argv) {
-	for (int i = 1; i <= 4096; i++) {
+	for (int i = 1; i <= TLS_LIST_ALLOC; i++) {
 		Tls *tls = _tls_get(i);
 		if (!tls) {
 			abort();
@@ -20,14 +20,14 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	for (int i = 1; i <= 4096; i++) {
+	for (int i = 1; i <= TLS_LIST_ALLOC; i++) {
 		TlsList *tls = tls_search_binary(i);
 		if (!tls) {
 			abort();
 		}
 	}
 
-	for (int i = 1; i <= 4096; i++) {
+	for (int i = 1; i <= TLS_LIST_ALLOC; i++) {
 		Tls *tls = _tls_get(i);
 		if (!tls) {
 			abort();
@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	for (int i = 4096; i >= 2; i--) {
+	for (int i = TLS_LIST_ALLOC; i >= 2; i--) {
 		if (!tls_search_binary(i)) {
 			abort();
 		}
@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
 		abort();
 	}
 
-	for (int i = 4096; i >= 2; i--) {
+	for (int i = TLS_LIST_ALLOC; i >= 2; i--) {
 		Tls *tls = _tls_get(i);
 		if (!tls) {
 			abort();
@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	for (int i = 1; i <= 4096; i++) {
+	for (int i = 1; i <= TLS_LIST_ALLOC; i++) {
 		Tls *tls = _tls_get(i);
 		if (!tls) {
 			abort();
