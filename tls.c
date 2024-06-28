@@ -124,7 +124,7 @@ static TlsList *tls_alloc_sparse(uint32_t tid) {
 	return NULL;
 }
 
-Tls *_tls_get(uint32_t tid) {
+static TlsList *__tls_get_noalloc(uint32_t tid) {
 	TlsList *tls;
 
 	if (!tid) {
@@ -133,10 +133,32 @@ Tls *_tls_get(uint32_t tid) {
 
 	tls = tls_search_binary(tid);
 	if (tls) {
-		return tls->data;
+		return tls;
 	}
 
 	tls = tls_search_linear(tid);
+	if (tls) {
+		return tls;
+	}
+
+	return NULL;
+}
+
+Tls *_tls_get_noalloc(uint32_t tid) {
+	TlsList *tls;
+
+	tls = __tls_get_noalloc(tid);
+	if (tls) {
+		return tls->data;
+	}
+
+	return NULL;
+}
+
+Tls *_tls_get(uint32_t tid) {
+	TlsList *tls;
+
+	tls = __tls_get_noalloc(tid);
 	if (tls) {
 		return tls->data;
 	}
@@ -179,17 +201,15 @@ void _tls_free(uint32_t tid) {
 		abort();
 	}
 
-	tls = tls_search_binary(tid);
+	tls = __tls_get_noalloc(tid);
 	if (tls) {
 		__tls_free(tls);
-		return;
 	}
+}
 
-	tls = tls_search_linear(tid);
-	if (tls) {
-		__tls_free(tls);
-		return;
-	}
+Tls *tls_get_noalloc() {
+	pid_t tid = gettid();
+	return _tls_get_noalloc(tid);
 }
 
 Tls *tls_get() {
