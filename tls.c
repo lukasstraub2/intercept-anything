@@ -1,4 +1,6 @@
 
+#define DEBUG_ENV "DEBUG_TLS"
+#include "debug.h"
 #include "nolibc.h"
 #include "tls.h"
 #include "mylock.h"
@@ -71,6 +73,8 @@ static TlsList *tls_search_linear(uint32_t tid) {
 }
 
 static TlsList *tls_alloc(TlsList *entry) {
+	trace("malloc()\n");
+
 	entry->data = malloc(sizeof(Tls));
 	if (!entry->data) {
 		abort();
@@ -209,15 +213,18 @@ void _tls_free(uint32_t tid) {
 
 Tls *tls_get_noalloc() {
 	pid_t tid = gettid();
+	trace("gettid(): %u\n", tid);
 	return _tls_get_noalloc(tid);
 }
 
 Tls *tls_get() {
 	pid_t tid = gettid();
+	trace("gettid(): %u\n", tid);
 	return _tls_get(tid);
 }
 
 void tls_free() {
 	pid_t tid = gettid();
+	trace("gettid(): %u\n", tid);
 	_tls_free(tid);
 }

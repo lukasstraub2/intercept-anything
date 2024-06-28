@@ -247,3 +247,10 @@ signed long futex(uint32_t *uaddr, int futex_op, uint32_t val,
 				  const struct timespec *timeout, uint32_t *uaddr2, uint32_t val3) {
 	return __sysret(sys_futex(uaddr, futex_op, val, timeout, uaddr2, val3));
 }
+
+static __attribute__((noreturn,unused))
+void sys_exit_group(int status)
+{
+	my_syscall1(__NR_exit_group, status & 255);
+	while(1);
+}

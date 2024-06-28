@@ -7,6 +7,7 @@
 #include "loader.h"
 #include "mytypes.h"
 #include "config.h"
+#include "tls.h"
 
 #include <asm/siginfo.h>
 
@@ -81,8 +82,10 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_chdir, 38, 1),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchdir, 37, 1),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_exit, 40, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_exit_group, 39, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_chdir, 38, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchdir, 37, 0),
 #ifdef __NR_open
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 36, 0),
 #else
@@ -296,11 +299,23 @@ static ssize_t read_full(int fd, char *buf, size_t count)
 	return total;
 }
 
+static void context_fill(Context *ctx) {
+	pid_t tid = gettid();
+	trace_plus("gettid(): %u\n", tid);
+	ctx->tls = _tls_get(tid);
+	ctx->tls->tid = tid;
+}
+
+static void thread_exit() {
+	tls_free();
+}
+
 __attribute__((unused))
 static int handle_open(const char *path, int flags, mode_t mode) {
 	trace("open(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
 		.at = 0,
@@ -319,6 +334,7 @@ static int handle_openat(int dirfd, const char *path, int flags, mode_t mode) {
 	trace("openat(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallOpen call = {
 		.at = 1,
@@ -339,6 +355,7 @@ static int handle_stat(const char *path, void *statbuf) {
 	trace("stat(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
 		.type = STATTYPE_PLAIN,
@@ -356,6 +373,7 @@ static int handle_fstat(int fd, void *statbuf) {
 	trace("fstat()\n");
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
 		.type = STATTYPE_F,
@@ -374,6 +392,7 @@ static int handle_lstat(const char *path, void *statbuf) {
 	trace("lstat(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
 		.type = STATTYPE_L,
@@ -392,6 +411,7 @@ static int handle_newfstatat(int dirfd, const char *path, void *statbuf,
 	trace("newfstatat(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
 		.type = STATTYPE_AT,
@@ -412,6 +432,7 @@ static int handle_statx(int dirfd, const char *path, int flags,
 	trace("statx(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallStat call = {
 		.type = STATTYPE_X,
@@ -433,6 +454,7 @@ static ssize_t handle_readlink(const char *path, char *buf, size_t bufsiz) {
 	trace("readlink(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallReadlink call = {
 		.at = 0,
@@ -451,6 +473,7 @@ static ssize_t handle_readlinkat(int dirfd, const char *path, char *buf, size_t 
 	trace("readlinkat(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallReadlink call = {
 		.at = 1,
@@ -471,6 +494,7 @@ static int handle_access(const char *path, int mode) {
 	trace("access(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallAccess call = {
 		.at = 0,
@@ -488,6 +512,7 @@ static int handle_faccessat(int dirfd, const char *path, int mode) {
 	trace("accessat(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallAccess call = {
 		.at = 1,
@@ -506,6 +531,7 @@ static int handle_execve(const char *path, char *const argv[], char *const envp[
 	trace("execve(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallExec call = {
 		.at = 0,
@@ -525,6 +551,7 @@ static int handle_execveat(int dirfd, const char *path, char *const argv[],
 	trace("exeveat(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallExec call = {
 		.at = 1,
@@ -619,6 +646,7 @@ static int handle_link(const char *oldpath, const char *newpath) {
 	trace("link(%s, %s)\n", oldpath, newpath);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallLink call = {
 		.at = 0,
@@ -637,6 +665,7 @@ static int handle_linkat(int olddirfd, const char *oldpath, int newdirfd,
 	trace("linkat(%s, %s)\n", oldpath, newpath);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallLink call = {
 		.at = 1,
@@ -658,6 +687,7 @@ static int handle_symlink(const char *oldpath, const char *newpath) {
 	trace("symlink(%s, %s)\n", oldpath, newpath);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallLink call = {
 		.at = 0,
@@ -676,6 +706,7 @@ static int handle_symlinkat(const char *oldpath, int newdirfd,
 	trace("symlinkat(%s, %s)\n", oldpath, newpath);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallLink call = {
 		.at = 1,
@@ -695,6 +726,7 @@ static int handle_unlink(const char *pathname) {
 	trace("unlink(%s)\n", pathname);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallUnlink call = {
 		.at = 0,
@@ -711,6 +743,7 @@ static int handle_unlinkat(int dirfd, const char *pathname, int flags) {
 	trace("unlinkat(%s)\n", pathname);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallUnlink call = {
 		.at = 1,
@@ -729,6 +762,7 @@ static int handle_setxattr(const char *path, const char *name, const void *value
 	trace("setxattr(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_SET,
@@ -750,6 +784,7 @@ static int handle_lsetxattr(const char *path, const char *name, const void *valu
 	trace("lsetxattr(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_SET,
@@ -771,6 +806,7 @@ static int handle_fsetxattr(int fd, const char *name, const void *value, size_t 
 	trace("fsetxattr(%d)\n", fd);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_SET,
@@ -792,6 +828,7 @@ static ssize_t handle_getxattr(const char *path, const char *name, void *value, 
 	trace("getxattr(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_GET,
@@ -812,6 +849,7 @@ static ssize_t handle_lgetxattr(const char *path, const char *name, void *value,
 	trace("lgetxattr(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_GET,
@@ -832,6 +870,7 @@ static ssize_t handle_fgetxattr(int fd, const char *name, void *value, size_t si
 	trace("fgetxattr(%d)\n", fd);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_GET,
@@ -852,6 +891,7 @@ static ssize_t handle_listxattr(const char *path, char *list, size_t size) {
 	trace("listxattr(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_LIST,
@@ -871,6 +911,7 @@ static ssize_t handle_llistxattr(const char *path, char *list, size_t size) {
 	trace("llistxattr(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_LIST,
@@ -890,6 +931,7 @@ static ssize_t handle_flistxattr(int fd, char *list, size_t size) {
 	trace("flistxattr(%d)\n", fd);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_LIST,
@@ -909,6 +951,7 @@ static int handle_removexattr(const char *path, const char *name) {
 	trace("removexattr(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_REMOVE,
@@ -927,6 +970,7 @@ static int handle_lremovexattr(const char *path, const char *name) {
 	trace("lremovexattr(%s)\n", path);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_REMOVE,
@@ -945,6 +989,7 @@ static int handle_fremovexattr(int fd, const char *name) {
 	trace("fremovexattr(%d)\n", fd);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetSSize ret = { ._errno = errno };
 	CallXattr call = {
 		.type = XATTRTYPE_REMOVE,
@@ -964,6 +1009,7 @@ static int handle_rename(const char *oldpath, const char *newpath) {
 	trace("rename(%s, %s)\n", oldpath, newpath);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallRename call = {
 		.type = RENAMETYPE_PLAIN,
@@ -982,6 +1028,7 @@ static int handle_renameat(int olddirfd, const char *oldpath,
 	trace("renameat(%s, %s)\n", oldpath, newpath);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallRename call = {
 		.type = RENAMETYPE_AT,
@@ -1002,6 +1049,7 @@ static int handle_renameat2(int olddirfd, const char *oldpath,
 	trace("renameat2(%s, %s)\n", oldpath, newpath);
 
 	Context ctx;
+	context_fill(&ctx);
 	RetInt ret = { ._errno = errno };
 	CallRename call = {
 		.type = RENAMETYPE_AT2,
@@ -1026,6 +1074,24 @@ static int handle_chdir(const char *path) {
 static int handle_fchdir(int fd) {
 	trace("fchdir(%d)\n", fd);
 	return __sysret(sys_fchdir(fd));
+}
+
+static int handle_exit(int status) {
+	trace("exit(%u)\n", status);
+
+	thread_exit();
+
+	sys_exit(status);
+	return 0;
+}
+
+static int handle_exit_group(int status) {
+	trace("exit_group(%u)\n", status);
+
+	thread_exit();
+
+	sys_exit_group(status);
+	return 0;
 }
 
 static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
@@ -1238,6 +1304,14 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 			ret = handle_fchdir(args->arg1);
 		break;
 
+		case __NR_exit:
+			ret = handle_exit(args->arg1);
+		break;
+
+		case __NR_exit_group:
+			ret = handle_exit_group(args->arg1);
+		break;
+
 		default:
 			debug("Unhandled syscall no. %lu\n", args->num);
 			errno = ENOSYS;
@@ -1369,6 +1443,10 @@ static int _bottom_exec(Context *ctx, const This *this, CallExec *call) {
 	}
 	call->path = PREFIX "/opt/loader";
 	call->argv = new_argv;
+
+	// TODO: What if execve fails?
+	thread_exit();
+	ctx->tls = NULL;
 
 	// TODO: Properly emulate execveat
 	ret = __sysret(sys_execve(call->path, call->argv, call->envp));

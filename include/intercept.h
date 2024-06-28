@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include "tls.h"
 
 // I wanted 64k, but glibc vfork only allocates 32k stack
 // TODO: Allocate on heap
@@ -10,6 +11,7 @@ _Static_assert(SCRATCH_SIZE >= PATH_MAX, "SCRATCH_SIZE");
 typedef struct Context Context;
 struct Context {
 	char scratch[SCRATCH_SIZE];
+	Tls *tls;
 };
 
 typedef struct RetInt RetInt;
