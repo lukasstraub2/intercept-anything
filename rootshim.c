@@ -14,7 +14,7 @@ struct This {
 void randchar6(char *buf) {
 	int ret;
 	const char *table = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789";
-	const unsigned int len = 61;
+	const unsigned int len = strlen(table);
 	unsigned char rand[6];
 
 	ret = my_syscall3(__NR_getrandom, rand, 6, 0);

@@ -72,14 +72,21 @@ static TlsList *tls_search_linear(uint32_t tid) {
 	return NULL;
 }
 
-static TlsList *tls_alloc(TlsList *entry) {
+// TODO: This is not reentrant at all
+static TlsList *tls_alloc(TlsList *entry, uint32_t tid) {
+	Tls *tls;
 	trace("malloc()\n");
 
-	entry->data = malloc(sizeof(Tls));
-	if (!entry->data) {
+	tls = malloc(sizeof(Tls));
+	if (!tls) {
 		abort();
 	}
 
+	// nolibc implementation ensures tls is zero-initialized
+
+	TLS_WRITE(tls->tid, tid);
+
+	entry->data = tls;
 	return entry;
 }
 
@@ -105,7 +112,7 @@ static TlsList *tls_alloc_append(uint32_t tid) {
 			continue;
 		}
 
-		return tls_alloc(current_entry);
+		return tls_alloc(current_entry, tid);
 	}
 }
 
@@ -122,7 +129,7 @@ static TlsList *tls_alloc_sparse(uint32_t tid) {
 			continue;
 		}
 
-		return tls_alloc(current_entry);
+		return tls_alloc(current_entry, tid);
 	}
 
 	return NULL;
@@ -181,21 +188,21 @@ Tls *_tls_get(uint32_t tid) {
 	return NULL;
 }
 
-static void __tls_free(TlsList *tls) {
+static void __tls_free(TlsList *entry) {
 	uint32_t size = __atomic_load_n(&thread_data_size, __ATOMIC_ACQUIRE);
 	uint32_t actual_size = min(size, (uint32_t)TLS_LIST_ALLOC);
-	uint32_t idx = tls - thread_data;
+	uint32_t idx = entry - thread_data;
 	Spinlock expected = size;
 
-	free(tls->data);
-	tls->data = NULL;
+	free(entry->data);
+	entry->data = NULL;
 
 	if (idx == actual_size -1) {
 		__atomic_compare_exchange_n(&thread_data_size, &expected, actual_size -1,
 									0, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED);
 	}
 
-	__atomic_store_n(&tls->tid, 0, __ATOMIC_RELEASE);
+	__atomic_store_n(&entry->tid, 0, __ATOMIC_RELEASE);
 }
 
 void _tls_free(uint32_t tid) {

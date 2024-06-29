@@ -9,11 +9,6 @@ int main(int argc, char **argv) {
 			abort();
 		}
 
-		if (tls->tid) {
-			abort();
-		}
-		tls->tid = i;
-
 		if (!tls_search_binary(i)) {
 			abort();
 		}
@@ -51,11 +46,6 @@ int main(int argc, char **argv) {
 			abort();
 		}
 
-		if (tls->tid) {
-			abort();
-		}
-		tls->tid = i;
-
 		if (!tls_search_binary(i)) {
 			abort();
 		}
@@ -86,11 +76,6 @@ int main(int argc, char **argv) {
 		if (!tls) {
 			abort();
 		}
-
-		if (tls->tid) {
-			abort();
-		}
-		tls->tid = i;
 
 		if (!_tls_get(i)) {
 			abort();

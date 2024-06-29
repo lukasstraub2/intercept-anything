@@ -303,7 +303,6 @@ static void context_fill(Context *ctx) {
 	pid_t tid = gettid();
 	trace_plus("gettid(): %u\n", tid);
 	ctx->tls = _tls_get(tid);
-	ctx->tls->tid = tid;
 }
 
 static void thread_exit() {
