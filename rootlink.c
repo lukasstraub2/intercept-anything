@@ -215,6 +215,46 @@ static int rootlink_rename(Context *ctx, const This *this,
 	return this->next->rename(ctx, this->next->rename_next, &_call);
 }
 
+static int rootlink_chdir(Context *ctx, const This *this,
+						  const CallChdir *call) {
+	CallChdir _call;
+	callchdir_copy(&_call, call);
+
+	if (call->f) {
+		return this->next->chdir(ctx, this->next->chdir_next, call);
+	}
+
+	MANGLE_PATH(_call.path, -1);
+	return this->next->chdir(ctx, this->next->chdir_next, &_call);
+}
+
+static int rootlink_chmod(Context *ctx, const This *this,
+						  const CallChmod *call) {
+	CallChmod _call;
+	callchmod_copy(&_call, call);
+
+	if ((chmodtype_is_at(call->type) && call->path[0] != '/') ||
+			call->type == CHMODTYPE_F) {
+		return this->next->chmod(ctx, this->next->chmod_next, call);
+	}
+
+	MANGLE_PATH(_call.path, -1);
+	return this->next->chmod(ctx, this->next->chmod_next, &_call);
+}
+
+static int rootlink_truncate(Context *ctx, const This *this,
+							 const CallTruncate *call) {
+	CallTruncate _call;
+	calltruncate_copy(&_call, call);
+
+	if (call->f) {
+		return this->next->truncate(ctx, this->next->truncate_next, call);
+	}
+
+	MANGLE_PATH(_call.path, -1);
+	return this->next->truncate(ctx, this->next->truncate_next, &_call);
+}
+
 const CallHandler *rootlink_init(const CallHandler *next) {
 	static int initialized = 0;
 	static This this;
@@ -247,6 +287,12 @@ const CallHandler *rootlink_init(const CallHandler *next) {
 	this.this.xattr_next = &this;
 	this.this.rename = rootlink_rename;
 	this.this.rename_next = &this;
+	this.this.chdir = rootlink_chdir;
+	this.this.chdir_next = &this;
+	this.this.chmod = rootlink_chmod;
+	this.this.chmod_next = &this;
+	this.this.truncate = rootlink_truncate;
+	this.this.truncate_next = &this;
 
 	return &this.this;
 }
