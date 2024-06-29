@@ -1480,12 +1480,6 @@ static int read_header(char *out, size_t out_len, int fd) {
 			return -1;
 		}
 
-		ret = line_size(out, out_len);
-		if (ret < 0) {
-			return -1;
-		}
-
-		ret = max(ret, (ssize_t)sizeof(Elf_Ehdr)) +1;
 		out[ret -1] = '\0';
 		return ret;
 	} else {
@@ -1494,9 +1488,18 @@ static int read_header(char *out, size_t out_len, int fd) {
 			return -1;
 		}
 
-		ret = line_size(scratch, scratch_size);
-		if (ret < 0) {
+		if (ret < 2) {
+			errno = ENOEXEC;
 			return -1;
+		}
+
+		if (scratch[0] == '#' && scratch[1] == '!') {
+			ret = line_size(scratch, scratch_size);
+			if (ret < 0) {
+				return -1;
+			}
+		} else {
+			ret = 0;
 		}
 
 		return max(ret, (ssize_t)sizeof(Elf_Ehdr)) +1;
@@ -1554,18 +1557,12 @@ out:
 	char header[size];
 	ret = read_header(header, size, fd);
 	if (ret < 0) {
-		close(fd);
 		_ret->_errno = errno;
 		_ret->ret = -1;
+		close(fd);
 		goto out;
 	}
 	close(fd);
-
-	if (size < 2) {
-		_ret->_errno = ENOEXEC;
-		_ret->ret = -1;
-		goto out;
-	}
 
 	if (header[0] == '#' && header[1] == '!') {
 		int sh_argc = cmdline_argc(header, size);
