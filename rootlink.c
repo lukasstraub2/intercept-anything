@@ -255,6 +255,19 @@ static int rootlink_truncate(Context *ctx, const This *this,
 	return this->next->truncate(ctx, this->next->truncate_next, &_call);
 }
 
+static int rootlink_mkdir(Context *ctx, const This *this,
+						  const CallMkdir *call) {
+	CallMkdir _call;
+	callmkdir_copy(&_call, call);
+
+	if (call->at && call->path[0] != '/') {
+		return this->next->mkdir(ctx, this->next->mkdir_next, call);
+	}
+
+	MANGLE_PATH(_call.path, -1);
+	return this->next->mkdir(ctx, this->next->mkdir_next, &_call);
+}
+
 const CallHandler *rootlink_init(const CallHandler *next) {
 	static int initialized = 0;
 	static This this;
@@ -293,6 +306,8 @@ const CallHandler *rootlink_init(const CallHandler *next) {
 	this.this.chmod_next = &this;
 	this.this.truncate = rootlink_truncate;
 	this.this.truncate_next = &this;
+	this.this.mkdir = rootlink_mkdir;
+	this.this.mkdir_next = &this;
 
 	return &this.this;
 }
