@@ -278,3 +278,9 @@ int sys_ftruncate(int fd, off_t length)
 {
 	return my_syscall2(__NR_fchmod, fd, length);
 }
+
+static __attribute__((unused))
+int sys_mkdirat(int dirfd, const char *path, mode_t mode)
+{
+	return my_syscall3(__NR_mkdirat, dirfd, path, mode);
+}

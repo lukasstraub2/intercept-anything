@@ -83,6 +83,8 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mkdir, 47, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mkdirat, 46, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_truncate, 45, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_ftruncate, 44, 0),
 #ifdef __NR_chmod
@@ -1209,6 +1211,42 @@ static int handle_ftruncate(int fd, off_t length) {
 	return ret.ret;
 }
 
+static int handle_mkdir(const char *path, mode_t mode) {
+	trace("mkdir(%s)\n", path);
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { ._errno = errno };
+	CallMkdir call = {
+		.at = 0,
+		.path = path,
+		.mode = mode,
+		.ret = &ret
+	};
+
+	_next->mkdir(&ctx, _next->mkdir_next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+static int handle_mkdirat(int dirfd, const char *path, mode_t mode) {
+	trace("mkdirat(%s)\n", path);
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { ._errno = errno };
+	CallMkdir call = {
+		.at = 1,
+		.dirfd = dirfd,
+		.path = path,
+		.mode = mode,
+		.ret = &ret
+	};
+
+	_next->mkdir(&ctx, _next->mkdir_next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
 
 static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 	ssize_t ret;
@@ -1448,6 +1486,14 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 
 		case __NR_ftruncate:
 			ret = handle_ftruncate(args->arg1, args->arg2);
+		break;
+
+		case __NR_mkdir:
+			ret = handle_mkdir((const char *)args->arg1, args->arg2);
+		break;
+
+		case __NR_mkdirat:
+			ret = handle_mkdirat(args->arg1, (const char *)args->arg2, args->arg3);
 		break;
 
 		default:
@@ -2053,6 +2099,24 @@ static int bottom_truncate(Context *ctx, const This *this, const CallTruncate *c
 	return ret;
 }
 
+static int bottom_mkdir(Context *ctx, const This *this, const CallMkdir *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	if (call->at) {
+		ret = __sysret(sys_mkdirat(call->dirfd, call->path, call->mode));
+	} else {
+		ret = __sysret(sys_mkdir(call->path, call->mode));
+	}
+
+	_ret->ret = ret;
+	if (ret < 0) {
+		_ret->_errno = errno;
+	}
+
+	return ret;
+}
+
 static const CallHandler bottom = {
 	bottom_open,
 	NULL,
@@ -2080,4 +2144,6 @@ static const CallHandler bottom = {
 	NULL,
 	bottom_truncate,
 	NULL,
+	bottom_mkdir,
+	NULL
 };

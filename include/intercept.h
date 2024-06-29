@@ -399,6 +399,26 @@ static void calltruncate_copy(CallTruncate *dst, const CallTruncate *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct CallMkdir CallMkdir;
+struct CallMkdir {
+	int at;
+	int dirfd;
+	const char *path;
+	mode_t mode;
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void callmkdir_copy(CallMkdir *dst, const CallMkdir *call) {
+	dst->at = call->at;
+	if (call->at) {
+		dst->dirfd = call->dirfd;
+	}
+	dst->path = call->path;
+	dst->mode = call->mode;
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -428,6 +448,8 @@ struct CallHandler {
 	const This *chmod_next;
 	int (*truncate)(Context *ctx, const This *this, const CallTruncate *call);
 	const This *truncate_next;
+	int (*mkdir)(Context *ctx, const This *this, const CallMkdir *call);
+	const This *mkdir_next;
 };
 
 void intercept_init(int recursing);
