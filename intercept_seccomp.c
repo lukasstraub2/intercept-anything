@@ -83,7 +83,11 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+#ifdef __NR_mkdir
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mkdir, 47, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 47, 0),
+#endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mkdirat, 46, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_truncate, 45, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_ftruncate, 44, 0),
@@ -1211,6 +1215,7 @@ static int handle_ftruncate(int fd, off_t length) {
 	return ret.ret;
 }
 
+__attribute__((unused))
 static int handle_mkdir(const char *path, mode_t mode) {
 	trace("mkdir(%s)\n", path);
 
@@ -1488,9 +1493,11 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 			ret = handle_ftruncate(args->arg1, args->arg2);
 		break;
 
+#ifdef __NR_mkdir
 		case __NR_mkdir:
 			ret = handle_mkdir((const char *)args->arg1, args->arg2);
 		break;
+#endif
 
 		case __NR_mkdirat:
 			ret = handle_mkdirat(args->arg1, (const char *)args->arg2, args->arg3);
