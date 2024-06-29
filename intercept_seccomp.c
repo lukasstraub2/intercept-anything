@@ -8,6 +8,7 @@
 #include "mytypes.h"
 #include "config.h"
 #include "tls.h"
+#include "util.h"
 
 #include <asm/siginfo.h>
 
@@ -207,16 +208,6 @@ static int64_t array_len(char *const array[]) {
 
 static void array_copy(char *dest[], char *const source[], int64_t len) {
 	memcpy(dest, source, len * sizeof(char *));
-}
-
-static int line_size(char *buf, ssize_t size) {
-	for (int i = 0; i < size; i++) {
-		if (buf[i] == '\r' || buf[i] == '\n') {
-			return i + 1;
-		}
-	}
-
-	return size;
 }
 
 static int cmdline_argc(char *buf, ssize_t size) {
@@ -1458,15 +1449,73 @@ static int _bottom_exec(Context *ctx, const This *this, CallExec *call) {
 	return ret;
 }
 
+static int line_size(char *buf, ssize_t size) {
+	for (int i = 0; i < size; i++) {
+		if (buf[i] == '\r' || buf[i] == '\n') {
+			return i + 1;
+		}
+	}
+
+	errno = ENOEXEC;
+	return -1;
+}
+
+static int read_header(char *out, size_t out_len, int fd) {
+	ssize_t ret;
+	const size_t scratch_size = (12*1024);
+	char scratch[scratch_size];
+
+	if (out && !out_len) {
+		abort();
+	}
+
+	ret = lseek(fd, 0, SEEK_SET);
+	if (ret < 0) {
+		return -1;
+	}
+
+	if (out) {
+		ret = read_full(fd, out, out_len);
+		if (ret < 0) {
+			return -1;
+		}
+
+		ret = line_size(out, out_len);
+		if (ret < 0) {
+			return -1;
+		}
+
+		ret = max(ret, (ssize_t)sizeof(Elf_Ehdr)) +1;
+		out[ret -1] = '\0';
+		return ret;
+	} else {
+		ret = read_full(fd, scratch, scratch_size);
+		if (ret < 0) {
+			return -1;
+		}
+
+		ret = line_size(scratch, scratch_size);
+		if (ret < 0) {
+			return -1;
+		}
+
+		return max(ret, (ssize_t)sizeof(Elf_Ehdr)) +1;
+	}
+}
+
 static int bottom_exec(Context *ctx, const This *this,
 					   const CallExec *call) {
 	int fd;
-	int _errno = 0;
 	ssize_t ret, size;
 	RetInt *_ret = call->ret;
 	int64_t exec_argc;
 	CallExec _call;
 	callexec_copy(&_call, call);
+
+	if (0) {
+out:
+		return _ret->ret;
+	}
 
 	if (call->final || (call->at && call->path[0] != '/')) {
 		return _bottom_exec(ctx, this, &_call);
@@ -1493,16 +1542,24 @@ static int bottom_exec(Context *ctx, const This *this,
 		goto out;
 	}
 
-	char scratch[(12*1024)];
-	ret = read_full(fd, scratch, SCRATCH_SIZE);
-	_errno = errno;
-	close(fd);
+	ret = read_header(NULL, 0, fd);
 	if (ret < 0) {
-		_ret->_errno = _errno;
+		_ret->_errno = errno;
 		_ret->ret = -1;
+		close(fd);
 		goto out;
 	}
 	size = ret;
+
+	char header[size];
+	ret = read_header(header, size, fd);
+	if (ret < 0) {
+		close(fd);
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		goto out;
+	}
+	close(fd);
 
 	if (size < 2) {
 		_ret->_errno = ENOEXEC;
@@ -1510,13 +1567,8 @@ static int bottom_exec(Context *ctx, const This *this,
 		goto out;
 	}
 
-	if (scratch[0] == '#' && scratch[1] == '!') {
-		size = line_size(scratch, size) + 1;
-		char buf[size];
-		memcpy(buf, scratch, size);
-		buf[size - 1] = '\0';
-
-		int sh_argc = cmdline_argc(buf, size);
+	if (header[0] == '#' && header[1] == '!') {
+		int sh_argc = cmdline_argc(header, size);
 		if (sh_argc == 0) {
 			_ret->_errno = ENOEXEC;
 			_ret->ret = -1;
@@ -1526,7 +1578,7 @@ static int bottom_exec(Context *ctx, const This *this,
 		int64_t argc = exec_argc + sh_argc;
 		char *argv[argc +1];
 
-		cmdline_extract(buf, size, argv);
+		cmdline_extract(header, size, argv);
 		array_copy(argv + sh_argc, call->argv, exec_argc);
 		argv[sh_argc] = (char *) call->path;
 		argv[argc] = NULL;
@@ -1540,7 +1592,7 @@ static int bottom_exec(Context *ctx, const This *this,
 		return _next->exec(ctx, _next->exec_next, &_call);
 	}
 
-	if ((size_t)size < sizeof(Elf_Ehdr) || !check_ehdr((Elf_Ehdr*)scratch)) {
+	if ((size_t)size < sizeof(Elf_Ehdr) || !check_ehdr((Elf_Ehdr*)header)) {
 		_ret->_errno = ENOEXEC;
 		_ret->ret = -1;
 		goto out;
@@ -1549,7 +1601,6 @@ static int bottom_exec(Context *ctx, const This *this,
 	_call.final = 1;
 	_next->exec(ctx, _next->exec_next, &_call);
 
-out:
 	return _ret->ret;
 }
 
