@@ -15,7 +15,9 @@ struct This {
 
 static int handle_path(const char *path) {
 	return !strcmp_prefix(path, "/usr") ||
-			!strcmp_prefix(path, "/bin");
+			!strcmp_prefix(path, "/bin") ||
+			!strcmp_prefix(path, "/dev/shm") ||
+			!strcmp_prefix(path, "/tmp");
 }
 
 static ssize_t mangle_path(char *out, size_t out_len, const char *path) {
