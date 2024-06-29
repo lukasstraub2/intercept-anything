@@ -9,11 +9,10 @@ int main(int argc, char **argv) {
 			abort();
 		}
 
-		if (tls->data[0]) {
+		if (tls->tid) {
 			abort();
 		}
-
-		memcpy(tls->data, &i, sizeof(int));
+		tls->tid = i;
 
 		if (!tls_search_binary(i)) {
 			abort();
@@ -33,9 +32,7 @@ int main(int argc, char **argv) {
 			abort();
 		}
 
-		int stored;
-		memcpy(&stored, tls->data, sizeof(int));
-		if (stored != i) {
+		if (tls->tid != i) {
 			abort();
 		}
 	}
@@ -54,11 +51,10 @@ int main(int argc, char **argv) {
 			abort();
 		}
 
-		if (tls->data[0]) {
+		if (tls->tid) {
 			abort();
 		}
-
-		memcpy(tls->data, &i, sizeof(int));
+		tls->tid = i;
 
 		if (!tls_search_binary(i)) {
 			abort();
@@ -81,9 +77,7 @@ int main(int argc, char **argv) {
 		abort();
 	}
 
-	int stored;
-	memcpy(&stored, tls->data, sizeof(int));
-	if (stored != 1) {
+	if (tls->tid != 1) {
 		abort();
 	}
 
@@ -93,11 +87,11 @@ int main(int argc, char **argv) {
 			abort();
 		}
 
-		if (tls->data[0]) {
+		if (tls->tid) {
 			abort();
 		}
+		tls->tid = i;
 
-		memcpy(tls->data, &i, sizeof(int));
 		if (!_tls_get(i)) {
 			abort();
 		}
@@ -109,9 +103,7 @@ int main(int argc, char **argv) {
 			abort();
 		}
 
-		int stored;
-		memcpy(&stored, tls->data, sizeof(int));
-		if (stored != i) {
+		if (tls->tid != i) {
 			abort();
 		}
 
@@ -126,8 +118,7 @@ int main(int argc, char **argv) {
 		abort();
 	}
 
-	memcpy(&stored, tls->data, sizeof(int));
-	if (stored != 1) {
+	if (tls->tid != 1) {
 		abort();
 	}
 

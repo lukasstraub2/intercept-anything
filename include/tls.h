@@ -7,7 +7,7 @@
 typedef struct TlsList TlsList;
 typedef struct Tls Tls;
 struct Tls {
-	char data[4096];
+	pid_t tid;
 };
 
 TlsList *tls_search_binary(uint32_t tid);
