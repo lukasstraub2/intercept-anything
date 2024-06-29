@@ -83,6 +83,8 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_truncate, 45, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_ftruncate, 44, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_chmod, 43, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchmod, 42, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchmodat, 41, 0),
@@ -1166,6 +1168,43 @@ static int handle_fchmodat(int dirfd, const char *path, mode_t mode) {
 	return ret.ret;
 }
 
+static int handle_truncate(const char *path, off_t length) {
+	trace("truncate(%s)\n", path);
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { ._errno = errno };
+	CallTruncate call = {
+		.f = 0,
+		.path = path,
+		.length = length,
+		.ret = &ret
+	};
+
+	_next->truncate(&ctx, _next->truncate_next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+static int handle_ftruncate(int fd, off_t length) {
+	trace("ftruncate(%d)\n", fd);
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { ._errno = errno };
+	CallTruncate call = {
+		.f = 1,
+		.fd = fd,
+		.length = length,
+		.ret = &ret
+	};
+
+	_next->truncate(&ctx, _next->truncate_next, &call);
+	errno = ret._errno;
+	return ret.ret;
+}
+
+
 static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 	ssize_t ret;
 
@@ -1394,6 +1433,14 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 
 		case __NR_fchmodat:
 			ret = handle_fchmodat(args->arg1, (const char *)args->arg2, args->arg3);
+		break;
+
+		case __NR_truncate:
+			ret = handle_truncate((const char *)args->arg1, args->arg2);
+		break;
+
+		case __NR_ftruncate:
+			ret = handle_ftruncate(args->arg1, args->arg2);
 		break;
 
 		default:
@@ -1981,6 +2028,24 @@ static int bottom_chmod(Context *ctx, const This *this, const CallChmod *call) {
 	return ret;
 }
 
+static int bottom_truncate(Context *ctx, const This *this, const CallTruncate *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	if (call->f) {
+		ret = __sysret(sys_ftruncate(call->fd, call->length));
+	} else {
+		ret = __sysret(sys_truncate(call->path, call->length));
+	}
+
+	_ret->ret = ret;
+	if (ret < 0) {
+		_ret->_errno = errno;
+	}
+
+	return ret;
+}
+
 static const CallHandler bottom = {
 	bottom_open,
 	NULL,
@@ -2005,5 +2070,7 @@ static const CallHandler bottom = {
 	bottom_chdir,
 	NULL,
 	bottom_chmod,
-	NULL
+	NULL,
+	bottom_truncate,
+	NULL,
 };

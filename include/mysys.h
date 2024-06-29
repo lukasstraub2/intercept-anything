@@ -266,3 +266,15 @@ int sys_fchmodat(int dirfd, const char *path, mode_t mode)
 {
 	return my_syscall3(__NR_fchmodat, dirfd, path, mode);
 }
+
+static __attribute__((unused))
+int sys_truncate(const char *path, off_t length)
+{
+	return my_syscall2(__NR_fchmod, path, length);
+}
+
+static __attribute__((unused))
+int sys_ftruncate(int fd, off_t length)
+{
+	return my_syscall2(__NR_fchmod, fd, length);
+}

@@ -378,6 +378,27 @@ static void callchmod_copy(CallChmod *dst, const CallChmod *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct CallTruncate CallTruncate;
+struct CallTruncate {
+	int f;
+	int fd;
+	const char *path;
+	off_t length;
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void calltruncate_copy(CallTruncate *dst, const CallTruncate *call) {
+	dst->f = call->f;
+	if (call->f) {
+		dst->fd = call->fd;
+	} else {
+		dst->path = call->path;
+	}
+	dst->length = call->length;
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -405,6 +426,8 @@ struct CallHandler {
 	const This *chdir_next;
 	int (*chmod)(Context *ctx, const This *this, const CallChmod *call);
 	const This *chmod_next;
+	int (*truncate)(Context *ctx, const This *this, const CallTruncate *call);
+	const This *truncate_next;
 };
 
 void intercept_init(int recursing);
