@@ -3,6 +3,12 @@
 #include "types.h"
 #include "config.h"
 
+// Needed by libgcc due to atomics
+__attribute__((weak,unused,section(".text.nolibc___getauxval")))
+unsigned long __getauxval(unsigned long type) {
+	return getauxval(type);
+}
+
 typedef volatile uint32_t TlsAtomic32 __attribute__((aligned(8)));
 _Static_assert(__atomic_always_lock_free(sizeof(TlsAtomic32), 0), "TlsAtomic32");
 
