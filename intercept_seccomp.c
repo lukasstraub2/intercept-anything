@@ -1493,7 +1493,8 @@ static int bottom_exec(Context *ctx, const This *this,
 		goto out;
 	}
 
-	ret = read_full(fd, ctx->scratch, SCRATCH_SIZE);
+	char scratch[(12*1024)];
+	ret = read_full(fd, scratch, SCRATCH_SIZE);
 	_errno = errno;
 	close(fd);
 	if (ret < 0) {
@@ -1509,10 +1510,10 @@ static int bottom_exec(Context *ctx, const This *this,
 		goto out;
 	}
 
-	if (ctx->scratch[0] == '#' && ctx->scratch[1] == '!') {
-		size = line_size(ctx->scratch, size) + 1;
+	if (scratch[0] == '#' && scratch[1] == '!') {
+		size = line_size(scratch, size) + 1;
 		char buf[size];
-		memcpy(buf, ctx->scratch, size);
+		memcpy(buf, scratch, size);
 		buf[size - 1] = '\0';
 
 		int sh_argc = cmdline_argc(buf, size);
@@ -1539,7 +1540,7 @@ static int bottom_exec(Context *ctx, const This *this,
 		return _next->exec(ctx, _next->exec_next, &_call);
 	}
 
-	if ((size_t)size < sizeof(Elf_Ehdr) || !check_ehdr((Elf_Ehdr*)ctx->scratch)) {
+	if ((size_t)size < sizeof(Elf_Ehdr) || !check_ehdr((Elf_Ehdr*)scratch)) {
 		_ret->_errno = ENOEXEC;
 		_ret->ret = -1;
 		goto out;

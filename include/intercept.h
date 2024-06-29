@@ -6,7 +6,6 @@
 
 typedef struct Context Context;
 struct Context {
-	char scratch[SCRATCH_SIZE];
 	Tls *tls;
 };
 
