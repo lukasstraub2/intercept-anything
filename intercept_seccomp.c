@@ -85,7 +85,11 @@ static int install_filter() {
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_truncate, 45, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_ftruncate, 44, 0),
+#ifdef __NR_chmod
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_chmod, 43, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 43, 0),
+#endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchmod, 42, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchmodat, 41, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_exit, 40, 0),
@@ -1423,9 +1427,11 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 			ret = handle_exit_group(args->arg1);
 		break;
 
+#ifdef __NR_chmod
 		case __NR_chmod:
 			ret = handle_chmod((const char *)args->arg1, args->arg2);
 		break;
+#endif
 
 		case __NR_fchmod:
 			ret = handle_fchmod(args->arg1, args->arg2);
