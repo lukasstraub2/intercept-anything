@@ -928,17 +928,16 @@ static int hardlink_link(Context *ctx, const This *this,
 				goto err;
 			}
 		} else if ((statbuf.stx_mode & S_IFMT) == S_IFREG) {
-			size_t len;
 			char ino_buf[21];
-			const char *prefix = "ino_";
 			u64toa_r(statbuf.stx_ino, ino_buf);
-			len = strlen(prefix) + 21;
-			char file[len];
-			concat(file, len, prefix, ino_buf);
+			const char *prefix = "ino_";
+			const size_t file_len = strlen(prefix) + 21;
+			char file[file_len];
+			concat(file, file_len, prefix, ino_buf);
 
-			len = concat(NULL, 0, HARDLINK_PREFIX, file);
-			char linkname[len];
-			concat(linkname, len, HARDLINK_PREFIX, file);
+			const size_t linkname_len = concat(NULL, 0, HARDLINK_PREFIX, file);
+			char linkname[linkname_len];
+			concat(linkname, linkname_len, HARDLINK_PREFIX, file);
 
 			ret = access(linkname, F_OK);
 			if (ret == 0) {
