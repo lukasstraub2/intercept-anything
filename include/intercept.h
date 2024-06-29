@@ -324,6 +324,43 @@ static void callrename_copy(CallRename *dst, const CallRename *call) {
 	dst->ret = call->ret;
 }
 
+typedef enum ChmodType ChmodType;
+enum ChmodType {
+	CHMODTYPE_PLAIN,
+	CHMODTYPE_F,
+	CHMODTYPE_AT,
+};
+__attribute__((unused))
+static int chmodtype_is_at(ChmodType type) {
+	return type == CHMODTYPE_AT;
+}
+
+// New structure for chmod calls
+typedef struct CallChmod CallChmod;
+struct CallChmod {
+	ChmodType type;
+	union {
+		int fd;
+		int dirfd;
+	};
+	const char *path;
+	mode_t mode;
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void callchmod_copy(CallChmod *dst, const CallChmod *call) {
+	dst->type = call->type;
+	if (chmodtype_is_at(call->type)) {
+		dst->dirfd = call->dirfd;
+	} else if (call->type == CHMODTYPE_F) {
+		dst->fd = call->fd;
+	}
+	dst->path = call->path;
+	dst->mode = call->mode;
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -347,6 +384,8 @@ struct CallHandler {
 	const This *xattr_next;
 	int (*rename)(Context *ctx, const This *this, const CallRename *call);
 	const This *rename_next;
+	int (*chmod)(Context *ctx, const This *this, const CallChmod *call);
+	const This *chmod_next;
 };
 
 void intercept_init(int recursing);

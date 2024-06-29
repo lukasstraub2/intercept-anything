@@ -254,3 +254,15 @@ void sys_exit_group(int status)
 	my_syscall1(__NR_exit_group, status & 255);
 	while(1);
 }
+
+static __attribute__((unused))
+int sys_fchmod(int fd, mode_t mode)
+{
+	return my_syscall2(__NR_fchmod, fd, mode);
+}
+
+static __attribute__((unused))
+int sys_fchmodat(int dirfd, const char *path, mode_t mode)
+{
+	return my_syscall3(__NR_fchmodat, dirfd, path, mode);
+}
