@@ -1117,6 +1117,7 @@ static int handle_exit_group(int status) {
 	return 0;
 }
 
+__attribute__((unused))
 static int handle_chmod(const char *path, mode_t mode) {
 	trace("chmod(%s)\n", path);
 
