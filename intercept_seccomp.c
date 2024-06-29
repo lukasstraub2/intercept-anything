@@ -1061,12 +1061,36 @@ static int handle_renameat2(int olddirfd, const char *oldpath,
 
 static int handle_chdir(const char *path) {
 	trace("chdir(%s)\n", path);
-	return __sysret(sys_chdir(path));
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { ._errno = errno };
+	CallChdir call = {
+		.f = 0,
+		.path = path,
+		.ret = &ret
+	};
+
+	_next->chdir(&ctx, _next->chdir_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_fchdir(int fd) {
 	trace("fchdir(%d)\n", fd);
-	return __sysret(sys_fchdir(fd));
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { ._errno = errno };
+	CallChdir call = {
+		.f = 1,
+		.fd = fd,
+		.ret = &ret
+	};
+
+	_next->chdir(&ctx, _next->chdir_next, &call);
+	errno = ret._errno;
+	return ret.ret;
 }
 
 static int handle_exit(int status) {
@@ -1909,6 +1933,24 @@ static int bottom_rename(Context *ctx, const This *this,
 	return ret;
 }
 
+static int bottom_chdir(Context *ctx, const This *this, const CallChdir *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	if (call->f) {
+		ret = __sysret(sys_fchdir(call->fd));
+	} else {
+		ret = __sysret(sys_chdir(call->path));
+	}
+
+	_ret->ret = ret;
+	if (ret < 0) {
+		_ret->_errno = errno;
+	}
+
+	return ret;
+}
+
 static int bottom_chmod(Context *ctx, const This *this, const CallChmod *call) {
 	int ret;
 	RetInt *_ret = call->ret;
@@ -1959,6 +2001,8 @@ static const CallHandler bottom = {
 	bottom_xattr,
 	NULL,
 	bottom_rename,
+	NULL,
+	bottom_chdir,
 	NULL,
 	bottom_chmod,
 	NULL

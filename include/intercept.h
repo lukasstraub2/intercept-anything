@@ -324,6 +324,25 @@ static void callrename_copy(CallRename *dst, const CallRename *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct CallChdir CallChdir;
+struct CallChdir {
+	int f;
+	int fd;
+	const char *path;
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void callchdir_copy(CallChdir *dst, const CallChdir *call) {
+	dst->f = call->f;
+	if (call->f) {
+		dst->fd = call->fd;
+	} else {
+		dst->path = call->path;
+	}
+	dst->ret = call->ret;
+}
+
 typedef enum ChmodType ChmodType;
 enum ChmodType {
 	CHMODTYPE_PLAIN,
@@ -339,10 +358,8 @@ static int chmodtype_is_at(ChmodType type) {
 typedef struct CallChmod CallChmod;
 struct CallChmod {
 	ChmodType type;
-	union {
-		int fd;
-		int dirfd;
-	};
+	int fd;
+	int dirfd;
 	const char *path;
 	mode_t mode;
 	RetInt *ret;
@@ -384,6 +401,8 @@ struct CallHandler {
 	const This *xattr_next;
 	int (*rename)(Context *ctx, const This *this, const CallRename *call);
 	const This *rename_next;
+	int (*chdir)(Context *ctx, const This *this, const CallChdir *call);
+	const This *chdir_next;
 	int (*chmod)(Context *ctx, const This *this, const CallChmod *call);
 	const This *chmod_next;
 };
