@@ -43,7 +43,7 @@ void intercept_init(int recursing) {
 
 	sig.sa_handler = handler;
 	//sigemptyset(&sig.sa_mask);
-	sig.sa_flags = SA_SIGINFO;
+	sig.sa_flags = SA_NODEFER | SA_SIGINFO;
 
 	sigaction(SIGSYS, &sig, NULL);
 	unblock_sigsys();
