@@ -177,6 +177,21 @@ struct CallLink {
 	RetInt *ret;
 };
 
+__attribute__((unused))
+static void calllink_copy(CallLink *dst, const CallLink *call) {
+	dst->at = call->at;
+
+	if (dst->at) {
+		dst->olddirfd = call->olddirfd;
+		dst->newdirfd = call->newdirfd;
+		dst->flags = call->flags;
+	}
+
+	dst->oldpath = call->oldpath;
+	dst->newpath = call->newpath;
+	dst->ret = call->ret;
+}
+
 typedef struct CallUnlink CallUnlink;
 struct CallUnlink {
 	int at;
@@ -185,6 +200,19 @@ struct CallUnlink {
 	int flags;
 	RetInt *ret;
 };
+
+__attribute__((unused))
+static void callunlink_copy(CallUnlink *dst, const CallUnlink *call) {
+	dst->at = call->at;
+
+	if (dst->at) {
+		dst->dirfd = call->dirfd;
+		dst->flags = call->flags;
+	}
+
+	dst->path = call->path;
+	dst->ret = call->ret;
+}
 
 typedef enum XattrType XattrType;
 enum XattrType {
