@@ -872,6 +872,55 @@ static int hardlink_exec(Context *ctx, const This *this, const CallExec *call) {
 	return _ret->ret;
 }
 
+static size_t make_linkname(char *out, size_t out_len, uint64_t ino) {
+	const char *prefix = "ino_";
+	const size_t prefix_len = strlen(prefix);
+	const size_t hardlink_prefix_len = strlen(HARDLINK_PREFIX);
+	const size_t len = hardlink_prefix_len + 21 + 1 + prefix_len + 21;
+	const uint64_t ino_hash = ino % 1499;
+	size_t pos = 0;
+
+	if (!out) {
+		return len;
+	}
+
+	if (out_len != len) {
+		abort();
+	}
+
+	memcpy(out + pos, HARDLINK_PREFIX, hardlink_prefix_len);
+	pos += hardlink_prefix_len;
+
+	pos += u64toa_r(ino_hash, out + pos);
+
+	out[pos] = '/';
+	pos += 1;
+
+	memcpy(out + pos, prefix, prefix_len);
+	pos += prefix_len;
+
+	pos += u64toa_r(ino, out + pos);
+
+	return pos +1;
+}
+
+static int hash_mkdir(char *linkname) {
+	int ret;
+	char *slash = strrchr(linkname, '/');
+
+	*slash = '\0';
+	ret = mkdir(linkname, 0777);
+	*slash = '/';
+
+	if (ret < 0) {
+		if (errno != EEXIST) {
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 static int hardlink_link(Context *ctx, const This *this,
 						 const CallLink *call) {
 	int ret, lock_fd;
@@ -928,16 +977,15 @@ static int hardlink_link(Context *ctx, const This *this,
 				goto err;
 			}
 		} else if ((statbuf.stx_mode & S_IFMT) == S_IFREG) {
-			char ino_buf[21];
-			u64toa_r(statbuf.stx_ino, ino_buf);
-			const char *prefix = "ino_";
-			const size_t file_len = strlen(prefix) + 21;
-			char file[file_len];
-			concat(file, file_len, prefix, ino_buf);
+			const size_t linkname_len = make_linkname(NULL, 0, statbuf.stx_ino);
 
-			const size_t linkname_len = concat(NULL, 0, HARDLINK_PREFIX, file);
 			char linkname[linkname_len];
-			concat(linkname, linkname_len, HARDLINK_PREFIX, file);
+			make_linkname(linkname, linkname_len, statbuf.stx_ino);
+
+			ret = hash_mkdir(linkname);
+			if (ret < 0) {
+				goto err;
+			}
 
 			ret = access(linkname, F_OK);
 			if (ret == 0) {
