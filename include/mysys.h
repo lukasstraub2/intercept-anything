@@ -284,3 +284,9 @@ int sys_mkdirat(int dirfd, const char *path, mode_t mode)
 {
 	return my_syscall3(__NR_mkdirat, dirfd, path, mode);
 }
+
+static __attribute__((unused))
+int sys_getdents(int fd, void *dirp, int count)
+{
+	return my_syscall3(__NR_getdents, fd, dirp, count);
+}

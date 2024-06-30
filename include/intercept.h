@@ -419,6 +419,24 @@ static void callmkdir_copy(CallMkdir *dst, const CallMkdir *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct CallGetdents CallGetdents;
+struct CallGetdents {
+	int is64;
+	int fd;
+	void *dirp;
+	size_t count;
+	RetSSize *ret;
+};
+
+__attribute__((unused))
+static void callgetdents_copy(CallGetdents *dst, const CallGetdents *call) {
+	dst->is64 = call->is64;
+	dst->fd = call->fd;
+	dst->dirp = call->dirp;
+	dst->count = call->count;
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -450,6 +468,8 @@ struct CallHandler {
 	const This *truncate_next;
 	int (*mkdir)(Context *ctx, const This *this, const CallMkdir *call);
 	const This *mkdir_next;
+	ssize_t (*getdents)(Context *ctx, const This *this, const CallGetdents *call);
+	const This *getdents_next;
 };
 
 void intercept_init(int recursing);
