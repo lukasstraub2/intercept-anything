@@ -288,5 +288,9 @@ int sys_mkdirat(int dirfd, const char *path, mode_t mode)
 static __attribute__((unused))
 int sys_getdents(int fd, void *dirp, int count)
 {
+#ifdef __NR_getdents
 	return my_syscall3(__NR_getdents, fd, dirp, count);
+#else
+	return __nolibc_enosys(__func__, fd, dirp, count);
+#endif
 }

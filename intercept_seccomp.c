@@ -83,7 +83,11 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+#ifdef __NR_getdents
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getdents, 49, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 49, 0),
+#endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getdents64, 48, 0),
 #ifdef __NR_mkdir
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mkdir, 47, 0),
@@ -1255,6 +1259,7 @@ static int handle_mkdirat(int dirfd, const char *path, mode_t mode) {
 	return ret.ret;
 }
 
+__attribute__((unused))
 static ssize_t handle_getdents(int fd, void *dirp, size_t count) {
 	trace("getdents(%d)\n", fd);
 
@@ -1544,9 +1549,11 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 			ret = handle_mkdirat(args->arg1, (const char *)args->arg2, args->arg3);
 		break;
 
+#ifdef __NR_getdents
 		case __NR_getdents:
 			ret = handle_getdents(args->arg1, (void *)args->arg2, args->arg3);
 		break;
+#endif
 
 		case __NR_getdents64:
 			ret = handle_getdents64(args->arg1, (void *)args->arg2, args->arg3);
