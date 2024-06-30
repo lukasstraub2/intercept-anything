@@ -1216,6 +1216,58 @@ static int mkpath(const char *_file_path, mode_t mode) {
 	return 0;
 }
 
+struct linux_dirent {
+	unsigned long d_ino;
+	unsigned long d_off;
+	unsigned short d_reclen;
+	char d_name[];
+};
+
+static ssize_t hardlink_getdents(Context *ctx, const This *this,
+								 const CallGetdents *call) {
+	int ret, lock_fd;
+	RetSSize *_ret = call->ret;
+
+	ret = lock(this, LOCK_SH);
+	if (ret < 0) {
+		_ret->_errno = errno;
+		_ret->ret = -1;
+		return -1;
+	}
+	lock_fd = ret;
+
+	this->next->getdents(ctx, this->next->getdents_next, call);
+
+	if (_ret->ret >= 0) {
+		ssize_t size = _ret->ret;
+		if (call->is64) {
+			struct linux_dirent64 *dirp = call->dirp;
+			for (int i = 0; i < size; i++) {
+				dirp[i].d_type = DT_UNKNOWN;
+			}
+		} else {
+			struct linux_dirent *dirp = call->dirp;
+			for (int i = 0; i < size; i++) {
+				unsigned char *d_type = (unsigned char *)dirp;
+				d_type += dirp[i].d_reclen -1;
+				*d_type = DT_UNKNOWN;
+			}
+		}
+	}
+
+	ret = unlock(lock_fd);
+	if (ret < 0) {
+		goto err;
+	}
+	return _ret->ret;
+
+err:
+	_ret->_errno = errno;
+	unlock(lock_fd);
+	_ret->ret = -1;
+	return -1;
+}
+
 const CallHandler *hardlinkshim_init(const CallHandler *next,
 									 const CallHandler *bottom) {
 	static This this;
@@ -1252,6 +1304,8 @@ const CallHandler *hardlinkshim_init(const CallHandler *next,
 	this.this.xattr_next = &this;
 	this.this.rename = hardlink_rename;
 	this.this.rename_next = &this;
+	this.this.getdents = hardlink_getdents;
+	this.this.getdents_next = &this;
 
 	ret = mkpath(HARDLINK_PREFIX LOCKFILE, 0777);
 	if (ret < 0) {
