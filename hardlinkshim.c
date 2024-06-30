@@ -1239,18 +1239,20 @@ static ssize_t hardlink_getdents(Context *ctx, const This *this,
 	this->next->getdents(ctx, this->next->getdents_next, call);
 
 	if (_ret->ret >= 0) {
+		char *buf = call->dirp;
 		ssize_t size = _ret->ret;
 		if (call->is64) {
-			struct linux_dirent64 *dirp = call->dirp;
-			for (int i = 0; i < size; i++) {
-				dirp[i].d_type = DT_UNKNOWN;
+			for (ssize_t pos = 0; pos < size;) {
+				struct linux_dirent64 *dirp = (struct linux_dirent64 *) buf + pos;
+				dirp->d_type = DT_UNKNOWN;
+				pos += dirp->d_reclen;
 			}
 		} else {
-			struct linux_dirent *dirp = call->dirp;
-			for (int i = 0; i < size; i++) {
-				unsigned char *d_type = (unsigned char *)dirp;
-				d_type += dirp[i].d_reclen -1;
+			for (ssize_t pos = 0; pos < size;) {
+				struct linux_dirent *dirp = (struct linux_dirent *) buf + pos;
+				char *d_type = buf + pos + dirp->d_reclen -1;
 				*d_type = DT_UNKNOWN;
+				pos += dirp->d_reclen;
 			}
 		}
 	}
