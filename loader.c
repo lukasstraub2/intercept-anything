@@ -146,9 +146,12 @@ int main(int argc, char **argv, char **envp)
 		exit_error("no input file");
 	file = argv[1];
 
+	int recursing = !strcmp(argv[0], "loader_recurse");
+	intercept_init(recursing);
+
 	for (i = 0;; i++, ehdr++) {
 		/* Open file, read and than check ELF header.*/
-		if ((fd = open(file, O_RDONLY)) < 0)
+		if ((fd = handle_openat(AT_FDCWD, file, O_RDONLY, 0)) < 0)
 			exit_error("can't open %s", file);
 		if (read(fd, ehdr, sizeof(*ehdr)) != sizeof(*ehdr))
 			exit_error("can't read ELF header %s", file);
@@ -210,9 +213,6 @@ int main(int argc, char **argv, char **envp)
 	}
 #undef AVSET
 	++av;
-
-	int recursing = !strcmp(argv[0], "loader_recurse");
-	intercept_init(recursing);
 
 	/* Shift argv, env and av. */
 	memcpy(&argv[0], &argv[1],

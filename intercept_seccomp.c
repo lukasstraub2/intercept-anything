@@ -341,7 +341,7 @@ static int handle_open(const char *path, int flags, mode_t mode) {
 	return ret.ret;
 }
 
-static int handle_openat(int dirfd, const char *path, int flags, mode_t mode) {
+int handle_openat(int dirfd, const char *path, int flags, mode_t mode) {
 	trace("openat(%s)\n", path);
 
 	Context ctx;

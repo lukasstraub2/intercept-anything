@@ -474,3 +474,5 @@ struct CallHandler {
 
 void intercept_init(int recursing);
 const CallHandler *main_init(const CallHandler *bottom);
+
+int handle_openat(int dirfd, const char *path, int flags, mode_t mode);
