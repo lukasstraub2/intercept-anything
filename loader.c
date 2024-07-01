@@ -44,11 +44,6 @@
 			 (((x) & PF_X) ? PROT_EXEC : 0))
 #define LOAD_ERR	((unsigned long)-1)
 
-static void z_fini(void)
-{
-	printf("Fini at work\n");
-}
-
 int check_ehdr(Elf_Ehdr *ehdr)
 {
 	unsigned char *e_ident = ehdr->e_ident;
@@ -223,11 +218,12 @@ int main(int argc, char **argv, char **envp)
 	memcpy(&argv[0], &argv[1],
 		 (unsigned long)av - (unsigned long)&argv[1]);
 	environ--;
+	_auxv--;
 	/* SP points to argc. */
 	(*sp)--;
 
 	z_trampo((void (*)(void))(elf_interp ?
-			entry[Z_INTERP] : entry[Z_PROG]), sp, z_fini);
+			entry[Z_INTERP] : entry[Z_PROG]), sp, NULL);
 	/* Should not reach. */
 	exit(0);
 }
