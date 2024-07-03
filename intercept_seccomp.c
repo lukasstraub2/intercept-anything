@@ -23,6 +23,9 @@
 static const CallHandler bottom;
 static const CallHandler *_next = NULL;
 
+static char _self_exe[SCRATCH_SIZE];
+const char *self_exe = _self_exe;
+
 static int install_filter();
 static void handler(int sig, siginfo_t *info, void *ucontext);
 static unsigned long handle_syscall(SysArgs *args, void *ucontext);
@@ -32,14 +35,20 @@ static void unblock_sigsys() {
 	sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, NULL, sizeof(unblock));
 }
 
-void intercept_init(int recursing) {
+void intercept_init(int recursing, const char *exe) {
 	struct sigaction sig = {0};
 	static int initialized = 0;
+	size_t exe_len = strlen(exe) +1;
 
 	if (initialized) {
 		return;
 	}
 	initialized = 1;
+
+	if (exe_len > SCRATCH_SIZE) {
+		abort();
+	}
+	memcpy(_self_exe, exe, exe_len);
 
 	sig.sa_handler = handler;
 	//sigemptyset(&sig.sa_mask);

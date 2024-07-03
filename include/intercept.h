@@ -472,7 +472,9 @@ struct CallHandler {
 	const This *getdents_next;
 };
 
-void intercept_init(int recursing);
+extern const char *self_exe;
+
+void intercept_init(int recursing, const char *exe);
 const CallHandler *main_init(const CallHandler *bottom);
 
 int handle_openat(int dirfd, const char *path, int flags, mode_t mode);

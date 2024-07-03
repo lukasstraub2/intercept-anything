@@ -33,7 +33,7 @@
 #define DEBUG_ENV "DEBUG_LOADER"
 #include "debug.h"
 
-#define alloca	__builtin_alloca
+#include "util.h"
 
 #define PAGE_SIZE	4096
 #define ALIGN		(PAGE_SIZE - 1)
@@ -147,7 +147,7 @@ int main(int argc, char **argv, char **envp)
 	file = argv[1];
 
 	int recursing = !strcmp(argv[0], "loader_recurse");
-	intercept_init(recursing);
+	intercept_init(recursing, argv[1]);
 
 	for (i = 0;; i++, ehdr++) {
 		/* Open file, read and than check ELF header.*/
