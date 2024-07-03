@@ -129,7 +129,8 @@ fail:
 }
 
 static ssize_t handle_exe(Shim *shim, ssize_t shim_len) {
-	const ssize_t len = strlen(self_exe) +1;
+	const ssize_t exe_len = strlen(self_exe) +1;
+	const ssize_t len = sizeof(Shim) + exe_len;
 
 	if (!shim) {
 		return len;
@@ -141,7 +142,7 @@ static ssize_t handle_exe(Shim *shim, ssize_t shim_len) {
 
 	shim->is_handled = 1;
 	shim->is_symlink = 1;
-	memcpy(shim->target, self_exe, len);
+	memcpy(shim->target, self_exe, exe_len);
 
 	return 0;
 }
