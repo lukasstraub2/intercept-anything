@@ -32,7 +32,8 @@ static int handle_path(const char *path) {
 			!strcmp(path, "/etc/publickey") ||
 			!strcmp(path, "/etc/rpc") ||
 			!strcmp(path, "/etc/services") ||
-			!strcmp(path, "/etc/shadow");
+			!strcmp(path, "/etc/shadow") ||
+			!strcmp(path, "/etc/resolv.conf");
 }
 
 static ssize_t mangle_path(char *out, size_t out_len, const char *path) {
