@@ -19,7 +19,20 @@ static int handle_path(const char *path) {
 			!strcmp_prefix(path, "/dev/shm") ||
 			!strcmp_prefix(path, "/tmp") ||
 			!strcmp_prefix(path, "/lib") ||
-			!strcmp_prefix(path, "/lib64");
+			!strcmp_prefix(path, "/lib64") ||
+			!strcmp(path, "/etc/nsswitch.conf") ||
+			!strcmp(path, "/etc/aliases") ||
+			!strcmp(path, "/etc/ethers") ||
+			!strcmp(path, "/etc/group") ||
+			!strcmp(path, "/etc/hosts") ||
+			!strcmp(path, "/etc/netgroup") ||
+			!strcmp(path, "/etc/networks") ||
+			!strcmp(path, "/etc/passwd") ||
+			!strcmp(path, "/etc/protocols") ||
+			!strcmp(path, "/etc/publickey") ||
+			!strcmp(path, "/etc/rpc") ||
+			!strcmp(path, "/etc/services") ||
+			!strcmp(path, "/etc/shadow");
 }
 
 static ssize_t mangle_path(char *out, size_t out_len, const char *path) {
