@@ -160,3 +160,76 @@ ssize_t readlink_cache(Cache *cache, char *out, size_t out_len,
 		}
 	}
 }
+
+ssize_t concatat(Cache *cache, char *out, size_t out_len,
+				 int dirfd, const char *path) {
+	ssize_t ret;
+	const size_t path_len = strlen(path);
+	char dirfd_buf[21];
+	itoa_r(dirfd, dirfd_buf);
+
+	if (out && !out_len) {
+		abort();
+	}
+
+	if (path[0] == '/') {
+		if (!out) {
+			return path_len +1;
+		} else {
+			if (path_len +1 > out_len) {
+				return -ERANGE;
+			}
+
+			memcpy(out, path, path_len +1);
+			return path_len +1;
+		}
+	}
+
+	const char *prefix = "/proc/self/fd/";
+	const ssize_t prefix_len = strlen(prefix) +1;
+	const ssize_t fd_path_len = prefix_len + 21;
+	char fd_path[fd_path_len];
+	ret = concat(fd_path, fd_path_len, prefix, dirfd_buf);
+	if (ret > fd_path_len) {
+		abort();
+	}
+
+	if (!out) {
+		if (dirfd == AT_FDCWD) {
+			ret = getcwd_cache(cache, NULL, 0);
+		} else {
+			ret = readlink_cache(cache, NULL, 0, AT_FDCWD, fd_path);
+		}
+		if (ret < 0) {
+			if (ret == -ENOENT) {
+				ret = -EBADF;
+			}
+			return ret;
+		}
+
+		return ret + path_len +1;
+	} else {
+		size_t fd_target_len = out_len - (path_len + 1);
+
+		if (dirfd == AT_FDCWD) {
+			ret = getcwd_cache(cache, out, fd_target_len);
+		} else {
+			ret = readlink_cache(cache, out, fd_target_len, AT_FDCWD, fd_path);
+		}
+		if (ret < 0) {
+			if (ret == -ENOENT) {
+				ret = -EBADF;
+			}
+			return ret;
+		}
+
+		if ((ret + path_len +1) > out_len) {
+			return -ERANGE;
+		}
+
+		out[fd_target_len -1] = '/';
+		memcpy(out + fd_target_len, path, path_len +1);
+
+		return ret + path_len +1;
+	}
+}

@@ -324,60 +324,18 @@ static int is_inside_prefixat(Context *ctx, const This *this, int dirfd,
 							  const char *path) {
 	ssize_t ret;
 	Cache *cache = &ctx->tls->cache;
-	char dirfd_buf[21];
-	itoa_r(dirfd, dirfd_buf);
 
-	if (path[0] == '/') {
-		return is_inside_prefix(this, path);
-	}
-
-	const char *prefix = "/proc/self/fd/";
-	const ssize_t prefix_len = strlen(prefix) +1;
-	const ssize_t fd_path_len = prefix_len + 21;
-	char fd_path[fd_path_len];
-	ret = concat(fd_path, fd_path_len, prefix, dirfd_buf);
-	if (ret > fd_path_len) {
-		abort();
-	}
-
-	if (dirfd == AT_FDCWD) {
-		ret = getcwd_cache(cache, NULL, 0);
-	} else {
-		ret = readlink_cache(cache, NULL, 0, AT_FDCWD, fd_path);
-	}
+	ret = concatat(cache, NULL, 0, dirfd, path);
 	if (ret < 0) {
-		if (ret == -ENOENT) {
-			ret = -EBADF;
-		}
 		return ret;
 	}
 	if (ret > SCRATCH_SIZE) {
 		return -ENAMETOOLONG;
 	}
 
-	ssize_t fd_target_len = ret +1;
-	char fd_target[fd_target_len];
-	if (dirfd == AT_FDCWD) {
-		ret = getcwd_cache(cache, fd_target, fd_target_len -1);
-	} else {
-		ret = readlink_cache(cache, fd_target, fd_target_len -1, AT_FDCWD,
-							 fd_path);
-	}
+	char fullpath[ret];
+	ret = concatat(cache, fullpath, ret, dirfd, path);
 	if (ret < 0) {
-		abort();
-	}
-	fd_target[fd_target_len -2] = '/';
-	fd_target[fd_target_len -1] = '\0';
-
-	ret = concat(NULL, 0, fd_target, path);
-	if (ret > SCRATCH_SIZE) {
-		return -ENAMETOOLONG;
-	}
-
-	ssize_t fullpath_len = ret;
-	char fullpath[fullpath_len];
-	ret = concat(fullpath, fullpath_len, fd_target, path);
-	if (ret > fullpath_len) {
 		abort();
 	}
 
