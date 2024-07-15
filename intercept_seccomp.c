@@ -1788,7 +1788,7 @@ out:
 	ret = read_header(NULL, 0, fd);
 	if (ret < 0) {
 		_ret->ret = ret;
-		close(fd);
+		sys_close(fd);
 		goto out;
 	}
 	size = ret;
@@ -1797,10 +1797,10 @@ out:
 	ret = read_header(header, size, fd);
 	if (ret < 0) {
 		_ret->ret = ret;
-		close(fd);
+		sys_close(fd);
 		goto out;
 	}
-	close(fd);
+	sys_close(fd);
 
 	if (header[0] == '#' && header[1] == '!') {
 		int sh_argc = cmdline_argc(header, size);

@@ -57,7 +57,7 @@ static int unlock(int fd) {
 	int ret;
 
 	ret = sys_flock(fd, LOCK_UN);
-	close(fd);
+	sys_close(fd);
 	if (ret < 0) {
 		return ret;
 	}
