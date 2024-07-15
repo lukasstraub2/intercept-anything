@@ -190,19 +190,16 @@ static int cnt_add(char *linkname, int add) {
 	return ret;
 }
 
-static ssize_t readlink_cache(Context *ctx, char *out, size_t out_len,
-							  int dirfd, const char *path);
-
 static int cnt_read_hardlink(Context *ctx, int dirfd, const char *path) {
 	int ret;
 
-	ret = readlink_cache(ctx, NULL, 0, dirfd, path);
+	ret = readlink_cache(&ctx->tls->cache, NULL, 0, dirfd, path);
 	if (ret < 0) {
 		return ret;
 	}
 
 	char target[ret];
-	ret = readlink_cache(ctx, target, ret, dirfd, path);
+	ret = readlink_cache(&ctx->tls->cache, target, ret, dirfd, path);
 	if (ret < 0) {
 		abort();
 	}
@@ -215,144 +212,10 @@ static int cnt_read_hardlink(Context *ctx, int dirfd, const char *path) {
 	return ret;
 }
 
-static int getcwd_cache_hit(Cache *cache) {
-	return cache->type == CACHETYPE_GETCWD;
-}
-
-static int getcwd_cache(Context *ctx, char *out, size_t out_len) {
-	Tls *tls = ctx->tls;
-	Cache *cache = &tls->cache;
-	// This function is reentrant as it accesses global thread data
-
-	if (out && !out_len) {
-		abort();
-	}
-
-	while (1) {
-		uint32_t cnt = TLS_INC_FETCH(cache->reentrant_cnt);
-		TLS_BARRIER();
-
-		if (out && getcwd_cache_hit(cache)) {
-			unsigned int ret = cache->out_len;
-
-			if (ret > out_len) {
-				return -ERANGE;
-			}
-
-			memcpy(out, cache->out, min(out_len, ret));
-
-			TLS_BARRIER();
-			if (cnt != TLS_READ(cache->reentrant_cnt)) {
-				continue;
-			}
-			return ret;
-		}
-
-		if (out) {
-			int ret = sys_getcwd(out, out_len);
-			if (ret < 0) {
-				return ret;
-			}
-			return ret;
-		} else {
-			cache->type = CACHETYPE_GETCWD;
-
-			int ret = sys_getcwd(cache->out, SCRATCH_SIZE);
-			if (ret < 0) {
-				return ret;
-			}
-
-			cache->out_len = ret;
-			TLS_BARRIER();
-			if (cnt != TLS_READ(cache->reentrant_cnt)) {
-				continue;
-			}
-			return ret;
-		}
-	}
-}
-
-static ssize_t _readlinkat(int dirfd, const char *path, char *out,
-						   size_t out_len) {
-	ssize_t ret;
-
-	ret = sys_readlinkat(dirfd, path, out, out_len);
-	if (ret < 0) {
-		return ret;
-	} else if ((size_t)ret == out_len) {
-		return -ERANGE;
-	}
-	out[ret] = '\0';
-
-	return ret +1;
-}
-
-static int readlink_cache_hit(Cache *cache, int dirfd, const char *path) {
-	return cache->type == CACHETYPE_READLINK
-			&& dirfd == cache->in_dirfd
-			&& !strcmp(path, cache->in_path);
-}
-
-static ssize_t readlink_cache(Context *ctx, char *out, size_t out_len,
-							  int dirfd, const char *path) {
-	Tls *tls = ctx->tls;
-	Cache *cache = &tls->cache;
-	// This function is reentrant as it accesses global thread data
-
-	if (out && !out_len) {
-		abort();
-	}
-
-	while (1) {
-		uint32_t cnt = TLS_INC_FETCH(cache->reentrant_cnt);
-		TLS_BARRIER();
-
-		if (out && readlink_cache_hit(cache, dirfd, path)) {
-			size_t ret = cache->out_len;
-			memcpy(out, cache->out, min(out_len, ret));
-
-			if (ret > out_len) {
-				return -ERANGE;
-			}
-
-			TLS_BARRIER();
-			if (cnt != TLS_READ(cache->reentrant_cnt)) {
-				continue;
-			}
-			return ret;
-		}
-
-		if (out) {
-			ssize_t ret = _readlinkat(dirfd, path, out, out_len);
-			if (ret < 0) {
-				return ret;
-			}
-			return ret;
-		} else {
-			size_t path_len = strlen(path) +1;
-			cache->type = CACHETYPE_READLINK;
-			cache->in_dirfd = dirfd;
-			memcpy(cache->in_path, path, path_len);
-
-			ssize_t ret = _readlinkat(dirfd, path, cache->out, SCRATCH_SIZE);
-			if (ret < 0) {
-				return ret;
-			}
-
-			cache->out_len = ret;
-			TLS_BARRIER();
-			if (cnt != TLS_READ(cache->reentrant_cnt)) {
-				continue;
-			}
-			return ret;
-		}
-	}
-}
-
 static int is_hardlinkat(Context *ctx, int dirfd, const char *path) {
 	ssize_t ret;
 
-	ret = readlink_cache(ctx, NULL, 0, dirfd, path);
+	ret = readlink_cache(&ctx->tls->cache, NULL, 0, dirfd, path);
 	if (ret < 0) {
 		if (ret == -EINVAL || ret == -ENOENT) {
 			return 0;
@@ -362,7 +225,7 @@ static int is_hardlinkat(Context *ctx, int dirfd, const char *path) {
 	}
 
 	char target[ret];
-	ret = readlink_cache(ctx, target, ret, dirfd, path);
+	ret = readlink_cache(&ctx->tls->cache, target, ret, dirfd, path);
 	if (ret < 0) {
 		abort();
 	}
@@ -460,6 +323,7 @@ static int is_inside_prefix(const This *this, const char *_file_path) {
 static int is_inside_prefixat(Context *ctx, const This *this, int dirfd,
 							  const char *path) {
 	ssize_t ret;
+	Cache *cache = &ctx->tls->cache;
 	char dirfd_buf[21];
 	itoa_r(dirfd, dirfd_buf);
 
@@ -477,9 +341,9 @@ static int is_inside_prefixat(Context *ctx, const This *this, int dirfd,
 	}
 
 	if (dirfd == AT_FDCWD) {
-		ret = getcwd_cache(ctx, NULL, 0);
+		ret = getcwd_cache(cache, NULL, 0);
 	} else {
-		ret = readlink_cache(ctx, NULL, 0, AT_FDCWD, fd_path);
+		ret = readlink_cache(cache, NULL, 0, AT_FDCWD, fd_path);
 	}
 	if (ret < 0) {
 		if (ret == -ENOENT) {
@@ -494,9 +358,9 @@ static int is_inside_prefixat(Context *ctx, const This *this, int dirfd,
 	ssize_t fd_target_len = ret +1;
 	char fd_target[fd_target_len];
 	if (dirfd == AT_FDCWD) {
-		ret = getcwd_cache(ctx, fd_target, fd_target_len -1);
+		ret = getcwd_cache(cache, fd_target, fd_target_len -1);
 	} else {
-		ret = readlink_cache(ctx, fd_target, fd_target_len -1, AT_FDCWD,
+		ret = readlink_cache(cache, fd_target, fd_target_len -1, AT_FDCWD,
 							 fd_path);
 	}
 	if (ret < 0) {
@@ -552,13 +416,13 @@ static int _copy_symlink(Context *ctx, int olddirfd, const char *oldpath,
 						 int newdirfd, const char *newpath) {
 	ssize_t ret;
 
-	ret = readlink_cache(ctx, NULL, 0, olddirfd, oldpath);
+	ret = readlink_cache(&ctx->tls->cache, NULL, 0, olddirfd, oldpath);
 	if (ret < 0) {
 		return ret;
 	}
 
 	char target[ret];
-	ret = readlink_cache(ctx, target, ret, olddirfd, oldpath);
+	ret = readlink_cache(&ctx->tls->cache, target, ret, olddirfd, oldpath);
 	if (ret < 0) {
 		abort();
 	}
@@ -585,13 +449,13 @@ static int _add_hardlink(Context *ctx, int olddirfd, const char *oldpath,
 						 int newdirfd, const char *newpath) {
 	ssize_t ret;
 
-	ret = readlink_cache(ctx, NULL, 0, olddirfd, oldpath);
+	ret = readlink_cache(&ctx->tls->cache, NULL, 0, olddirfd, oldpath);
 	if (ret < 0) {
 		return ret;
 	}
 
 	char target[ret];
-	ret = readlink_cache(ctx, target, ret, olddirfd, oldpath);
+	ret = readlink_cache(&ctx->tls->cache, target, ret, olddirfd, oldpath);
 	if (ret < 0) {
 		abort();
 	}
@@ -1057,13 +921,13 @@ static int hardlink_unlink(Context *ctx, const This *this,
 	}
 
 	if (ret) {
-		ret = readlink_cache(ctx, NULL, 0, dirfd, call->path);
+		ret = readlink_cache(&ctx->tls->cache, NULL, 0, dirfd, call->path);
 		if (ret < 0) {
 			goto err;
 		}
 
 		char target[ret];
-		ret = readlink_cache(ctx, target, ret, dirfd, call->path);
+		ret = readlink_cache(&ctx->tls->cache, target, ret, dirfd, call->path);
 		if (ret < 0) {
 			abort();
 		}
@@ -1146,6 +1010,7 @@ static int hardlink_rename(Context *ctx, const This *this,
 	RetInt *_ret = call->ret;
 	int olddirfd = (renametype_is_at(call->type)? call->olddirfd: AT_FDCWD);
 	int newdirfd = (renametype_is_at(call->type)? call->newdirfd: AT_FDCWD);
+	Cache *cache = &ctx->tls->cache;
 
 	ret = ab_inside_prefixat(ctx, this, olddirfd, call->oldpath,
 							 newdirfd, call->newpath);
@@ -1174,13 +1039,13 @@ static int hardlink_rename(Context *ctx, const This *this,
 	}
 
 	if (ret) {
-		ret = readlink_cache(ctx, NULL, 0, newdirfd, call->newpath);
+		ret = readlink_cache(cache, NULL, 0, newdirfd, call->newpath);
 		if (ret < 0) {
 			goto err;
 		}
 
 		char target[ret];
-		ret = readlink_cache(ctx, target, ret, newdirfd, call->newpath);
+		ret = readlink_cache(cache, target, ret, newdirfd, call->newpath);
 		if (ret < 0) {
 			abort();
 		}

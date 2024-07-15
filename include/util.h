@@ -1,6 +1,7 @@
 #pragma once
 
 #include "stdint.h"
+#include "tls.h"
 
 #define max(a,b)             \
 ({                           \
@@ -25,3 +26,7 @@
 
 size_t concat(char *out, size_t out_len, const char *a, const char *b);
 int strcmp_prefix(const char *a, const char *b);
+
+int getcwd_cache(Cache *cache, char *out, size_t out_len);
+ssize_t readlink_cache(Cache *cache, char *out, size_t out_len,
+					   int dirfd, const char *path);
