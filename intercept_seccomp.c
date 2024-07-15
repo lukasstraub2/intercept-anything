@@ -1660,21 +1660,36 @@ static int bottom_access(Context *ctx, const This *this,
 }
 
 static int _bottom_exec(Context *ctx, const This *this, CallExec *call) {
-	int ret;
+	ssize_t ret;
 	int64_t argc;
-
-	if (call->at && call->path[0] != '/') {
-		exit_error("execveat with relative path");
-	}
+	int dirfd = (call->at? call->dirfd: AT_FDCWD);
 
 	argc = array_len(call->argv);
 	if (argc < 0) {
 		return -E2BIG;
 	}
 
+	ret = concatat(&ctx->tls->cache, NULL, 0, dirfd, call->path);
+	if (ret < 0) {
+		return ret;
+	}
+	if (ret > SCRATCH_SIZE) {
+		return -ENAMETOOLONG;
+	}
+
+	char fullpath[ret];
+	ret = concatat(&ctx->tls->cache, fullpath, ret, dirfd, call->path);
+	if (ret < 0) {
+		abort();
+	}
+
+	if (call->at && call->flags & AT_EMPTY_PATH) {
+		fullpath[ret -2] = '\0';
+	}
+
 	char *new_argv[argc > 1 ? 2 + argc : 3];
 	new_argv[0] = (char *) "loader_recurse";
-	new_argv[1] = (char *) call->path;
+	new_argv[1] = (char *) fullpath;
 	if (argc > 1) {
 		array_copy(new_argv + 2, call->argv + 1, argc);
 	} else {
@@ -1687,7 +1702,6 @@ static int _bottom_exec(Context *ctx, const This *this, CallExec *call) {
 	thread_exit();
 	ctx->tls = NULL;
 
-	// TODO: Properly emulate execveat
 	ret = sys_execve(call->path, call->argv, call->envp);
 
 	call->ret->ret = ret;
@@ -1749,6 +1763,45 @@ static int read_header(char *out, size_t out_len, int fd) {
 	}
 }
 
+static int open_fullpath_execveat(Context *ctx, const CallExec *call) {
+	ssize_t ret;
+	int flags = 0;
+	int dirfd = (call->at? call->dirfd: AT_FDCWD);
+
+	ret = concatat(&ctx->tls->cache, NULL, 0, dirfd, call->path);
+	if (ret < 0) {
+		return ret;
+	}
+	if (ret > SCRATCH_SIZE) {
+		return -ENAMETOOLONG;
+	}
+
+	char fullpath[ret];
+	ret = concatat(&ctx->tls->cache, fullpath, ret, dirfd, call->path);
+	if (ret < 0) {
+		abort();
+	}
+
+	if (call->at && call->flags & AT_EMPTY_PATH) {
+		fullpath[ret -2] = '\0';
+	}
+	if (call->at && call->flags & AT_SYMLINK_NOFOLLOW) {
+		flags |= O_NOFOLLOW;
+	}
+
+	ret = sys_faccessat(dirfd, call->path, X_OK);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = sys_openat(dirfd, call->path, flags | O_RDONLY | O_CLOEXEC, 0);
+	if (ret < 0) {
+		return ret;
+	}
+
+	return ret;
+}
+
 static int bottom_exec(Context *ctx, const This *this,
 					   const CallExec *call) {
 	int fd;
@@ -1763,7 +1816,7 @@ out:
 		return _ret->ret;
 	}
 
-	if (call->final || (call->at && call->path[0] != '/')) {
+	if (call->final) {
 		return _bottom_exec(ctx, this, &_call);
 	}
 
@@ -1773,17 +1826,12 @@ out:
 		goto out;
 	}
 
-	ret = sys_access(call->path, X_OK);
+	ret = open_fullpath_execveat(ctx, call);
 	if (ret < 0) {
 		_ret->ret = ret;
 		goto out;
 	}
-
-	fd = sys_open(call->path, O_RDONLY | O_CLOEXEC, 0);
-	if (fd < 0) {
-		_ret->ret = ret;
-		goto out;
-	}
+	fd = ret;
 
 	ret = read_header(NULL, 0, fd);
 	if (ret < 0) {
