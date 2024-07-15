@@ -351,7 +351,7 @@ int printf(const char *fmt, ...)
 static __attribute__((unused))
 void perror(const char *msg)
 {
-	fprintf(stderr, "%s%serrno=%d\n", (msg && *msg) ? msg : "", (msg && *msg) ? ": " : "", errno);
+	fprintf(stderr, "%s%serrno=%d\n", (msg && *msg) ? msg : "", (msg && *msg) ? ": " : "", 0);
 }
 
 static __attribute__((unused))
