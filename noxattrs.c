@@ -1,14 +1,13 @@
 
+#include "common.h"
+
 #include "noxattrs.h"
 #include "intercept.h"
 
-#include <errno.h>
-
 static ssize_t noxattrs_xattr(Context *ctx, const This *this,
 							  const CallXattr *call) {
-	call->ret->_errno = EOPNOTSUPP;
-	call->ret->ret = -1;
-	return -1;
+	call->ret->ret = -EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 const CallHandler *noxattrs_init(const CallHandler *next) {

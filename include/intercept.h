@@ -12,7 +12,6 @@ struct Context {
 typedef struct RetInt RetInt;
 struct RetInt {
 	int ret;
-	int _errno;
 };
 
 typedef struct CallOpen CallOpen;
@@ -89,7 +88,6 @@ static void callstat_copy(CallStat *dst, const CallStat *call) {
 typedef struct RetSSize RetSSize;
 struct RetSSize {
 	ssize_t ret;
-	int _errno;
 };
 
 typedef struct CallReadlink CallReadlink;

@@ -1,4 +1,6 @@
 
+#include "common.h"
+
 #include "nolibc.h"
 #include "tls.h"
 

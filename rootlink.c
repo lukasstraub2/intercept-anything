@@ -1,4 +1,6 @@
 
+#include "common.h"
+
 #include "rootlink.h"
 #include "config.h"
 #include "intercept.h"
@@ -6,7 +8,6 @@
 
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
 
 struct This {
 	CallHandler this;
@@ -46,8 +47,7 @@ static ssize_t mangle_path(char *out, size_t out_len, const char *path) {
 		}
 
 		if (len > out_len) {
-            errno = ENAMETOOLONG;
-            return -1;
+			return -ENAMETOOLONG;
         }
 		memcpy(out, path, len);
 		return len;
@@ -59,8 +59,7 @@ static ssize_t mangle_path(char *out, size_t out_len, const char *path) {
 	}
 
     if (len > out_len) {
-        errno = ENAMETOOLONG;
-        return -1;
+		return -ENAMETOOLONG;
     }
 
 	return len;
@@ -69,9 +68,8 @@ static ssize_t mangle_path(char *out, size_t out_len, const char *path) {
 #define _MANGLE_PATH(__path, errret, prefix) \
 	ssize_t prefix ## len = mangle_path(NULL, 0, (__path)); \
 	if (prefix ## len > SCRATCH_SIZE) { \
-		call->ret->_errno = ENAMETOOLONG; \
-		call->ret->ret = (errret); \
-		return (errret); \
+		call->ret->ret = -ENAMETOOLONG; \
+		return -ENAMETOOLONG; \
 	} \
 	\
 	char prefix ## buf[prefix ## len]; \

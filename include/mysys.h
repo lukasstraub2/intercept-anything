@@ -49,20 +49,9 @@ ssize_t sys_readlink(const char *path, char *buf, unsigned long bufsiz) {
 }
 
 static __attribute__((unused))
-ssize_t readlink(const char *path, char *buf, unsigned long bufsiz) {
-	return __sysret(sys_readlink(path, buf, bufsiz));
-}
-
-static __attribute__((unused))
 ssize_t sys_readlinkat(int dirfd, const char *path, char *buf,
 					   unsigned long bufsiz) {
 	return my_syscall4(__NR_readlinkat, dirfd, path, buf, bufsiz);
-}
-
-static __attribute__((unused))
-ssize_t readlinkat(int dirfd, const char *path, char *buf,
-				   unsigned long bufsiz) {
-	return __sysret(sys_readlinkat(dirfd, path, buf, bufsiz));
 }
 
 static __attribute__((unused))
@@ -77,11 +66,6 @@ int sys_access(const char *path, int mode) {
 #else
 	return my_syscall3(__NR_faccessat, AT_FDCWD, path, mode);
 #endif
-}
-
-static __attribute__((unused))
-int access(const char *path, int mode) {
-	return __sysret(sys_access(path, mode));
 }
 
 static __attribute__((unused))
@@ -114,11 +98,7 @@ int sys_symlinkat(const char *oldpath, int newdirfd, const char *newpath) {
 }
 
 static __attribute__((unused))
-int symlinkat(const char *oldpath, int newdirfd, const char *newpath) {
-	return __sysret(sys_symlinkat(oldpath, newdirfd, newpath));
-}
-
-static __attribute__((unused)) int sys_unlinkat(int dirfd, const char *pathname, int flags) {
+int sys_unlinkat(int dirfd, const char *pathname, int flags) {
 	return my_syscall3(__NR_unlinkat, dirfd, pathname, flags);
 }
 
@@ -192,18 +172,8 @@ int sys_rename(const char *oldpath, const char *newpath) {
 }
 
 static __attribute__((unused))
-int rename(const char *oldpath, const char *newpath) {
-	return __sysret(sys_rename(oldpath, newpath));
-}
-
-static __attribute__((unused))
 int sys_renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
 	return my_syscall4(__NR_renameat, olddirfd, oldpath, newdirfd, newpath);
-}
-
-static __attribute__((unused))
-int renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath) {
-	return __sysret(sys_renameat(olddirfd, oldpath, newdirfd, newpath));
 }
 
 static __attribute__((unused))
@@ -222,30 +192,14 @@ int sys_getcwd(char *buf, size_t size) {
 }
 
 static __attribute__((unused))
-int getcwd(char *buf, size_t size) {
-	return __sysret(sys_getcwd(buf, size));
-}
-
-static __attribute__((unused))
 int sys_flock(int fd, int operation) {
 	return my_syscall2(__NR_flock, fd, operation);
-}
-
-static __attribute__((unused))
-int flock(int fd, int operation) {
-	return __sysret(sys_flock(fd, operation));
 }
 
 static __attribute__((unused))
 signed long sys_futex(uint32_t *uaddr, int futex_op, uint32_t val,
 					  const struct timespec *timeout, uint32_t *uaddr2, uint32_t val3) {
 	return my_syscall6(__NR_futex, uaddr, futex_op, val, timeout, uaddr2, val3);
-}
-
-static __attribute__((unused))
-signed long futex(uint32_t *uaddr, int futex_op, uint32_t val,
-				  const struct timespec *timeout, uint32_t *uaddr2, uint32_t val3) {
-	return __sysret(sys_futex(uaddr, futex_op, val, timeout, uaddr2, val3));
 }
 
 static __attribute__((noreturn,unused))

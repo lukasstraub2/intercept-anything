@@ -1,4 +1,6 @@
 
+#include "common.h"
+
 #include "intercept.h"
 #include "noxattrs.h"
 #include "hardlinkshim.h"

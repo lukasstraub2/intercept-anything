@@ -67,8 +67,8 @@ void mutex_lock(Mutex *mutex) {
 			signed long ret;
 			tries = 0;
 
-			ret = futex(mutex, FUTEX_WAIT, 1, NULL, NULL, 0);
-			if (ret < 0 && errno != EAGAIN) {
+			ret = sys_futex(mutex, FUTEX_WAIT, 1, NULL, NULL, 0);
+			if (ret < 0 && ret != -EAGAIN) {
 				abort();
 			}
 		}
@@ -79,7 +79,7 @@ static __attribute__((unused))
 void mutex_unlock(Mutex *mutex) {
 	signed long ret;
 	__atomic_store_n(mutex, 0, __ATOMIC_RELEASE);
-	ret = futex(mutex, FUTEX_WAKE, 1, NULL, NULL, 0);
+	ret = sys_futex(mutex, FUTEX_WAKE, 1, NULL, NULL, 0);
 	if (ret < 0) {
 		abort();
 	}

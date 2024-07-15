@@ -1,4 +1,6 @@
 
+#include "common.h"
+
 #define DEBUG_ENV "DEBUG_TLS"
 #include "debug.h"
 #include "nolibc.h"

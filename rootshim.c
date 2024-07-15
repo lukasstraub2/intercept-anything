@@ -1,4 +1,6 @@
 
+#include "common.h"
+
 #include "nolibc.h"
 
 #include "rootshim.h"
@@ -23,7 +25,7 @@ static void shim_unlink(Shim *shim) {
 	int ret;
 
 	if (!shim->is_symlink) {
-		ret = unlink(shim->target);
+		ret = sys_unlink(shim->target);
 		if (ret < 0) {
 			abort();
 		}
@@ -60,12 +62,12 @@ int mkostemp(char *template, int flags, mode_t mode) {
 
 	while (1) {
 		randchar6(xxxxxx);
-		ret = open(template, flags | O_RDWR | O_CREAT | O_EXCL, mode);
+		ret = sys_open(template, flags | O_RDWR | O_CREAT | O_EXCL, mode);
 		if (ret < 0) {
-			if (ret == EEXIST) {
+			if (ret == -EEXIST) {
 				continue;
 			} else {
-				return -1;
+				return ret;
 			}
 		}
 
@@ -92,23 +94,24 @@ static ssize_t handle_uptime(Shim *shim, ssize_t shim_len) {
 
 	ret = mkostemp(filename, 0, 0400);
     if (ret < 0) {
-		return -1;
+		return ret;
     }
     fd = ret;
 
-    ret = write(fd, content, content_len);
+	ret = sys_write(fd, content, content_len);
     if (ret < 0) {
         goto fail;
     } else if (ret != content_len) {
+		ret = -EINTR;
         goto fail;
     }
 
-    ret = lseek(fd, SEEK_SET, 0);
+	ret = sys_lseek(fd, SEEK_SET, 0);
     if (ret < 0) {
         goto fail;
     }
 
-	ret = close(fd);
+	ret = sys_close(fd);
 	if (ret < 0) {
 		goto fail;
 	}
@@ -120,12 +123,9 @@ static ssize_t handle_uptime(Shim *shim, ssize_t shim_len) {
 	return 0;
 
 fail:
-	(void)0;
-	int _errno = errno;
-	unlink(filename);
-	close(fd);
-	errno = _errno;
-    return -1;
+	sys_unlink(filename);
+	sys_close(fd);
+	return ret;
 }
 
 static ssize_t handle_exe(Shim *shim, ssize_t shim_len) {
@@ -171,17 +171,15 @@ static ssize_t handle_path(Shim *shim, ssize_t shim_len, const char *path) {
 #define _FILL_SHIM(__path, prefix) \
 	ssize_t prefix ## shim_ret = handle_path(NULL, 0, (__path)); \
 	if (prefix ## shim_ret < 0) { \
-		call->ret->_errno = errno; \
-		call->ret->ret = -1; \
-		return -1; \
+		call->ret->ret = prefix ## shim_ret; \
+		return prefix ## shim_ret; \
 	} \
 	\
 	Shim * prefix ## shim = alloca(prefix ## shim_ret); \
 	prefix ## shim_ret = handle_path(prefix ## shim, prefix ## shim_ret, (__path)); \
 	if (prefix ## shim_ret < 0) { \
-		call->ret->_errno = errno; \
-		call->ret->ret = -1; \
-		return -1; \
+		call->ret->ret = prefix ## shim_ret; \
+		return prefix ## shim_ret; \
 	} \
 	(__path) = prefix ## shim->target;
 
@@ -202,8 +200,7 @@ static int rootshim_open(Context *ctx, const This *this,
 
 	if (shim->is_handled) {
 		if ((call->flags & O_NOFOLLOW) && shim->is_symlink) {
-			_ret->_errno = ELOOP;
-			_ret->ret = -1;
+			_ret->ret = -ELOOP;
 			goto fail;
 		}
 
@@ -267,8 +264,7 @@ static ssize_t rootshim_readlink(Context *ctx, const This *this,
 		len = min(call->bufsiz, len);
 
 		if (!shim->is_symlink) {
-			_ret->_errno = EINVAL;
-			_ret->ret = -1;
+			_ret->ret = -EINVAL;
 			goto fail;
 		}
 		shim_unlink(shim);
@@ -322,8 +318,7 @@ static ssize_t rootshim_xattr(Context *ctx, const This *this,
 
 	if (shim->is_handled) {
 		shim_unlink(shim);
-		_ret->_errno = EOPNOTSUPP;
-		_ret->ret = -1;
+		_ret->ret = -EOPNOTSUPP;
 		goto fail;
 	} else {
 		return this->next->xattr(ctx, this->next->xattr_next, call);

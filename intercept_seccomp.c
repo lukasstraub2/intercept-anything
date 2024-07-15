@@ -1,4 +1,6 @@
 
+#include "common.h"
+
 #include "nolibc.h"
 #include "mysignal.h"
 #include "myseccomp.h"
@@ -204,18 +206,18 @@ static int install_filter() {
 	};
 
 	/* First try without dropping privileges */
-	ret = prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0);
+	ret = sys_prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0);
 	if (ret == 0) {
 		return 0;
 	}
 
-	ret = prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
+	ret = sys_prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
 	if (ret < 0) {
 		exit_error("prctl(NO_NEW_PRIVS)");
 		return 1;
 	}
 
-	ret = prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0);
+	ret = sys_prctl(PR_SET_SECCOMP, 2, (unsigned long) &prog, 0, 0);
 	if (ret < 0) {
 		exit_error("prctl(PR_SET_SECCOMP)");
 		return 1;
@@ -303,11 +305,11 @@ static ssize_t read_full(int fd, char *buf, size_t count)
 	ssize_t total = 0;
 
 	while (count) {
-		ret = read(fd, buf, count);
+		ret = sys_read(fd, buf, count);
 		if (ret < 0) {
-			if (errno == EINTR)
+			if (ret == -EINTR)
 				continue;
-			return -1;
+			return ret;
 		} else if (ret == 0) {
 			break;
 		}
@@ -336,7 +338,7 @@ static int handle_open(const char *path, int flags, mode_t mode) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallOpen call = {
 		.at = 0,
 		.path = path,
@@ -346,7 +348,7 @@ static int handle_open(const char *path, int flags, mode_t mode) {
 	};
 
 	_next->open(&ctx, _next->open_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -355,7 +357,7 @@ int handle_openat(int dirfd, const char *path, int flags, mode_t mode) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallOpen call = {
 		.at = 1,
 		.dirfd = dirfd,
@@ -366,7 +368,7 @@ int handle_openat(int dirfd, const char *path, int flags, mode_t mode) {
 	};
 
 	_next->open(&ctx, _next->open_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -376,7 +378,7 @@ static int handle_stat(const char *path, void *statbuf) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallStat call = {
 		.type = STATTYPE_PLAIN,
 		.path = path,
@@ -385,7 +387,7 @@ static int handle_stat(const char *path, void *statbuf) {
 	};
 
 	_next->stat(&ctx, _next->stat_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -394,7 +396,7 @@ static int handle_fstat(int fd, void *statbuf) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallStat call = {
 		.type = STATTYPE_F,
 		.dirfd = fd,
@@ -403,7 +405,7 @@ static int handle_fstat(int fd, void *statbuf) {
 	};
 
 	_next->stat(&ctx, _next->stat_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -413,7 +415,7 @@ static int handle_lstat(const char *path, void *statbuf) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallStat call = {
 		.type = STATTYPE_L,
 		.path = path,
@@ -422,7 +424,7 @@ static int handle_lstat(const char *path, void *statbuf) {
 	};
 
 	_next->stat(&ctx, _next->stat_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -432,7 +434,7 @@ static int handle_newfstatat(int dirfd, const char *path, void *statbuf,
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallStat call = {
 		.type = STATTYPE_AT,
 		.dirfd = dirfd,
@@ -443,7 +445,7 @@ static int handle_newfstatat(int dirfd, const char *path, void *statbuf,
 	};
 
 	_next->stat(&ctx, _next->stat_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -453,7 +455,7 @@ static int handle_statx(int dirfd, const char *path, int flags,
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallStat call = {
 		.type = STATTYPE_X,
 		.dirfd = dirfd,
@@ -465,7 +467,7 @@ static int handle_statx(int dirfd, const char *path, int flags,
 	};
 
 	_next->stat(&ctx, _next->stat_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -475,7 +477,7 @@ static ssize_t handle_readlink(const char *path, char *buf, size_t bufsiz) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallReadlink call = {
 		.at = 0,
 		.path = path,
@@ -485,7 +487,7 @@ static ssize_t handle_readlink(const char *path, char *buf, size_t bufsiz) {
 	};
 
 	_next->readlink(&ctx, _next->readlink_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -494,7 +496,7 @@ static ssize_t handle_readlinkat(int dirfd, const char *path, char *buf, size_t 
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallReadlink call = {
 		.at = 1,
 		.dirfd = dirfd,
@@ -505,7 +507,7 @@ static ssize_t handle_readlinkat(int dirfd, const char *path, char *buf, size_t 
 	};
 
 	_next->readlink(&ctx, _next->readlink_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -515,7 +517,7 @@ static int handle_access(const char *path, int mode) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallAccess call = {
 		.at = 0,
 		.path = path,
@@ -524,7 +526,7 @@ static int handle_access(const char *path, int mode) {
 	};
 
 	_next->access(&ctx, _next->access_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -533,7 +535,7 @@ static int handle_faccessat(int dirfd, const char *path, int mode) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallAccess call = {
 		.at = 1,
 		.dirfd = dirfd,
@@ -543,7 +545,7 @@ static int handle_faccessat(int dirfd, const char *path, int mode) {
 	};
 
 	_next->access(&ctx, _next->access_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -552,7 +554,7 @@ static int handle_execve(const char *path, char *const argv[], char *const envp[
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallExec call = {
 		.at = 0,
 		.path = path,
@@ -562,7 +564,7 @@ static int handle_execve(const char *path, char *const argv[], char *const envp[
 	};
 
 	_next->exec(&ctx, _next->exec_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -572,7 +574,7 @@ static int handle_execveat(int dirfd, const char *path, char *const argv[],
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallExec call = {
 		.at = 1,
 		.dirfd = dirfd,
@@ -584,7 +586,7 @@ static int handle_execveat(int dirfd, const char *path, char *const argv[],
 	};
 
 	_next->exec(&ctx, _next->exec_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -598,16 +600,16 @@ static int handle_rt_sigprocmask(int how, const sigset_t *set,
 	trace("rt_sigprocmask()\n");
 
 	if (!set) {
-		return __sysret(sys_rt_sigprocmask(how, set, oldset, sigsetsize));
+		return sys_rt_sigprocmask(how, set, oldset, sigsetsize);
 	}
 
 	unsigned char copy[sigsetsize];
 	memcpy(copy, set, sigsetsize);
 	copy[3] &= ~(0x40); // Clear SIGSYS
 
-	ret = __sysret(sys_rt_sigprocmask(how, (sigset_t *)copy, oldset, sigsetsize));
+	ret = sys_rt_sigprocmask(how, (sigset_t *)copy, oldset, sigsetsize);
 	if (ret < 0) {
-		return -1;
+		return ret;
 	}
 
 	// Any changes to sigprocmask would be reset on sigreturn
@@ -632,8 +634,7 @@ static int handle_rt_sigprocmask(int how, const sigset_t *set,
 		break;
 
 		default:
-			errno = EINVAL;
-			return -1;
+			return -EINVAL;
 		break;
 	}
 }
@@ -648,7 +649,7 @@ static long handle_rt_sigaction(int signum, const struct sigaction *act,
 	}
 
 	if (!act) {
-		return __sysret(sys_rt_sigaction(signum, act, oldact, sigsetsize));
+		return sys_rt_sigaction(signum, act, oldact, sigsetsize);
 	}
 
 	size_t size = sizeof(struct sigaction) + sigsetsize - sizeof(sigset_t);
@@ -658,7 +659,7 @@ static long handle_rt_sigaction(int signum, const struct sigaction *act,
 	char *sa_mask = (char *)&copy->sa_mask;
 	sa_mask[3] &= ~(0x40); // Clear SIGSYS
 
-	return __sysret(sys_rt_sigaction(signum, copy, oldact, sigsetsize));
+	return sys_rt_sigaction(signum, copy, oldact, sigsetsize);
 }
 
 __attribute__((unused))
@@ -667,7 +668,7 @@ static int handle_link(const char *oldpath, const char *newpath) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallLink call = {
 		.at = 0,
 		.oldpath = oldpath,
@@ -676,7 +677,7 @@ static int handle_link(const char *oldpath, const char *newpath) {
 	};
 
 	_next->link(&ctx, _next->link_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -686,7 +687,7 @@ static int handle_linkat(int olddirfd, const char *oldpath, int newdirfd,
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallLink call = {
 		.at = 1,
 		.olddirfd = olddirfd,
@@ -698,7 +699,7 @@ static int handle_linkat(int olddirfd, const char *oldpath, int newdirfd,
 	};
 
 	_next->link(&ctx, _next->link_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -708,7 +709,7 @@ static int handle_symlink(const char *oldpath, const char *newpath) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallLink call = {
 		.at = 0,
 		.oldpath = oldpath,
@@ -717,7 +718,7 @@ static int handle_symlink(const char *oldpath, const char *newpath) {
 	};
 
 	_next->symlink(&ctx, _next->symlink_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -727,7 +728,7 @@ static int handle_symlinkat(const char *oldpath, int newdirfd,
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallLink call = {
 		.at = 1,
 		.oldpath = oldpath,
@@ -737,7 +738,7 @@ static int handle_symlinkat(const char *oldpath, int newdirfd,
 	};
 
 	_next->symlink(&ctx, _next->symlink_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -747,7 +748,7 @@ static int handle_unlink(const char *pathname) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallUnlink call = {
 		.at = 0,
 		.path = pathname,
@@ -755,7 +756,7 @@ static int handle_unlink(const char *pathname) {
 	};
 
 	_next->unlink(&ctx, _next->unlink_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -764,7 +765,7 @@ static int handle_unlinkat(int dirfd, const char *pathname, int flags) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallUnlink call = {
 		.at = 1,
 		.dirfd = dirfd,
@@ -774,7 +775,7 @@ static int handle_unlinkat(int dirfd, const char *pathname, int flags) {
 	};
 
 	_next->unlink(&ctx, _next->unlink_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -783,7 +784,7 @@ static int handle_setxattr(const char *path, const char *name, const void *value
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_SET,
 		.type2 = XATTRTYPE_PLAIN,
@@ -796,7 +797,7 @@ static int handle_setxattr(const char *path, const char *name, const void *value
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -805,7 +806,7 @@ static int handle_lsetxattr(const char *path, const char *name, const void *valu
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_SET,
 		.type2 = XATTRTYPE_L,
@@ -818,7 +819,7 @@ static int handle_lsetxattr(const char *path, const char *name, const void *valu
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -827,7 +828,7 @@ static int handle_fsetxattr(int fd, const char *name, const void *value, size_t 
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_SET,
 		.type2 = XATTRTYPE_F,
@@ -840,7 +841,7 @@ static int handle_fsetxattr(int fd, const char *name, const void *value, size_t 
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -849,7 +850,7 @@ static ssize_t handle_getxattr(const char *path, const char *name, void *value, 
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_GET,
 		.type2 = XATTRTYPE_PLAIN,
@@ -861,7 +862,7 @@ static ssize_t handle_getxattr(const char *path, const char *name, void *value, 
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -870,7 +871,7 @@ static ssize_t handle_lgetxattr(const char *path, const char *name, void *value,
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_GET,
 		.type2 = XATTRTYPE_L,
@@ -882,7 +883,7 @@ static ssize_t handle_lgetxattr(const char *path, const char *name, void *value,
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -891,7 +892,7 @@ static ssize_t handle_fgetxattr(int fd, const char *name, void *value, size_t si
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_GET,
 		.type2 = XATTRTYPE_F,
@@ -903,7 +904,7 @@ static ssize_t handle_fgetxattr(int fd, const char *name, void *value, size_t si
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -912,7 +913,7 @@ static ssize_t handle_listxattr(const char *path, char *list, size_t size) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_LIST,
 		.type2 = XATTRTYPE_PLAIN,
@@ -923,7 +924,7 @@ static ssize_t handle_listxattr(const char *path, char *list, size_t size) {
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -932,7 +933,7 @@ static ssize_t handle_llistxattr(const char *path, char *list, size_t size) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_LIST,
 		.type2 = XATTRTYPE_L,
@@ -943,7 +944,7 @@ static ssize_t handle_llistxattr(const char *path, char *list, size_t size) {
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -952,7 +953,7 @@ static ssize_t handle_flistxattr(int fd, char *list, size_t size) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_LIST,
 		.type2 = XATTRTYPE_F,
@@ -963,7 +964,7 @@ static ssize_t handle_flistxattr(int fd, char *list, size_t size) {
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -972,7 +973,7 @@ static int handle_removexattr(const char *path, const char *name) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_REMOVE,
 		.type2 = XATTRTYPE_PLAIN,
@@ -982,7 +983,7 @@ static int handle_removexattr(const char *path, const char *name) {
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -991,7 +992,7 @@ static int handle_lremovexattr(const char *path, const char *name) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_REMOVE,
 		.type2 = XATTRTYPE_L,
@@ -1001,7 +1002,7 @@ static int handle_lremovexattr(const char *path, const char *name) {
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1010,7 +1011,7 @@ static int handle_fremovexattr(int fd, const char *name) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_REMOVE,
 		.type2 = XATTRTYPE_F,
@@ -1020,7 +1021,7 @@ static int handle_fremovexattr(int fd, const char *name) {
 	};
 
 	_next->xattr(&ctx, _next->xattr_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1030,7 +1031,7 @@ static int handle_rename(const char *oldpath, const char *newpath) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallRename call = {
 		.type = RENAMETYPE_PLAIN,
 		.oldpath = oldpath,
@@ -1039,7 +1040,7 @@ static int handle_rename(const char *oldpath, const char *newpath) {
 	};
 
 	_next->rename(&ctx, _next->rename_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1049,7 +1050,7 @@ static int handle_renameat(int olddirfd, const char *oldpath,
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallRename call = {
 		.type = RENAMETYPE_AT,
 		.olddirfd = olddirfd,
@@ -1060,7 +1061,7 @@ static int handle_renameat(int olddirfd, const char *oldpath,
 	};
 
 	_next->rename(&ctx, _next->rename_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1070,7 +1071,7 @@ static int handle_renameat2(int olddirfd, const char *oldpath,
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallRename call = {
 		.type = RENAMETYPE_AT2,
 		.olddirfd = olddirfd,
@@ -1082,7 +1083,7 @@ static int handle_renameat2(int olddirfd, const char *oldpath,
 	};
 
 	_next->rename(&ctx, _next->rename_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1091,7 +1092,7 @@ static int handle_chdir(const char *path) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallChdir call = {
 		.f = 0,
 		.path = path,
@@ -1099,7 +1100,7 @@ static int handle_chdir(const char *path) {
 	};
 
 	_next->chdir(&ctx, _next->chdir_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1108,7 +1109,7 @@ static int handle_fchdir(int fd) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallChdir call = {
 		.f = 1,
 		.fd = fd,
@@ -1116,7 +1117,7 @@ static int handle_fchdir(int fd) {
 	};
 
 	_next->chdir(&ctx, _next->chdir_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1144,7 +1145,7 @@ static int handle_chmod(const char *path, mode_t mode) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallChmod call = {
 		.type = CHMODTYPE_PLAIN,
 		.path = path,
@@ -1153,7 +1154,7 @@ static int handle_chmod(const char *path, mode_t mode) {
 	};
 
 	_next->chmod(&ctx, _next->chmod_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1162,7 +1163,7 @@ static int handle_fchmod(int fd, mode_t mode) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallChmod call = {
 		.type = CHMODTYPE_F,
 		.fd = fd,
@@ -1171,7 +1172,7 @@ static int handle_fchmod(int fd, mode_t mode) {
 	};
 
 	_next->chmod(&ctx, _next->chmod_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1180,7 +1181,7 @@ static int handle_fchmodat(int dirfd, const char *path, mode_t mode) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallChmod call = {
 		.type = CHMODTYPE_AT,
 		.dirfd = dirfd,
@@ -1190,7 +1191,7 @@ static int handle_fchmodat(int dirfd, const char *path, mode_t mode) {
 	};
 
 	_next->chmod(&ctx, _next->chmod_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1199,7 +1200,7 @@ static int handle_truncate(const char *path, off_t length) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallTruncate call = {
 		.f = 0,
 		.path = path,
@@ -1208,7 +1209,7 @@ static int handle_truncate(const char *path, off_t length) {
 	};
 
 	_next->truncate(&ctx, _next->truncate_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1217,7 +1218,7 @@ static int handle_ftruncate(int fd, off_t length) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallTruncate call = {
 		.f = 1,
 		.fd = fd,
@@ -1226,7 +1227,7 @@ static int handle_ftruncate(int fd, off_t length) {
 	};
 
 	_next->truncate(&ctx, _next->truncate_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1236,7 +1237,7 @@ static int handle_mkdir(const char *path, mode_t mode) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallMkdir call = {
 		.at = 0,
 		.path = path,
@@ -1245,7 +1246,7 @@ static int handle_mkdir(const char *path, mode_t mode) {
 	};
 
 	_next->mkdir(&ctx, _next->mkdir_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1254,7 +1255,7 @@ static int handle_mkdirat(int dirfd, const char *path, mode_t mode) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetInt ret = { ._errno = errno };
+	RetInt ret = { 0 };
 	CallMkdir call = {
 		.at = 1,
 		.dirfd = dirfd,
@@ -1264,7 +1265,7 @@ static int handle_mkdirat(int dirfd, const char *path, mode_t mode) {
 	};
 
 	_next->mkdir(&ctx, _next->mkdir_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1274,7 +1275,7 @@ static ssize_t handle_getdents(int fd, void *dirp, size_t count) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallGetdents call = {
 		.is64 = 0,
 		.fd = fd,
@@ -1284,7 +1285,7 @@ static ssize_t handle_getdents(int fd, void *dirp, size_t count) {
 	};
 
 	_next->getdents(&ctx, _next->getdents_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1293,7 +1294,7 @@ static ssize_t handle_getdents64(int fd, void *dirp, size_t count) {
 
 	Context ctx;
 	context_fill(&ctx);
-	RetSSize ret = { ._errno = errno };
+	RetSSize ret = { 0 };
 	CallGetdents call = {
 		.is64 = 1,
 		.fd = fd,
@@ -1303,7 +1304,7 @@ static ssize_t handle_getdents64(int fd, void *dirp, size_t count) {
 	};
 
 	_next->getdents(&ctx, _next->getdents_next, &call);
-	errno = ret._errno;
+
 	return ret.ret;
 }
 
@@ -1570,13 +1571,8 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 
 		default:
 			debug("Unhandled syscall no. %lu\n", args->num);
-			errno = ENOSYS;
-			ret = -1;
+			ret = -ENOSYS;
 		break;
-	}
-
-	if (ret < 0) {
-		return -errno;
 	}
 
 	return ret;
@@ -1587,14 +1583,11 @@ static int bottom_open(Context *ctx, const This *this, const CallOpen *call) {
 	RetInt *_ret = call->ret;
 
 	if (call->at) {
-		ret = __sysret(sys_openat(call->dirfd, call->path, call->flags, call->mode));
+		ret = sys_openat(call->dirfd, call->path, call->flags, call->mode);
 	} else {
-		ret = __sysret(sys_open(call->path, call->flags, call->mode));
+		ret = sys_open(call->path, call->flags, call->mode);
 	}
 
-	if (ret < 0) {
-		_ret->_errno = errno;
-	}
 	_ret->ret = ret;
 	return ret;
 }
@@ -1605,25 +1598,25 @@ static int bottom_stat(Context *ctx, const This *this, const CallStat *call) {
 
 	switch (call->type) {
 		case STATTYPE_PLAIN:
-			ret = __sysret(sys_stat(call->path, call->statbuf));
+			ret = sys_stat(call->path, call->statbuf);
 		break;
 
 		case STATTYPE_F:
-			ret = __sysret(sys_fstat(call->dirfd, call->statbuf));
+			ret = sys_fstat(call->dirfd, call->statbuf);
 		break;
 
 		case STATTYPE_L:
-			ret = __sysret(sys_lstat(call->path, call->statbuf));
+			ret = sys_lstat(call->path, call->statbuf);
 		break;
 
 		case STATTYPE_AT:
-			ret = __sysret(sys_newfstatat(call->dirfd, call->path,
-										  call->statbuf, call->flags));
+			ret = sys_newfstatat(call->dirfd, call->path,
+								 call->statbuf, call->flags);
 		break;
 
 		case STATTYPE_X:
-			ret = __sysret(sys_statx(call->dirfd, call->path, call->flags,
-									 call->mask, call->statbuf));
+			ret = sys_statx(call->dirfd, call->path, call->flags,
+							call->mask, call->statbuf);
 		break;
 
 		default:
@@ -1631,9 +1624,6 @@ static int bottom_stat(Context *ctx, const This *this, const CallStat *call) {
 		break;
 	}
 
-	if (ret < 0) {
-		_ret->_errno = errno;
-	}
 	_ret->ret = ret;
 	return ret;
 }
@@ -1644,15 +1634,12 @@ static ssize_t bottom_readlink(Context *ctx, const This *this,
 	RetSSize *_ret = call->ret;
 
 	if (call->at) {
-		ret = __sysret(sys_readlinkat(call->dirfd, call->path, call->buf,
-									  call->bufsiz));
+		ret = sys_readlinkat(call->dirfd, call->path, call->buf,
+							 call->bufsiz);
 	} else {
-		ret = __sysret(sys_readlink(call->path, call->buf, call->bufsiz));
+		ret = sys_readlink(call->path, call->buf, call->bufsiz);
 	}
 
-	if (ret < 0) {
-		_ret->_errno = errno;
-	}
 	_ret->ret = ret;
 	return ret;
 }
@@ -1663,14 +1650,11 @@ static int bottom_access(Context *ctx, const This *this,
 	RetInt *_ret = call->ret;
 
 	if (call->at) {
-		ret = __sysret(sys_faccessat(call->dirfd, call->path, call->mode));
+		ret = sys_faccessat(call->dirfd, call->path, call->mode);
 	} else {
-		ret = __sysret(sys_access(call->path, call->mode));
+		ret = sys_access(call->path, call->mode);
 	}
 
-	if (ret < 0) {
-		_ret->_errno = errno;
-	}
 	_ret->ret = ret;
 	return ret;
 }
@@ -1684,9 +1668,8 @@ static int _bottom_exec(Context *ctx, const This *this, CallExec *call) {
 	}
 
 	argc = array_len(call->argv);
-	if (argc >= INT_MAX -1) {
-		errno = E2BIG;
-		return -1;
+	if (argc < 0) {
+		return -E2BIG;
 	}
 
 	char *new_argv[argc > 1 ? 2 + argc : 3];
@@ -1705,13 +1688,9 @@ static int _bottom_exec(Context *ctx, const This *this, CallExec *call) {
 	ctx->tls = NULL;
 
 	// TODO: Properly emulate execveat
-	ret = __sysret(sys_execve(call->path, call->argv, call->envp));
+	ret = sys_execve(call->path, call->argv, call->envp);
 
 	call->ret->ret = ret;
-	if (ret < 0) {
-		call->ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -1722,8 +1701,7 @@ static int line_size(char *buf, ssize_t size) {
 		}
 	}
 
-	errno = ENOEXEC;
-	return -1;
+	return -ENOEXEC;
 }
 
 static int read_header(char *out, size_t out_len, int fd) {
@@ -1735,15 +1713,15 @@ static int read_header(char *out, size_t out_len, int fd) {
 		abort();
 	}
 
-	ret = lseek(fd, 0, SEEK_SET);
+	ret = sys_lseek(fd, 0, SEEK_SET);
 	if (ret < 0) {
-		return -1;
+		return ret;
 	}
 
 	if (out) {
 		ret = read_full(fd, out, out_len);
 		if (ret < 0) {
-			return -1;
+			return ret;
 		}
 
 		out[ret -1] = '\0';
@@ -1751,18 +1729,17 @@ static int read_header(char *out, size_t out_len, int fd) {
 	} else {
 		ret = read_full(fd, scratch, scratch_size);
 		if (ret < 0) {
-			return -1;
+			return ret;
 		}
 
 		if (ret < 2) {
-			errno = ENOEXEC;
-			return -1;
+			return -ENOEXEC;
 		}
 
 		if (scratch[0] == '#' && scratch[1] == '!') {
 			ret = line_size(scratch, scratch_size);
 			if (ret < 0) {
-				return -1;
+				return ret;
 			}
 		} else {
 			ret = 0;
@@ -1792,29 +1769,25 @@ out:
 
 	exec_argc = array_len(call->argv);
 	if (exec_argc < 0) {
-		_ret->_errno = E2BIG;
-		_ret->ret = -1;
+		_ret->ret = -E2BIG;
 		goto out;
 	}
 
-	ret = access(call->path, X_OK);
+	ret = sys_access(call->path, X_OK);
 	if (ret < 0) {
-		_ret->_errno = errno;
-		_ret->ret = -1;
+		_ret->ret = ret;
 		goto out;
 	}
 
-	fd = open(call->path, O_RDONLY | O_CLOEXEC);
+	fd = sys_open(call->path, O_RDONLY | O_CLOEXEC, 0);
 	if (fd < 0) {
-		_ret->_errno = errno;
-		_ret->ret = -1;
+		_ret->ret = ret;
 		goto out;
 	}
 
 	ret = read_header(NULL, 0, fd);
 	if (ret < 0) {
-		_ret->_errno = errno;
-		_ret->ret = -1;
+		_ret->ret = ret;
 		close(fd);
 		goto out;
 	}
@@ -1823,8 +1796,7 @@ out:
 	char header[size];
 	ret = read_header(header, size, fd);
 	if (ret < 0) {
-		_ret->_errno = errno;
-		_ret->ret = -1;
+		_ret->ret = ret;
 		close(fd);
 		goto out;
 	}
@@ -1833,8 +1805,7 @@ out:
 	if (header[0] == '#' && header[1] == '!') {
 		int sh_argc = cmdline_argc(header, size);
 		if (sh_argc == 0) {
-			_ret->_errno = ENOEXEC;
-			_ret->ret = -1;
+			_ret->ret = -ENOEXEC;
 			goto out;
 		}
 
@@ -1856,8 +1827,7 @@ out:
 	}
 
 	if ((size_t)size < sizeof(Elf_Ehdr) || !check_ehdr((Elf_Ehdr*)header)) {
-		_ret->_errno = ENOEXEC;
-		_ret->ret = -1;
+		_ret->ret = -ENOEXEC;
 		goto out;
 	}
 
@@ -1872,15 +1842,12 @@ static int bottom_link(Context *ctx, const This *this, const CallLink *call) {
 	RetInt *_ret = call->ret;
 
 	if (call->at) {
-		ret = __sysret(sys_linkat(call->olddirfd, call->oldpath, call->newdirfd,
-								  call->newpath, call->flags));
+		ret = sys_linkat(call->olddirfd, call->oldpath, call->newdirfd,
+						 call->newpath, call->flags);
 	} else {
-		ret = __sysret(sys_link(call->oldpath, call->newpath));
+		ret = sys_link(call->oldpath, call->newpath);
 	}
 
-	if (ret < 0) {
-		_ret->_errno = errno;
-	}
 	_ret->ret = ret;
 	return ret;
 }
@@ -1890,17 +1857,13 @@ static int bottom_symlink(Context *ctx, const This *this,
 	int ret;
 
 	if (call->at) {
-		ret = __sysret(sys_symlinkat(call->oldpath, call->newdirfd,
-									 call->newpath));
+		ret = sys_symlinkat(call->oldpath, call->newdirfd,
+							call->newpath);
 	} else {
-		ret = __sysret(sys_symlink(call->oldpath, call->newpath));
+		ret = sys_symlink(call->oldpath, call->newpath);
 	}
 
 	call->ret->ret = ret;
-	if (ret < 0) {
-		call->ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -1909,16 +1872,12 @@ static int bottom_unlink(Context *ctx, const This *this,
 	int ret;
 
 	if (call->at) {
-		ret = __sysret(sys_unlinkat(call->dirfd, call->path, call->flags));
+		ret = sys_unlinkat(call->dirfd, call->path, call->flags);
 	} else {
-		ret = __sysret(sys_unlink(call->path));
+		ret = sys_unlink(call->path);
 	}
 
 	call->ret->ret = ret;
-	if (ret < 0) {
-		call->ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -1928,18 +1887,18 @@ static int bottom_setxattr(Context *ctx, const This *this,
 
 	switch (call->type2) {
 		case XATTRTYPE_PLAIN:
-			ret = __sysret(sys_setxattr(call->path, call->name,
-										call->value, call->size, call->flags));
+			ret = sys_setxattr(call->path, call->name,
+							   call->value, call->size, call->flags);
 		break;
 
 		case XATTRTYPE_L:
-			ret = __sysret(sys_lsetxattr(call->path, call->name,
-										 call->value, call->size, call->flags));
+			ret = sys_lsetxattr(call->path, call->name,
+								call->value, call->size, call->flags);
 		break;
 
 		case XATTRTYPE_F:
-			ret = __sysret(sys_fsetxattr(call->fd, call->name,
-										 call->value, call->size, call->flags));
+			ret = sys_fsetxattr(call->fd, call->name,
+								call->value, call->size, call->flags);
 		break;
 
 		default:
@@ -1948,10 +1907,6 @@ static int bottom_setxattr(Context *ctx, const This *this,
 	}
 
 	call->ret->ret = ret;
-	if (ret < 0) {
-		call->ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -1961,18 +1916,18 @@ static ssize_t bottom_getxattr(Context *ctx, const This *this,
 
 	switch (call->type2) {
 		case XATTRTYPE_PLAIN:
-			ret = __sysret(sys_getxattr(call->path, call->name,
-										call->value, call->size));
+			ret = sys_getxattr(call->path, call->name,
+							   call->value, call->size);
 		break;
 
 		case XATTRTYPE_L:
-			ret = __sysret(sys_lgetxattr(call->path, call->name,
-										 call->value, call->size));
+			ret = sys_lgetxattr(call->path, call->name,
+								call->value, call->size);
 		break;
 
 		case XATTRTYPE_F:
-			ret = __sysret(sys_fgetxattr(call->fd, call->name,
-										 call->value, call->size));
+			ret = sys_fgetxattr(call->fd, call->name,
+								call->value, call->size);
 		break;
 
 		default:
@@ -1981,10 +1936,6 @@ static ssize_t bottom_getxattr(Context *ctx, const This *this,
 	}
 
 	call->ret->ret = ret;
-	if (ret < 0) {
-		call->ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -1994,15 +1945,15 @@ static ssize_t bottom_listxattr(Context *ctx, const This *this,
 
 	switch (call->type2) {
 		case XATTRTYPE_PLAIN:
-			ret = __sysret(sys_listxattr(call->path, call->list, call->size));
+			ret = sys_listxattr(call->path, call->list, call->size);
 		break;
 
 		case XATTRTYPE_L:
-			ret = __sysret(sys_llistxattr(call->path, call->list, call->size));
+			ret = sys_llistxattr(call->path, call->list, call->size);
 		break;
 
 		case XATTRTYPE_F:
-			ret = __sysret(sys_flistxattr(call->fd, call->list, call->size));
+			ret = sys_flistxattr(call->fd, call->list, call->size);
 		break;
 
 		default:
@@ -2011,10 +1962,6 @@ static ssize_t bottom_listxattr(Context *ctx, const This *this,
 	}
 
 	call->ret->ret = ret;
-	if (ret < 0) {
-		call->ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -2024,15 +1971,15 @@ static int bottom_removexattr(Context *ctx, const This *this,
 
 	switch (call->type2) {
 		case XATTRTYPE_PLAIN:
-			ret = __sysret(sys_removexattr(call->path, call->name));
+			ret = sys_removexattr(call->path, call->name);
 		break;
 
 		case XATTRTYPE_L:
-			ret = __sysret(sys_lremovexattr(call->path, call->name));
+			ret = sys_lremovexattr(call->path, call->name);
 		break;
 
 		case XATTRTYPE_F:
-			ret = __sysret(sys_fremovexattr(call->fd, call->name));
+			ret = sys_fremovexattr(call->fd, call->name);
 		break;
 
 		default:
@@ -2041,10 +1988,6 @@ static int bottom_removexattr(Context *ctx, const This *this,
 	}
 
 	call->ret->ret = ret;
-	if (ret < 0) {
-		call->ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -2079,17 +2022,17 @@ static int bottom_rename(Context *ctx, const This *this,
 
 	switch (call->type) {
 		case RENAMETYPE_PLAIN:
-			ret = __sysret(sys_rename(call->oldpath, call->newpath));
+			ret = sys_rename(call->oldpath, call->newpath);
 		break;
 
 		case RENAMETYPE_AT:
-			ret = __sysret(sys_renameat(call->olddirfd, call->oldpath,
-										call->newdirfd, call->newpath));
+			ret = sys_renameat(call->olddirfd, call->oldpath,
+							   call->newdirfd, call->newpath);
 		break;
 
 		case RENAMETYPE_AT2:
-			ret = __sysret(sys_renameat2(call->olddirfd, call->oldpath,
-										 call->newdirfd, call->newpath, call->flags));
+			ret = sys_renameat2(call->olddirfd, call->oldpath,
+								call->newdirfd, call->newpath, call->flags);
 		break;
 
 		default:
@@ -2098,10 +2041,6 @@ static int bottom_rename(Context *ctx, const This *this,
 	}
 
 	call->ret->ret = ret;
-	if (ret < 0) {
-		call->ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -2110,16 +2049,12 @@ static int bottom_chdir(Context *ctx, const This *this, const CallChdir *call) {
 	RetInt *_ret = call->ret;
 
 	if (call->f) {
-		ret = __sysret(sys_fchdir(call->fd));
+		ret = sys_fchdir(call->fd);
 	} else {
-		ret = __sysret(sys_chdir(call->path));
+		ret = sys_chdir(call->path);
 	}
 
 	_ret->ret = ret;
-	if (ret < 0) {
-		_ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -2129,15 +2064,15 @@ static int bottom_chmod(Context *ctx, const This *this, const CallChmod *call) {
 
 	switch(call->type) {
 		case CHMODTYPE_PLAIN:
-			ret = __sysret(sys_chmod(call->path, call->mode));
+			ret = sys_chmod(call->path, call->mode);
 		break;
 
 		case CHMODTYPE_F:
-			ret = __sysret(sys_fchmod(call->fd, call->mode));
+			ret = sys_fchmod(call->fd, call->mode);
 		break;
 
 		case CHMODTYPE_AT:
-			ret = __sysret(sys_fchmodat(call->dirfd, call->path, call->mode));
+			ret = sys_fchmodat(call->dirfd, call->path, call->mode);
 		break;
 
 		default:
@@ -2146,10 +2081,6 @@ static int bottom_chmod(Context *ctx, const This *this, const CallChmod *call) {
 	}
 
 	_ret->ret = ret;
-	if (ret < 0) {
-		_ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -2158,16 +2089,12 @@ static int bottom_truncate(Context *ctx, const This *this, const CallTruncate *c
 	RetInt *_ret = call->ret;
 
 	if (call->f) {
-		ret = __sysret(sys_ftruncate(call->fd, call->length));
+		ret = sys_ftruncate(call->fd, call->length);
 	} else {
-		ret = __sysret(sys_truncate(call->path, call->length));
+		ret = sys_truncate(call->path, call->length);
 	}
 
 	_ret->ret = ret;
-	if (ret < 0) {
-		_ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -2176,16 +2103,12 @@ static int bottom_mkdir(Context *ctx, const This *this, const CallMkdir *call) {
 	RetInt *_ret = call->ret;
 
 	if (call->at) {
-		ret = __sysret(sys_mkdirat(call->dirfd, call->path, call->mode));
+		ret = sys_mkdirat(call->dirfd, call->path, call->mode);
 	} else {
-		ret = __sysret(sys_mkdir(call->path, call->mode));
+		ret = sys_mkdir(call->path, call->mode);
 	}
 
 	_ret->ret = ret;
-	if (ret < 0) {
-		_ret->_errno = errno;
-	}
-
 	return ret;
 }
 
@@ -2194,14 +2117,11 @@ static ssize_t bottom_getdents(Context *ctx, const This *this, const CallGetdent
 	RetSSize *_ret = call->ret;
 
 	if (call->is64) {
-		ret = __sysret(sys_getdents64(call->fd, call->dirp, call->count));
+		ret = sys_getdents64(call->fd, call->dirp, call->count);
 	} else {
-		ret = __sysret(sys_getdents(call->fd, call->dirp, call->count));
+		ret = sys_getdents(call->fd, call->dirp, call->count);
 	}
 
-	if (ret < 0) {
-		_ret->_errno = errno;
-	}
 	_ret->ret = ret;
 	return ret;
 }

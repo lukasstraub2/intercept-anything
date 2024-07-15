@@ -24,6 +24,8 @@
  * SOFTWARE.
  */
 
+#include "common.h"
+
 #include "nolibc.h"
 #include "mprotect.h"
 #include "trampo.h"
@@ -81,12 +83,12 @@ static unsigned long loadelf_anon(int fd, Elf_Ehdr *ehdr, Elf_Phdr *phdr)
 	hint = dyn ? NULL : (void *)minva;
 
 	/* Check that we can hold the whole image. */
-	base = mmap(hint, maxva - minva, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS,
-				-1, 0);
-	if (base == MAP_FAILED) {
+	base = sys_mmap(hint, maxva - minva, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS,
+					-1, 0);
+	if ((unsigned long)base >= -4095UL) {
 		return LOAD_ERR;
 	}
-	munmap(base, maxva - minva);
+	sys_munmap(base, maxva - minva);
 	/* For !dyn, we want MAP_FIXED_NOREPLACE behaviour, but older kernels do
 	 * not support it. So check if the kernel modified the mapping due to
 	 * collisions.
@@ -105,21 +107,20 @@ static unsigned long loadelf_anon(int fd, Elf_Ehdr *ehdr, Elf_Phdr *phdr)
 		start += TRUNC_PG(iter->p_vaddr);
 		sz = ROUND_PG(iter->p_memsz + off);
 
-		p = mmap((void *)start, sz, PROT_WRITE, MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE,
-				 -1, 0);
-		if (p == (void *)-1)
+		p = sys_mmap((void *)start, sz, PROT_WRITE, MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE,
+					 -1, 0);
+		if ((unsigned long)p >= -4095UL)
 			goto err;
-		if (lseek(fd, iter->p_offset, SEEK_SET) < 0)
+		if (sys_lseek(fd, iter->p_offset, SEEK_SET) < 0)
 			goto err;
-		if (read(fd, p + off, iter->p_filesz) !=
-				(ssize_t)iter->p_filesz)
+		if (sys_read(fd, p + off, iter->p_filesz) != (ssize_t)iter->p_filesz)
 			goto err;
-		mprotect(p, sz, PFLAGS(iter->p_flags));
+		sys_mprotect(p, sz, PFLAGS(iter->p_flags));
 	}
 
 	return (unsigned long)base;
 err:
-	munmap(base, maxva - minva);
+	sys_munmap(base, maxva - minva);
 	return LOAD_ERR;
 }
 
@@ -153,7 +154,7 @@ int main(int argc, char **argv, char **envp)
 		/* Open file, read and than check ELF header.*/
 		if ((fd = handle_openat(AT_FDCWD, file, O_RDONLY, 0)) < 0)
 			exit_error("can't open %s", file);
-		if (read(fd, ehdr, sizeof(*ehdr)) != sizeof(*ehdr))
+		if (sys_read(fd, ehdr, sizeof(*ehdr)) != sizeof(*ehdr))
 			exit_error("can't read ELF header %s", file);
 		if (!check_ehdr(ehdr))
 			exit_error("bogus ELF header %s", file);
@@ -161,9 +162,9 @@ int main(int argc, char **argv, char **envp)
 		/* Read the program header. */
 		sz = ehdr->e_phnum * sizeof(Elf_Phdr);
 		phdr = alloca(sz);
-		if (lseek(fd, ehdr->e_phoff, SEEK_SET) < 0)
+		if (sys_lseek(fd, ehdr->e_phoff, SEEK_SET) < 0)
 			exit_error("can't lseek to program header %s", file);
-		if (read(fd, phdr, sz) != sz)
+		if (sys_read(fd, phdr, sz) != sz)
 			exit_error("can't read program header %s", file);
 		/* Time to load ELF. */
 		if ((base[i] = loadelf_anon(fd, ehdr, phdr)) == LOAD_ERR)
@@ -178,9 +179,9 @@ int main(int argc, char **argv, char **envp)
 			if (iter->p_type != PT_INTERP)
 				continue;
 			elf_interp = alloca(iter->p_filesz);
-			if (lseek(fd, iter->p_offset, SEEK_SET) < 0)
+			if (sys_lseek(fd, iter->p_offset, SEEK_SET) < 0)
 				exit_error("can't lseek interp segment");
-			if (read(fd, elf_interp, iter->p_filesz) !=
+			if (sys_read(fd, elf_interp, iter->p_filesz) !=
 					(ssize_t)iter->p_filesz)
 				exit_error("can't read interp segment");
 			if (elf_interp[iter->p_filesz - 1] != '\0')
@@ -191,10 +192,10 @@ int main(int argc, char **argv, char **envp)
 		if (elf_interp == NULL)
 			break;
 
-		close(fd);
+		sys_close(fd);
 	}
 
-	close(fd);
+	sys_close(fd);
 
 	/* Reassign some vectors that are important for
 	 * the dynamic linker and for lib C. */
