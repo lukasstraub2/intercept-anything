@@ -282,6 +282,19 @@ static int rootlink_mkdir(Context *ctx, const This *this,
 	return this->next->mkdir(ctx, this->next->mkdir_next, &_call);
 }
 
+static int rootlink_mknod(Context *ctx, const This *this,
+						  const CallMknod *call) {
+	CallMknod _call;
+	callmknod_copy(&_call, call);
+
+	if (call->at && call->path[0] != '/') {
+		return this->next->mknod(ctx, this->next->mknod_next, call);
+	}
+
+	MANGLE_PATH(_call.path, -1);
+	return this->next->mknod(ctx, this->next->mknod_next, &_call);
+}
+
 const CallHandler *rootlink_init(const CallHandler *next) {
 	static int initialized = 0;
 	static This this;
@@ -322,6 +335,8 @@ const CallHandler *rootlink_init(const CallHandler *next) {
 	this.this.truncate_next = &this;
 	this.this.mkdir = rootlink_mkdir;
 	this.this.mkdir_next = &this;
+	this.this.mknod = rootlink_mknod;
+	this.this.mknod_next = &this;
 
 	return &this.this;
 }
