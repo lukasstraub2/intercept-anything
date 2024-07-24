@@ -1148,7 +1148,8 @@ err:
 }
 
 const CallHandler *hardlinkshim_init(const CallHandler *next,
-									 const CallHandler *bottom) {
+									 const CallHandler *bottom,
+									 int recursing) {
 	static This this;
 	static int initialized = 0;
 	int ret;
@@ -1185,10 +1186,12 @@ const CallHandler *hardlinkshim_init(const CallHandler *next,
 	this.this.getdents = hardlink_getdents;
 	this.this.getdents_next = &this;
 
-	ret = mkpath(HARDLINK_PREFIX LOCKFILE, 0777);
-	if (ret < 0) {
-		exit_error("mkpath(%s): %d", LOCKFILE, -ret);
-		return NULL;
+	if (!recursing) {
+		ret = mkpath(HARDLINK_PREFIX LOCKFILE, 0777);
+		if (ret < 0) {
+			exit_error("mkpath(%s): %d", LOCKFILE, -ret);
+			return NULL;
+		}
 	}
 
 	ret = sys_open(HARDLINK_PREFIX LOCKFILE, O_CREAT | O_RDWR, 0777);

@@ -64,7 +64,7 @@ void intercept_init(int recursing, const char *exe) {
 		install_filter();
 	}
 
-	_next = main_init(&bottom);
+	_next = main_init(&bottom, recursing);
 }
 
 static void handler(int sig, siginfo_t *info, void *ucontext) {

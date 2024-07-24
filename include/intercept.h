@@ -497,6 +497,6 @@ struct CallHandler {
 extern const char *self_exe;
 
 void intercept_init(int recursing, const char *exe);
-const CallHandler *main_init(const CallHandler *bottom);
+const CallHandler *main_init(const CallHandler *bottom, int recursing);
 
 int handle_openat(int dirfd, const char *path, int flags, mode_t mode);
