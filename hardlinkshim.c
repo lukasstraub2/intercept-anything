@@ -1,5 +1,6 @@
 
 #include "common.h"
+#include "mylock.h"
 
 #define DEBUG_ENV "HARDLINK_DEBUG"
 #include "debug.h"
@@ -27,14 +28,46 @@ struct This {
 #define HARDLINK_PREFIX PREFIX "/tmp/hardlinkshim/"
 #define LOCKFILE "lock"
 
+static Spinlock lock_cnt = 0;
+const int lock_fd_offset = 20000;
+
+static int lock_fd_get() {
+	return lock_fd_offset + __atomic_fetch_add(&lock_cnt, 1, __ATOMIC_SEQ_CST);
+}
+
+static void lock_fd_put(int fd) {
+	Spinlock oldval = __atomic_load_n(&lock_cnt, __ATOMIC_SEQ_CST);
+	fd -= lock_fd_offset;
+
+	if (oldval == 0) {
+		abort();
+	}
+
+	if ((unsigned int)fd == oldval -1) {
+		__atomic_compare_exchange_n(&lock_cnt, &oldval, oldval -1, 0,
+									__ATOMIC_SEQ_CST, __ATOMIC_RELAXED);
+	}
+}
+
 static int lock(const This *this, int operation) {
-	int ret, fd;
+	int ret, fd, newfd;
 
 	ret = sys_open(HARDLINK_PREFIX LOCKFILE, O_RDWR | O_CLOEXEC, 0777);
 	if (ret < 0) {
 		return ret;
 	}
 	fd = ret;
+
+	newfd = lock_fd_get();
+
+	ret = sys_dup3(fd, newfd, O_CLOEXEC);
+	if (ret < 0) {
+		sys_close(fd);
+		lock_fd_put(newfd);
+		return ret;
+	}
+	sys_close(fd);
+	fd = newfd;
 
 	while (1) {
 		ret = sys_flock(fd, operation);
@@ -44,6 +77,7 @@ static int lock(const This *this, int operation) {
 			}
 
 			sys_close(fd);
+			lock_fd_put(fd);
 			return ret;
 		}
 
@@ -58,6 +92,7 @@ static int unlock(int fd) {
 
 	ret = sys_flock(fd, LOCK_UN);
 	sys_close(fd);
+	lock_fd_put(fd);
 	if (ret < 0) {
 		return ret;
 	}

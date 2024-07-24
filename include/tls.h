@@ -40,6 +40,7 @@ typedef struct Tls Tls;
 struct Tls {
 	volatile pid_t tid;
 	Cache cache;
+	int hardlink_lock_cnt;
 };
 
 TlsList *tls_search_binary(uint32_t tid);
