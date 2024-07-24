@@ -248,3 +248,9 @@ int sys_getdents(int fd, void *dirp, int count)
 	return __nolibc_enosys(__func__, fd, dirp, count);
 #endif
 }
+
+static __attribute__((unused))
+long sys_mknodat(int dirfd, const char *path, mode_t mode, dev_t dev)
+{
+	return my_syscall4(__NR_mknodat, dirfd, path, mode, dev);
+}

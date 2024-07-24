@@ -435,6 +435,28 @@ static void callgetdents_copy(CallGetdents *dst, const CallGetdents *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct CallMknod CallMknod;
+struct CallMknod {
+	int at;      // Indicates if dirfd is used (1) or not (0)
+	int dirfd;    // File descriptor of the directory (if at == 1)
+	const char *path;
+	mode_t mode;
+	unsigned int dev; // Device number
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void callmknod_copy(CallMknod *dst, const CallMknod *call) {
+	dst->at = call->at;
+	if (call->at) {
+		dst->dirfd = call->dirfd;
+	}
+	dst->path = call->path;
+	dst->mode = call->mode;
+	dst->dev = call->dev;
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -468,6 +490,8 @@ struct CallHandler {
 	const This *mkdir_next;
 	ssize_t (*getdents)(Context *ctx, const This *this, const CallGetdents *call);
 	const This *getdents_next;
+	int (*mknod)(Context *ctx, const This *this, const CallMknod *call);
+	const This *mknod_next;
 };
 
 extern const char *self_exe;
