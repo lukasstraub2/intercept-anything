@@ -271,6 +271,11 @@ int sys_bind(int fd, void *addr, int addrlen) {
 }
 
 static __attribute__((unused))
+int sys_connect(int fd, void *addr, int addrlen) {
+	return my_syscall3(__NR_connect, fd, addr, addrlen);
+}
+
+static __attribute__((unused))
 int sys_fanotify_mark(int fanotify_fd, unsigned int flags,
 					  __u64 mask, int dfd, const char *pathname) {
 	return my_syscall5(__NR_fanotify_mark, fanotify_fd, flags, mask, dfd, pathname);

@@ -94,8 +94,9 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fanotify_mark, 56, 0),
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_inotify_add_watch, 55, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fanotify_mark, 57, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_inotify_add_watch, 56, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_connect, 55, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_bind, 54, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_accept, 53, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_accept4, 52, 0),
@@ -1405,14 +1406,34 @@ int handle_bind(int fd, void *addr, int addrlen) {
 	Context ctx;
 	context_fill(&ctx);
 	RetInt ret = { 0 };
-	CallBind call = {
+	CallConnect call = {
+		.is_bind = 1,
 		.fd = fd,
 		.addr = addr,
 		.addrlen = addrlen,
 		.ret = &ret
 	};
 
-	_next->bind(&ctx, _next->bind_next, &call);
+	_next->connect(&ctx, _next->connect_next, &call);
+
+	return ret.ret;
+}
+
+int handle_connect(int fd, void *addr, int addrlen) {
+	trace("connect()\n");
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { 0 };
+	CallConnect call = {
+		.is_bind = 0,
+		.fd = fd,
+		.addr = addr,
+		.addrlen = addrlen,
+		.ret = &ret
+	};
+
+	_next->connect(&ctx, _next->connect_next, &call);
 
 	return ret.ret;
 }
@@ -1737,6 +1758,10 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 
 		case __NR_bind:
 			ret = handle_bind(args->arg1, (void *)args->arg2, args->arg3);
+		break;
+
+		case __NR_connect:
+			ret = handle_connect(args->arg1, (void *)args->arg2, args->arg3);
 		break;
 
 		case __NR_fanotify_mark:
@@ -2380,11 +2405,15 @@ static int bottom_accept(Context *ctx, const This *this, const CallAccept *call)
 	return ret;
 }
 
-static int bottom_bind(Context *ctx, const This *this, const CallBind *call) {
+static int bottom_connect(Context *ctx, const This *this, const CallConnect *call) {
 	int ret;
 	RetInt *_ret = call->ret;
 
-	ret = sys_bind(call->fd, call->addr, call->addrlen);
+	if (call->is_bind) {
+		ret = sys_bind(call->fd, call->addr, call->addrlen);
+	} else {
+		ret = sys_connect(call->fd, call->addr, call->addrlen);
+	}
 
 	_ret->ret = ret;
 	return ret;
@@ -2445,7 +2474,7 @@ static const CallHandler bottom = {
 	NULL,
 	bottom_accept,
 	NULL,
-	bottom_bind,
+	bottom_connect,
 	NULL,
 	bottom_fanotify_mark,
 	NULL,

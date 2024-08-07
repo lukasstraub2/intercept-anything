@@ -479,8 +479,9 @@ static void callaccept_copy(CallAccept *dst, const CallAccept *call) {
 	dst->ret = call->ret;
 }
 
-typedef struct CallBind CallBind;
-struct CallBind {
+typedef struct CallConnect CallConnect;
+struct CallConnect {
+	int is_bind;
 	int fd;
 	void *addr;
 	int addrlen;
@@ -488,7 +489,8 @@ struct CallBind {
 };
 
 __attribute__((unused))
-static void callbind_copy(CallBind *dst, const CallBind *call) {
+static void callconnect_copy(CallConnect *dst, const CallConnect *call) {
+	dst->is_bind = call->is_bind;
 	dst->fd = call->fd;
 	dst->addr = call->addr;
 	dst->addrlen = call->addrlen;
@@ -568,8 +570,8 @@ struct CallHandler {
 	const This *mknod_next;
 	int (*accept)(Context *ctx, const This *this, const CallAccept *call);
 	const This *accept_next;
-	int (*bind)(Context *ctx, const This *this, const CallBind *call);
-	const This *bind_next;
+	int (*connect)(Context *ctx, const This *this, const CallConnect *call);
+	const This *connect_next;
 	int (*fanotify_mark)(Context *ctx, const This *this, const CallFanotifyMark *call);
 	const This *fanotify_mark_next;
 	int (*inotify_add_watch)(Context *ctx, const This *this, const CallInotifyAddWatch *call);

@@ -316,10 +316,10 @@ static int fill_addr_un(struct sockaddr_un *addr, char *sun_path) {
 	return 0;
 }
 
-static int rootlink_bind(Context *ctx, const This *this, const CallBind *call) {
+static int rootlink_connect(Context *ctx, const This *this, const CallConnect *call) {
 	RetInt *_ret = call->ret;
-	CallBind _call;
-	callbind_copy(&_call, call);
+	CallConnect _call;
+	callconnect_copy(&_call, call);
 
 	struct __kernel_sockaddr_storage *generic = call->addr;
 	if (generic->ss_family == AF_UNIX) {
@@ -370,7 +370,7 @@ static int rootlink_bind(Context *ctx, const This *this, const CallBind *call) {
 
 				_call.addr = &new_addr;
 				_call.addrlen = sizeof(new_addr);
-				ret = this->next->bind(ctx, this->next->bind_next, &_call);
+				ret = this->next->connect(ctx, this->next->connect_next, &_call);
 				sys_close(dirfd);
 
 				return ret;
@@ -384,12 +384,12 @@ static int rootlink_bind(Context *ctx, const This *this, const CallBind *call) {
 
 				_call.addr = &new_addr;
 				_call.addrlen = sizeof(new_addr);
-				return this->next->bind(ctx, this->next->bind_next, &_call);
+				return this->next->connect(ctx, this->next->connect_next, &_call);
 			}
 		}
 	}
 
-	return this->next->bind(ctx, this->next->bind_next, call);
+	return this->next->connect(ctx, this->next->connect_next, call);
 }
 
 static int rootlink_fanotify_mark(Context *ctx, const This *this, const CallFanotifyMark *call) {
@@ -454,8 +454,8 @@ const CallHandler *rootlink_init(const CallHandler *next) {
 	this.this.mkdir_next = &this;
 	this.this.mknod = rootlink_mknod;
 	this.this.mknod_next = &this;
-	this.this.bind = rootlink_bind;
-	this.this.bind_next = &this;
+	this.this.connect = rootlink_connect;
+	this.this.connect_next = &this;
 	this.this.fanotify_mark = rootlink_fanotify_mark;
 	this.this.fanotify_mark_next = &this;
 	this.this.inotify_add_watch = rootlink_inotify_add_watch;
