@@ -495,6 +495,42 @@ static void callbind_copy(CallBind *dst, const CallBind *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct CallFanotifyMark CallFanotifyMark;
+struct CallFanotifyMark {
+	int fd;
+	unsigned int flags;
+	__u64 mask;
+	int dirfd;
+	const char *path;
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void callfanotify_mark_copy(CallFanotifyMark *dst, const CallFanotifyMark *call) {
+	dst->fd = call->fd;
+	dst->flags = call->flags;
+	dst->mask = call->mask;
+	dst->dirfd = call->dirfd;
+	dst->path = call->path;
+	dst->ret = call->ret;
+}
+
+typedef struct CallInotifyAddWatch CallInotifyAddWatch;
+struct CallInotifyAddWatch {
+	int fd;
+	const char *path;
+	__u32 mask;
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void callinotify_add_watch_copy(CallInotifyAddWatch *dst, const CallInotifyAddWatch *call) {
+	dst->fd = call->fd;
+	dst->path = call->path;
+	dst->mask = call->mask;
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -534,6 +570,10 @@ struct CallHandler {
 	const This *accept_next;
 	int (*bind)(Context *ctx, const This *this, const CallBind *call);
 	const This *bind_next;
+	int (*fanotify_mark)(Context *ctx, const This *this, const CallFanotifyMark *call);
+	const This *fanotify_mark_next;
+	int (*inotify_add_watch)(Context *ctx, const This *this, const CallInotifyAddWatch *call);
+	const This *inotify_add_watch_next;
 };
 
 extern const char *self_exe;

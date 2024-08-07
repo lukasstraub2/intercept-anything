@@ -392,6 +392,26 @@ static int rootlink_bind(Context *ctx, const This *this, const CallBind *call) {
 	return this->next->bind(ctx, this->next->bind_next, call);
 }
 
+static int rootlink_fanotify_mark(Context *ctx, const This *this, const CallFanotifyMark *call) {
+	CallFanotifyMark _call;
+	callfanotify_mark_copy(&_call, call);
+
+	if (call->path[0] != '/') {
+		return this->next->fanotify_mark(ctx, this->next->fanotify_mark_next, call);
+	}
+
+	MANGLE_PATH(_call.path, -1);
+	return this->next->fanotify_mark(ctx, this->next->fanotify_mark_next, &_call);
+}
+
+static int rootlink_inotify_add_watch(Context *ctx, const This *this, const CallInotifyAddWatch *call) {
+	CallInotifyAddWatch _call;
+	callinotify_add_watch_copy(&_call, call);
+
+	MANGLE_PATH(_call.path, -1);
+	return this->next->inotify_add_watch(ctx, this->next->inotify_add_watch_next, &_call);
+}
+
 const CallHandler *rootlink_init(const CallHandler *next) {
 	static int initialized = 0;
 	static This this;
@@ -436,6 +456,10 @@ const CallHandler *rootlink_init(const CallHandler *next) {
 	this.this.mknod_next = &this;
 	this.this.bind = rootlink_bind;
 	this.this.bind_next = &this;
+	this.this.fanotify_mark = rootlink_fanotify_mark;
+	this.this.fanotify_mark_next = &this;
+	this.this.inotify_add_watch = rootlink_inotify_add_watch;
+	this.this.inotify_add_watch_next = &this;
 
 	return &this.this;
 }

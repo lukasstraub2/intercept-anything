@@ -94,6 +94,8 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fanotify_mark, 56, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_inotify_add_watch, 55, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_bind, 54, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_accept, 53, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_accept4, 52, 0),
@@ -1415,6 +1417,45 @@ int handle_bind(int fd, void *addr, int addrlen) {
 	return ret.ret;
 }
 
+static int handle_fanotify_mark(int fanotify_fd, unsigned int flags,
+								__u64 mask, int dfd, const char *pathname) {
+	trace("fanotify_mark(%s)\n", pathname);
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { 0 };
+	CallFanotifyMark call = {
+		.fd = fanotify_fd,
+		.flags = flags,
+		.mask = mask,
+		.dirfd = dfd,
+		.path = pathname,
+		.ret = &ret
+	};
+
+	_next->fanotify_mark(&ctx, _next->fanotify_mark_next, &call);
+
+	return ret.ret;
+}
+
+static int handle_inotify_add_watch(int fd, const char *pathname, __u32 mask) {
+	trace("inotify_add_watch(%s)\n", pathname);
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { 0 };
+	CallInotifyAddWatch call = {
+		.fd = fd,
+		.path = pathname,
+		.mask = mask,
+		.ret = &ret
+	};
+
+	_next->inotify_add_watch(&ctx, _next->inotify_add_watch_next, &call);
+
+	return ret.ret;
+}
+
 
 static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 	ssize_t ret;
@@ -1696,6 +1737,14 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 
 		case __NR_bind:
 			ret = handle_bind(args->arg1, (void *)args->arg2, args->arg3);
+		break;
+
+		case __NR_fanotify_mark:
+			ret = handle_fanotify_mark(args->arg1, args->arg2, args->arg3, args->arg4, (const char *)args->arg5);
+		break;
+
+		case __NR_inotify_add_watch:
+			ret = handle_inotify_add_watch(args->arg1, (const char *)args->arg2, args->arg3);
 		break;
 
 		default:
@@ -2341,6 +2390,26 @@ static int bottom_bind(Context *ctx, const This *this, const CallBind *call) {
 	return ret;
 }
 
+static int bottom_fanotify_mark(Context *ctx, const This *this, const CallFanotifyMark *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	ret = sys_fanotify_mark(call->fd, call->flags, call->mask, call->dirfd, call->path);
+
+	_ret->ret = ret;
+	return ret;
+}
+
+static int bottom_inotify_add_watch(Context *ctx, const This *this, const CallInotifyAddWatch *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	ret = sys_inotify_add_watch(call->fd, call->path, call->mask);
+
+	_ret->ret = ret;
+	return ret;
+}
+
 static const CallHandler bottom = {
 	bottom_open,
 	NULL,
@@ -2377,5 +2446,9 @@ static const CallHandler bottom = {
 	bottom_accept,
 	NULL,
 	bottom_bind,
+	NULL,
+	bottom_fanotify_mark,
+	NULL,
+	bottom_inotify_add_watch,
 	NULL,
 };
