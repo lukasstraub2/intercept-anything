@@ -479,6 +479,22 @@ static void callaccept_copy(CallAccept *dst, const CallAccept *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct CallBind CallBind;
+struct CallBind {
+	int fd;
+	void *addr;
+	int addrlen;
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void callbind_copy(CallBind *dst, const CallBind *call) {
+	dst->fd = call->fd;
+	dst->addr = call->addr;
+	dst->addrlen = call->addrlen;
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -516,6 +532,8 @@ struct CallHandler {
 	const This *mknod_next;
 	int (*accept)(Context *ctx, const This *this, const CallAccept *call);
 	const This *accept_next;
+	int (*bind)(Context *ctx, const This *this, const CallBind *call);
+	const This *bind_next;
 };
 
 extern const char *self_exe;

@@ -9,6 +9,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "linux/socket.h"
+#include "linux/un.h"
+#include "mysocket.h"
+
 struct This {
 	CallHandler this;
 	const CallHandler *next;
@@ -49,12 +53,16 @@ static ssize_t mangle_path(char *out, size_t out_len, const char *path) {
 		if (len > out_len) {
 			return -ENAMETOOLONG;
         }
+
 		memcpy(out, path, len);
 		return len;
     }
 
     len = concat(out, out_len, PREFIX "/tmp/rootlink", path);
 	if (!out) {
+		if (len > SCRATCH_SIZE) {
+			return -ENAMETOOLONG;
+		}
 		return len;
 	}
 
@@ -67,9 +75,9 @@ static ssize_t mangle_path(char *out, size_t out_len, const char *path) {
 
 #define _MANGLE_PATH(__path, errret, prefix) \
 	ssize_t prefix ## len = mangle_path(NULL, 0, (__path)); \
-	if (prefix ## len > SCRATCH_SIZE) { \
-		call->ret->ret = -ENAMETOOLONG; \
-		return -ENAMETOOLONG; \
+	if (prefix ## len < 0) { \
+		call->ret->ret = prefix ## len; \
+		return prefix ## len; \
 	} \
 	\
 	char prefix ## buf[prefix ## len]; \
@@ -295,6 +303,95 @@ static int rootlink_mknod(Context *ctx, const This *this,
 	return this->next->mknod(ctx, this->next->mknod_next, &_call);
 }
 
+static int fill_addr_un(struct sockaddr_un *addr, char *sun_path) {
+	size_t len = strlen(sun_path) + 1;
+
+	if (len > sizeof(addr->sun_path)) {
+		return -ENAMETOOLONG;
+	}
+
+	addr->sun_family = AF_UNIX;
+	memcpy(addr->sun_path, sun_path, len);
+
+	return 0;
+}
+
+static int rootlink_bind(Context *ctx, const This *this, const CallBind *call) {
+	RetInt *_ret = call->ret;
+	CallBind _call;
+	callbind_copy(&_call, call);
+
+	struct __kernel_sockaddr_storage *generic = call->addr;
+	if (generic->ss_family == AF_UNIX) {
+		struct sockaddr_un *addr = call->addr;
+		if (addr->sun_path[0] != '\0') {
+			// Not an abstract socket
+			ssize_t len = mangle_path(NULL, 0, addr->sun_path);
+			if (len < 0) {
+				_ret->ret = len;
+				return len;
+			}
+
+			char new_path[len];
+			len = mangle_path(new_path, len, addr->sun_path);
+			assert(len >= 0);
+
+			char *slash = strrchr(new_path, '/');
+			if (slash) {
+				*slash = '\0';
+				int dirfd = sys_open(new_path,
+									 O_RDONLY | O_DIRECTORY | O_NOCTTY | O_CLOEXEC, 0);
+				*slash = '/';
+				if (dirfd < 0) {
+					_ret->ret = dirfd;
+					return dirfd;
+				}
+
+				char dirfd_buf[21];
+				itoa_r(dirfd, dirfd_buf);
+				const char *prefix = "/proc/self/fd/";
+				const ssize_t prefix_len = strlen(prefix) +1;
+				const char *basename = slash;
+				const ssize_t basename_len = strlen(basename) +1;
+				const ssize_t fd_path_len = prefix_len + 21 + basename_len;
+				char fd_path[fd_path_len];
+				len = concat3(fd_path, fd_path_len, prefix, dirfd_buf, basename);
+				if (len > fd_path_len) {
+					abort();
+				}
+
+				struct sockaddr_un new_addr;
+				int ret = fill_addr_un(&new_addr, fd_path);
+				if (ret < 0) {
+					sys_close(dirfd);
+					_ret->ret = ret;
+					return ret;
+				}
+
+				_call.addr = &new_addr;
+				_call.addrlen = sizeof(new_addr);
+				ret = this->next->bind(ctx, this->next->bind_next, &_call);
+				sys_close(dirfd);
+
+				return ret;
+			} else {
+				struct sockaddr_un new_addr;
+				int ret = fill_addr_un(&new_addr, new_path);
+				if (ret < 0) {
+					_ret->ret = ret;
+					return ret;
+				}
+
+				_call.addr = &new_addr;
+				_call.addrlen = sizeof(new_addr);
+				return this->next->bind(ctx, this->next->bind_next, &_call);
+			}
+		}
+	}
+
+	return this->next->bind(ctx, this->next->bind_next, call);
+}
+
 const CallHandler *rootlink_init(const CallHandler *next) {
 	static int initialized = 0;
 	static This this;
@@ -337,6 +434,8 @@ const CallHandler *rootlink_init(const CallHandler *next) {
 	this.this.mkdir_next = &this;
 	this.this.mknod = rootlink_mknod;
 	this.this.mknod_next = &this;
+	this.this.bind = rootlink_bind;
+	this.this.bind_next = &this;
 
 	return &this.this;
 }

@@ -25,6 +25,8 @@
 #define alloca	__builtin_alloca
 
 size_t concat(char *out, size_t out_len, const char *a, const char *b);
+size_t concat3(char *out, size_t out_len,
+			   const char *a, const char *b, const char *c);
 int strcmp_prefix(const char *a, const char *b);
 
 int getcwd_cache(Cache *cache, char *out, size_t out_len);
