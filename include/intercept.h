@@ -457,6 +457,28 @@ static void callmknod_copy(CallMknod *dst, const CallMknod *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct CallAccept CallAccept;
+struct CallAccept {
+	int is4;
+	int fd;
+	void *addr;
+	int *addrlen;
+	int flags;
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void callaccept_copy(CallAccept *dst, const CallAccept *call) {
+	dst->is4 = call->is4;
+	dst->fd = call->fd;
+	dst->addr = call->addr;
+	dst->addrlen = call->addrlen;
+	if (call->is4) {
+		dst->flags = call->flags;
+	}
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -492,6 +514,8 @@ struct CallHandler {
 	const This *getdents_next;
 	int (*mknod)(Context *ctx, const This *this, const CallMknod *call);
 	const This *mknod_next;
+	int (*accept)(Context *ctx, const This *this, const CallAccept *call);
+	const This *accept_next;
 };
 
 extern const char *self_exe;

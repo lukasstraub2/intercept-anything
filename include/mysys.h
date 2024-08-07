@@ -254,3 +254,13 @@ long sys_mknodat(int dirfd, const char *path, mode_t mode, dev_t dev)
 {
 	return my_syscall4(__NR_mknodat, dirfd, path, mode, dev);
 }
+
+static __attribute__((unused))
+int sys_accept(int fd, void *addr, int *addrlen) {
+	return my_syscall3(__NR_accept4, fd, addr, addrlen);
+}
+
+static __attribute__((unused))
+int sys_accept4(int fd, void *addr, int *addrlen, int flags) {
+	return my_syscall4(__NR_accept4, fd, addr, addrlen, flags);
+}
