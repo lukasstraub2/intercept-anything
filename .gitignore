@@ -5,7 +5,7 @@ loader
 posix_spawnp_helper
 print
 confstr
-test.sh
+/test.sh
 rootlink.*
 !rootlink.h
 !rootlink.c

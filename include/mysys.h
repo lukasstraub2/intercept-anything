@@ -285,3 +285,13 @@ static __attribute__((unused))
 int sys_inotify_add_watch(int fd, const char *pathname, __u32 mask) {
 	return my_syscall3(__NR_inotify_add_watch, fd, pathname, mask);
 }
+
+static __attribute__((unused))
+int sys_getrlimit(unsigned int resource, void *rlim) {
+	return my_syscall2(__NR_getrlimit, resource, rlim);
+}
+
+static __attribute__((unused))
+int sys_setrlimit(unsigned int resource, const void *rlim) {
+	return my_syscall2(__NR_setrlimit, resource, rlim);
+}

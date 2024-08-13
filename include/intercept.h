@@ -533,6 +533,44 @@ static void callinotify_add_watch_copy(CallInotifyAddWatch *dst, const CallInoti
 	dst->ret = call->ret;
 }
 
+typedef enum RlimitType RlimitType;
+enum RlimitType {
+	RLIMITTYPE_GET,
+	RLIMITTYPE_SET,
+	RLIMITTYPE_PR
+};
+
+typedef struct CallRlimit CallRlimit;
+struct CallRlimit {
+	RlimitType type;
+	pid_t pid;
+	unsigned int resource;
+	const void *new_rlim;
+	void *old_rlim;
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void callrlimit_copy(CallRlimit *dst, const CallRlimit *call) {
+	dst->type = call->type;
+
+	if (call->type == RLIMITTYPE_PR) {
+		dst->pid = call->pid;
+	}
+
+	dst->resource = call->resource;
+
+	if (call->type == RLIMITTYPE_PR || call->type == RLIMITTYPE_SET) {
+		dst->new_rlim = call->new_rlim;
+	}
+
+	if (call->type == RLIMITTYPE_PR || call->type == RLIMITTYPE_GET) {
+		dst->old_rlim = call->old_rlim;
+	}
+
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -576,6 +614,8 @@ struct CallHandler {
 	const This *fanotify_mark_next;
 	int (*inotify_add_watch)(Context *ctx, const This *this, const CallInotifyAddWatch *call);
 	const This *inotify_add_watch_next;
+	int (*rlimit)(Context *ctx, const This *this, const CallRlimit *call);
+	const This *rlimit_next;
 };
 
 extern const char *self_exe;

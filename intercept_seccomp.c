@@ -1477,6 +1477,62 @@ static int handle_inotify_add_watch(int fd, const char *pathname, __u32 mask) {
 	return ret.ret;
 }
 
+int handle_getrlimit(unsigned int resource, void *old_rlim) {
+	trace("getrlimit()\n");
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { 0 };
+	CallRlimit call = {
+		.type = RLIMITTYPE_GET,
+		.resource = resource,
+		.old_rlim = old_rlim,
+		.ret = &ret
+	};
+
+	_next->rlimit(&ctx, _next->rlimit_next, &call);
+
+	return ret.ret;
+}
+
+int handle_setrlimit(unsigned int resource, const void *new_rlim) {
+	trace("setrlimit()\n");
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { 0 };
+	CallRlimit call = {
+		.type = RLIMITTYPE_SET,
+		.resource = resource,
+		.new_rlim = new_rlim,
+		.ret = &ret
+	};
+
+	_next->rlimit(&ctx, _next->rlimit_next, &call);
+
+	return ret.ret;
+}
+
+int handle_prlimit64(pid_t pid, unsigned int resource, const void *new_rlim, void *old_rlim) {
+	trace("prlimit64()\n");
+
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { 0 };
+	CallRlimit call = {
+		.type = RLIMITTYPE_PR,
+		.pid = pid,
+		.resource = resource,
+		.new_rlim = new_rlim,
+		.old_rlim = old_rlim,
+		.ret = &ret
+	};
+
+	_next->rlimit(&ctx, _next->rlimit_next, &call);
+
+	return ret.ret;
+}
+
 
 static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 	ssize_t ret;
@@ -1770,6 +1826,18 @@ static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
 
 		case __NR_inotify_add_watch:
 			ret = handle_inotify_add_watch(args->arg1, (const char *)args->arg2, args->arg3);
+		break;
+
+		case __NR_getrlimit:
+			ret = handle_getrlimit(args->arg1, (void *)args->arg2);
+		break;
+
+		case __NR_setrlimit:
+			ret = handle_setrlimit(args->arg1, (const void *)args->arg2);
+		break;
+
+		case __NR_prlimit64:
+			ret = handle_prlimit64(args->arg1, args->arg2, (const void *)args->arg3, (void *)args->arg4);
 		break;
 
 		default:
@@ -2439,6 +2507,33 @@ static int bottom_inotify_add_watch(Context *ctx, const This *this, const CallIn
 	return ret;
 }
 
+static int bottom_rlimit(Context *ctx, const This *this, const CallRlimit *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	switch (call->type) {
+		case RLIMITTYPE_GET:
+			ret = sys_getrlimit(call->resource, call->old_rlim);
+			break;
+
+		case RLIMITTYPE_SET:
+			ret = sys_setrlimit(call->resource, call->new_rlim);
+			break;
+
+		case RLIMITTYPE_PR:
+			ret = sys_prlimit64(call->pid, call->resource, call->new_rlim, call->old_rlim);
+			break;
+
+		default:
+			abort();
+			break;
+	}
+
+	_ret->ret = ret;
+	return ret;
+}
+
+
 static const CallHandler bottom = {
 	bottom_open,
 	NULL,
@@ -2479,5 +2574,7 @@ static const CallHandler bottom = {
 	bottom_fanotify_mark,
 	NULL,
 	bottom_inotify_add_watch,
+	NULL,
+	bottom_rlimit,
 	NULL,
 };
