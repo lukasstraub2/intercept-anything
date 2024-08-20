@@ -49,9 +49,9 @@ void spinlock_unlock(Spinlock *lock) {
 	__atomic_store_n(lock, 0, __ATOMIC_RELEASE);
 }
 
-static int is_ownerdead(Tls *tls, Mutex expected) {
+static int is_ownerdead(Mutex expected) {
 	while (1) {
-		int ret = sys_tgkill(tls->pid, expected, 0);
+		int ret = sys_tkill(expected, 0);
 		if (ret < 0) {
 			if (ret == -EAGAIN) {
 				continue;
@@ -66,8 +66,7 @@ static int is_ownerdead(Tls *tls, Mutex expected) {
 	}
 }
 
-static int _mutex_lock(Tls *tls, Mutex *mutex) {
-	const pid_t tid = tls->tid;
+static int _mutex_lock(const pid_t tid, Mutex *mutex) {
 	Mutex expected = 0;
 	int tries = 0;
 	int ownerdead = 0;
@@ -78,7 +77,7 @@ static int _mutex_lock(Tls *tls, Mutex *mutex) {
 			signed long ret;
 			tries = 0;
 
-			if (is_ownerdead(tls, expected)) {
+			if (is_ownerdead(expected)) {
 				ownerdead = 1;
 				continue;
 			}
@@ -116,7 +115,7 @@ int mutex_lock(Tls *tls, RobustMutex *mutex) {
 
 	WRITE_ONCE(list->pending, mutex);
 	__asm volatile ("" ::: "memory");
-	int ownerdead = _mutex_lock(tls, &mutex->mutex);
+	int ownerdead = _mutex_lock(tls->tid, &mutex->mutex);
 	__asm volatile ("" ::: "memory");
 	RLIST_INSERT_HEAD(&list->head, mutex, next);
 	__asm volatile ("" ::: "memory");

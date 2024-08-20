@@ -303,6 +303,11 @@ int sys_tgkill(pid_t tgid, pid_t tid, int sig) {
 }
 
 static __attribute__((unused))
+int sys_tkill(pid_t tid, int sig) {
+	return my_syscall2(__NR_tkill, tid, sig);
+}
+
+static __attribute__((unused))
 ssize_t sys_splice(int fd_in, __kernel_loff_t *off_in,
 				   int fd_out, __kernel_loff_t *off_out,
 				   size_t len, unsigned int flags) {

@@ -11,3 +11,4 @@ rootlink.*
 !rootlink.c
 .qtc_clangd
 tls_test
+mylock_test
