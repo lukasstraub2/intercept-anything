@@ -2,6 +2,7 @@
 
 #include "types.h"
 #include "config.h"
+#include "mylock.h"
 
 // Needed by libgcc due to atomics
 __attribute__((weak,unused,section(".text.nolibc___getauxval")))
@@ -23,7 +24,6 @@ enum CacheType {
 	CACHETYPE_GETCWD
 };
 
-typedef struct Cache Cache;
 struct Cache {
 	TlsAtomic32 reentrant_cnt;
 	CacheType type;
@@ -34,13 +34,13 @@ struct Cache {
 };
 
 #define TLS_LIST_ALLOC 4096
-typedef struct TlsList TlsList;
-
-typedef struct Tls Tls;
 struct Tls {
-	volatile pid_t tid;
+	pid_t pid;
+	pid_t tid;
 	Cache cache;
 	int hardlink_lock_cnt;
+	RobustMutexList my_robust_mutex_list;
+	void *jumpbuf[5];
 };
 
 TlsList *tls_search_binary(uint32_t tid);

@@ -23,7 +23,7 @@ static int tls_size() {
 	return min(size, (uint32_t)TLS_LIST_ALLOC);
 }
 
-static TlsList *_tls_search_binary(uint32_t tid, int u, int o) {
+static TlsList *_tls_search_binary(const uint32_t tid, int u, int o) {
 	if (u > o) {
 		return NULL;
 	}
@@ -49,7 +49,7 @@ static TlsList *_tls_search_binary(uint32_t tid, int u, int o) {
 	}
 }
 
-TlsList *tls_search_binary(uint32_t tid) {
+TlsList *tls_search_binary(const uint32_t tid) {
 	int size = tls_size();
 
 	if (!size) {
@@ -59,7 +59,7 @@ TlsList *tls_search_binary(uint32_t tid) {
 	return _tls_search_binary(tid, 0, size -1);
 }
 
-static TlsList *tls_search_linear(uint32_t tid) {
+static TlsList *tls_search_linear(const uint32_t tid) {
 	int size = tls_size();
 
 	for (int i = 0; i < size; i++) {
@@ -75,8 +75,9 @@ static TlsList *tls_search_linear(uint32_t tid) {
 }
 
 // TODO: This is not reentrant at all
-static TlsList *tls_alloc(TlsList *entry, uint32_t tid) {
+static TlsList *tls_alloc(TlsList *entry, const uint32_t tid) {
 	Tls *tls;
+	pid_t pid = getpid();
 	trace("malloc()\n");
 
 	tls = malloc(sizeof(Tls));
@@ -85,14 +86,15 @@ static TlsList *tls_alloc(TlsList *entry, uint32_t tid) {
 	}
 
 	// nolibc implementation ensures tls is zero-initialized
-
-	TLS_WRITE(tls->tid, tid);
+	tls->pid = pid;
+	tls->tid = tid;
+	__asm volatile ("" ::: "memory");
 
 	entry->data = tls;
 	return entry;
 }
 
-static TlsList *tls_alloc_append(uint32_t tid) {
+static TlsList *tls_alloc_append(const uint32_t tid) {
 	int size = tls_size();
 	Spinlock expected = 0;
 
@@ -118,7 +120,7 @@ static TlsList *tls_alloc_append(uint32_t tid) {
 	}
 }
 
-static TlsList *tls_alloc_sparse(uint32_t tid) {
+static TlsList *tls_alloc_sparse(const uint32_t tid) {
 	int size = tls_size();
 	Spinlock expected = 0;
 
@@ -137,7 +139,7 @@ static TlsList *tls_alloc_sparse(uint32_t tid) {
 	return NULL;
 }
 
-static TlsList *__tls_get_noalloc(uint32_t tid) {
+static TlsList *__tls_get_noalloc(const uint32_t tid) {
 	TlsList *tls;
 
 	if (!tid) {
@@ -157,32 +159,36 @@ static TlsList *__tls_get_noalloc(uint32_t tid) {
 	return NULL;
 }
 
-Tls *_tls_get_noalloc(uint32_t tid) {
+Tls *_tls_get_noalloc(const uint32_t tid) {
 	TlsList *tls;
 
 	tls = __tls_get_noalloc(tid);
 	if (tls) {
+		assert(tls->tid > 0);
 		return tls->data;
 	}
 
 	return NULL;
 }
 
-Tls *_tls_get(uint32_t tid) {
+Tls *_tls_get(const uint32_t tid) {
 	TlsList *tls;
 
 	tls = __tls_get_noalloc(tid);
 	if (tls) {
+		assert(tls->tid > 0);
 		return tls->data;
 	}
 
 	tls = tls_alloc_append(tid);
 	if (tls) {
+		assert(tls->tid > 0);
 		return tls->data;
 	}
 
 	tls = tls_alloc_sparse(tid);
 	if (tls) {
+		assert(tls->tid > 0);
 		return tls->data;
 	}
 
@@ -207,7 +213,7 @@ static void __tls_free(TlsList *entry) {
 	__atomic_store_n(&entry->tid, 0, __ATOMIC_RELEASE);
 }
 
-void _tls_free(uint32_t tid) {
+void _tls_free(const uint32_t tid) {
 	TlsList *tls;
 
 	if (!tid) {
@@ -216,6 +222,7 @@ void _tls_free(uint32_t tid) {
 
 	tls = __tls_get_noalloc(tid);
 	if (tls) {
+		assert(tls->tid > 0);
 		__tls_free(tls);
 	}
 }

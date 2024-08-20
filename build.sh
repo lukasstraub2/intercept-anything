@@ -28,3 +28,7 @@ cc -g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -Wno-error=incompatible-poin
 cc -g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-ident -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include" \
 	-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -Wl,--no-undefined -static -o tls_test \
         tls.c tls_test.c -lgcc
+
+cc -g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-ident -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include" \
+	-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -Wl,--no-undefined -static -o mylock_test \
+        tls.c mylock.c mylock_test.c -lgcc

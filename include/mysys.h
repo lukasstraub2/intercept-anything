@@ -1,6 +1,7 @@
 #pragma once
 
 #include "sys.h"
+#include "asm-generic/posix_types.h"
 
 static __attribute__((unused))
 int sys_openat(int dirfd, const char *path, int flags, mode_t mode) {
@@ -294,4 +295,16 @@ int sys_getrlimit(unsigned int resource, void *rlim) {
 static __attribute__((unused))
 int sys_setrlimit(unsigned int resource, const void *rlim) {
 	return my_syscall2(__NR_setrlimit, resource, rlim);
+}
+
+static __attribute__((unused))
+int sys_tgkill(pid_t tgid, pid_t tid, int sig) {
+	return my_syscall3(__NR_tgkill, tgid, tid, sig);
+}
+
+static __attribute__((unused))
+ssize_t sys_splice(int fd_in, __kernel_loff_t *off_in,
+				   int fd_out, __kernel_loff_t *off_out,
+				   size_t len, unsigned int flags) {
+	return my_syscall6(__NR_splice, fd_in, off_in, fd_out, off_out, len, flags);
 }
