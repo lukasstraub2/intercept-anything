@@ -66,6 +66,16 @@ static int is_ownerdead(Mutex expected) {
 	}
 }
 
+static void futex_wait(Mutex *mutex, Mutex expected) {
+	signed long ret;
+	struct timespec timeout = {1, 0};
+
+	ret = sys_futex(mutex, FUTEX_WAIT, expected, &timeout, NULL, 0);
+	if (ret < 0 && ret != -EAGAIN) {
+		abort();
+	}
+}
+
 static int _mutex_lock(const pid_t tid, Mutex *mutex) {
 	Mutex expected = 0;
 	int tries = 0;
@@ -74,7 +84,6 @@ static int _mutex_lock(const pid_t tid, Mutex *mutex) {
 	while (!__atomic_compare_exchange_n(mutex, &expected, tid, 0,
 										__ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
 		if (tries++ > 1000) {
-			signed long ret;
 			tries = 0;
 
 			if (is_ownerdead(expected)) {
@@ -82,10 +91,7 @@ static int _mutex_lock(const pid_t tid, Mutex *mutex) {
 				continue;
 			}
 
-			ret = sys_futex(mutex, FUTEX_WAIT, expected, NULL, NULL, 0);
-			if (ret < 0 && ret != -EAGAIN) {
-				abort();
-			}
+			futex_wait(mutex, expected);
 		}
 
 		expected = 0;
