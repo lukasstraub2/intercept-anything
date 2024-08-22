@@ -9,6 +9,7 @@
 #include "loader.h"
 #include "mytypes.h"
 #include "config.h"
+#include "signalmanager.h"
 #include "tls.h"
 #include "util.h"
 
@@ -32,13 +33,7 @@ static int install_filter();
 static void handler(int sig, siginfo_t *info, void *ucontext);
 static unsigned long handle_syscall(SysArgs *args, void *ucontext);
 
-static void unblock_sigsys() {
-	unsigned long unblock = (1u << (SIGSYS -1));
-	sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, NULL, sizeof(unblock));
-}
-
 void intercept_init(int recursing, const char *exe) {
-	struct sigaction sig = {0};
 	static int initialized = 0;
 	size_t exe_len = strlen(exe) +1;
 
@@ -52,19 +47,16 @@ void intercept_init(int recursing, const char *exe) {
 	}
 	memcpy(_self_exe, exe, exe_len);
 
-	sig.sa_handler = handler;
-	//sigemptyset(&sig.sa_mask);
-	sig.sa_flags = SA_NODEFER | SA_SIGINFO;
+	mutex_init();
 
-	sigaction(SIGSYS, &sig, NULL);
-	unblock_sigsys();
-	trace("registered signal handler\n");
+	const CallHandler *signalmanager = signalmanager_init(&bottom);
+	_next = main_init(signalmanager, recursing);
+
+	signalmanager_install_sigsys(handler);
 
 	if (!recursing) {
 		install_filter();
 	}
-
-	_next = main_init(&bottom, recursing);
 }
 
 static void handler(int sig, siginfo_t *info, void *ucontext) {
@@ -605,73 +597,43 @@ static int handle_execveat(int dirfd, const char *path, char *const argv[],
 static int handle_rt_sigprocmask(int how, const sigset_t *set,
 								 sigset_t *oldset, size_t sigsetsize,
 								 void *ucontext) {
-	struct ucontext* ctx = (struct ucontext*)ucontext;
-	char *cur_set = (char *)&ctx->uc_sigmask;
-	int ret;
-
 	trace("rt_sigprocmask()\n");
 
-	if (!set) {
-		return sys_rt_sigprocmask(how, set, oldset, sigsetsize);
-	}
+	Context ctx;
+	context_fill(&ctx);
+	ctx.ucontext = ucontext;
+	RetInt ret = { 0 };
+	CallSigprocmask call = {
+		.how = how,
+		.set = set,
+		.oldset = oldset,
+		.sigsetsize = sigsetsize,
+		.ret = &ret
+	};
 
-	unsigned char copy[sigsetsize];
-	memcpy(copy, set, sigsetsize);
-	copy[3] &= ~(0x40); // Clear SIGSYS
+	_next->sigprocmask(&ctx, _next->sigprocmask_next, &call);
 
-	ret = sys_rt_sigprocmask(how, (sigset_t *)copy, oldset, sigsetsize);
-	if (ret < 0) {
-		return ret;
-	}
-
-	// Any changes to sigprocmask would be reset on sigreturn
-	switch (how) {
-		case SIG_BLOCK:
-			for (unsigned int i = 0; i < sigsetsize; i++) {
-				cur_set[i] |= copy[i];
-			}
-			return 0;
-		break;
-
-		case SIG_UNBLOCK:
-			for (unsigned int i = 0; i < sigsetsize; i++) {
-				cur_set[i] &= ~copy[i];
-			}
-			return 0;
-		break;
-
-		case SIG_SETMASK:
-			memcpy(cur_set, copy, sigsetsize);
-			return 0;
-		break;
-
-		default:
-			return -EINVAL;
-		break;
-	}
+	return ret.ret;
 }
 
-static long handle_rt_sigaction(int signum, const struct sigaction *act,
-								struct sigaction *oldact, size_t sigsetsize) {
+static int handle_rt_sigaction(int signum, const struct sigaction *act,
+							   struct sigaction *oldact, size_t sigsetsize) {
 	trace("rt_sigaction(%d)\n", signum);
 
-	// TODO: Move this to filter chain
-	if (signum == SIGSYS) {
-		return 0;
-	}
+	Context ctx;
+	context_fill(&ctx);
+	RetInt ret = { 0 };
+	CallSigaction call = {
+		.signum = signum,
+		.act = act,
+		.oldact = oldact,
+		.sigsetsize = sigsetsize,
+		.ret = &ret
+	};
 
-	if (!act) {
-		return sys_rt_sigaction(signum, act, oldact, sigsetsize);
-	}
+	_next->sigaction(&ctx, _next->sigaction_next, &call);
 
-	size_t size = sizeof(struct sigaction) + sigsetsize - sizeof(sigset_t);
-	unsigned char _copy[size];
-	memcpy(_copy, act, size);
-	struct sigaction *copy = (struct sigaction *)_copy;
-	char *sa_mask = (char *)&copy->sa_mask;
-	sa_mask[3] &= ~(0x40); // Clear SIGSYS
-
-	return sys_rt_sigaction(signum, copy, oldact, sigsetsize);
+	return ret.ret;
 }
 
 __attribute__((unused))
@@ -1966,7 +1928,7 @@ static int _bottom_exec(Context *ctx, const This *this, CallExec *call) {
 	} else {
 		new_argv[2] = NULL;
 	}
-	call->path = PREFIX "/opt/loader";
+	call->path = "/proc/self/exe";
 	call->argv = new_argv;
 
 	// TODO: What if execve fails?
@@ -2576,5 +2538,9 @@ static const CallHandler bottom = {
 	bottom_inotify_add_watch,
 	NULL,
 	bottom_rlimit,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
 	NULL,
 };

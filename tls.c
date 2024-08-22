@@ -1,9 +1,9 @@
 
 #include "common.h"
+#include "nolibc.h"
 
 #define DEBUG_ENV "DEBUG_TLS"
 #include "debug.h"
-#include "nolibc.h"
 #include "tls.h"
 #include "mylock.h"
 #include "util.h"

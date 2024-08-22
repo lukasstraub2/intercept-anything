@@ -25,3 +25,6 @@ struct RobustMutexList {
 int mutex_lock(Tls *tls, RobustMutex *mutex);
 void mutex_unlock(Tls *tls, RobustMutex *mutex);
 void mutex_recover(Tls *tls);
+
+void mutex_init();
+RobustMutex *mutex_alloc();

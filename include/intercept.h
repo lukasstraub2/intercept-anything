@@ -7,6 +7,7 @@
 typedef struct Context Context;
 struct Context {
 	Tls *tls;
+	void *ucontext;
 };
 
 typedef struct RetInt RetInt;
@@ -571,6 +572,24 @@ static void callrlimit_copy(CallRlimit *dst, const CallRlimit *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct CallSigprocmask CallSigprocmask;
+struct CallSigprocmask {
+	int how;
+	const sigset_t *set;
+	sigset_t *oldset;
+	size_t sigsetsize;
+	RetInt *ret;
+};
+
+typedef struct CallSigaction CallSigaction;
+struct CallSigaction {
+	int signum;
+	const struct sigaction *act;
+	struct sigaction *oldact;
+	size_t sigsetsize;
+	RetInt *ret;
+};
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -616,6 +635,10 @@ struct CallHandler {
 	const This *inotify_add_watch_next;
 	int (*rlimit)(Context *ctx, const This *this, const CallRlimit *call);
 	const This *rlimit_next;
+	int (*sigprocmask)(Context *ctx, const This *this, const CallSigprocmask *call);
+	const This *sigprocmask_next;
+	int (*sigaction)(Context *ctx, const This *this, const CallSigaction *call);
+	const This *sigaction_next;
 };
 
 extern const char *self_exe;

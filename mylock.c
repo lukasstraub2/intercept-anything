@@ -5,6 +5,15 @@
 #include "mysys.h"
 #include "linux/futex.h"
 
+typedef struct LocalMutexes LocalMutexes;
+struct LocalMutexes {
+	Spinlock size;
+	uint32_t alloc;
+	RobustMutex data[];
+};
+
+static LocalMutexes *local_mutexes = NULL;
+
 typedef struct rwlock_t rwlock_t;
 struct rwlock_t {
 	Mutex serialize_lockers;
@@ -202,6 +211,32 @@ void mutex_recover(Tls *tls) {
 	RLIST_FOREACH(elm, &list->head, next, temp) {
 		mutex_recover_one(tls, elm);
 	}
+}
+
+void mutex_init() {
+	if (local_mutexes) {
+		abort();
+	}
+
+	// map shared, so we don't deadlock after fork()
+	void *alloc = sys_mmap(NULL, 4096, PROT_READ|PROT_WRITE,
+						   MAP_ANONYMOUS|MAP_SHARED, -1, 0);
+	if ((unsigned long)alloc >= -4095UL) {
+		abort();
+	}
+	local_mutexes = alloc;
+
+	local_mutexes->alloc = (4096 - sizeof(LocalMutexes)) / sizeof(RobustMutex);
+	assert(sizeof(LocalMutexes) + local_mutexes->alloc * sizeof(RobustMutex) <= 4096);
+}
+
+RobustMutex *mutex_alloc() {
+	uint32_t idx = __atomic_fetch_add(&local_mutexes->size, 1, __ATOMIC_ACQUIRE);
+	if (idx >= local_mutexes->alloc) {
+		return NULL;
+	}
+
+	return local_mutexes->data + idx;
 }
 
 /*

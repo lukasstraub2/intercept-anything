@@ -82,7 +82,7 @@ int sys_rt_sigprocmask(int how, const sigset_t *set,
 }
 
 static __attribute__((unused))
-long sys_rt_sigaction(int signum, const struct sigaction *act,
+int sys_rt_sigaction(int signum, const struct sigaction *act,
 					  struct sigaction *oldact, size_t sigsetsize) {
 	return my_syscall4(__NR_rt_sigaction, signum, act, oldact, sigsetsize);
 }
@@ -312,4 +312,9 @@ ssize_t sys_splice(int fd_in, __kernel_loff_t *off_in,
 				   int fd_out, __kernel_loff_t *off_out,
 				   size_t len, unsigned int flags) {
 	return my_syscall6(__NR_splice, fd_in, off_in, fd_out, off_out, len, flags);
+}
+
+static __attribute__((unused))
+int sys_madvise(void *start, size_t len_in, int behavior) {
+	return my_syscall3(__NR_madvise, start, len_in, behavior);
 }
