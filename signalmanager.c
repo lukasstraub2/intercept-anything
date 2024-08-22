@@ -11,7 +11,7 @@
 #include "myseccomp.h"
 #include "signalmanager.h"
 
-#define DEBUG_ENV "DEBUG_INTERCEPT"
+#define DEBUG_ENV "DEBUG_SIGNAL"
 #include "debug.h"
 
 _Static_assert(sizeof(sigset_t) == 8, "sigset_t");
@@ -77,6 +77,37 @@ static void action_terminate(int signum) {
 
 	raise(signum);
 	while (1);
+}
+
+static void action_stop(int signum) {
+	int ret;
+	struct sigaction act = {0};
+	act.sa_handler = SIG_DFL;
+	struct sigaction oldact;
+	const sigset_t empty = 0;
+	sigset_t oldset;
+
+	ret = sys_rt_sigaction(signum, &act, &oldact, sizeof(sigset_t));
+	if (ret < 0) {
+		exit_error("rt_sigaction(%d): %d", signum, ret);
+	}
+
+	ret = sys_rt_sigprocmask(SIG_SETMASK, &empty, &oldset, sizeof(sigset_t));
+	if (ret < 0) {
+		exit_error("rt_sigprocmask(0): %d", ret);
+	}
+
+	raise(signum);
+
+	ret = sys_rt_sigprocmask(SIG_SETMASK, &oldset, NULL, sizeof(sigset_t));
+	if (ret < 0) {
+		exit_error("rt_sigprocmask(oldset): %d", ret);
+	}
+
+	ret = sys_rt_sigaction(signum, &oldact, NULL, sizeof(sigset_t));
+	if (ret < 0) {
+		exit_error("rt_sigaction(%d): %d", signum, ret);
+	}
 }
 
 static void default_action(int signum) {
@@ -177,18 +208,22 @@ static void default_action(int signum) {
 
 		case SIGSTOP:
 			// Stop
+			//action_stop();
 		break;
 
 		case SIGTSTP:
 			// Stop
+			action_stop(signum);
 		break;
 
 		case SIGTTIN:
 			// Stop
+			action_stop(signum);
 		break;
 
 		case SIGTTOU:
 			// Stop
+			action_stop(signum);
 		break;
 
 		case SIGURG:
@@ -274,10 +309,13 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 	const myhandler_t _handler = (myhandler_t) handler;
 
 	if (handler == SIG_DFL) {
+		trace_plus("signal %d: SIG_DFL\n", signum);
 		default_action(signum);
 	} else if (handler == SIG_IGN) {
+		trace_plus("signal %d: SIG_IGN\n", signum);
 		// noop
 	} else {
+		trace_plus("signal %d: registered handler\n", signum);
 		if (act.sa_flags & SA_SIGINFO) {
 			_handler(signum, info, ucontext);
 		} else {
