@@ -285,7 +285,9 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 		}
 	}
 
-	// longjump
+	if (tls->jumpbuf_valid) {
+		__builtin_longjmp(tls->jumpbuf, 1);
+	}
 }
 
 static int signalmanager_sigprocmask(Context *ctx, const This *this, const CallSigprocmask *call) {
@@ -346,10 +348,9 @@ static int signalmanager_sigaction(Context *ctx, const This *this, const CallSig
 		goto out;
 	}
 
-	Tls *tls = tls_get();
 	struct sigaction *mysig = get_mysignal(call->signum);
 
-	int ownerdead = mutex_lock(tls, mutex);
+	int ownerdead = mutex_lock(ctx->tls, mutex);
 	if (ownerdead) {
 		recover_mysignal();
 	}
@@ -362,7 +363,7 @@ static int signalmanager_sigaction(Context *ctx, const This *this, const CallSig
 		update_mysignal(call->signum, call->act);
 	}
 
-	mutex_unlock(tls, mutex);
+	mutex_unlock(ctx->tls, mutex);
 
 	if (call->signum == SIGSYS) {
 		_ret->ret = 0;

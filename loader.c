@@ -152,7 +152,7 @@ int main(int argc, char **argv, char **envp)
 
 	for (i = 0;; i++, ehdr++) {
 		/* Open file, read and than check ELF header.*/
-		if ((fd = handle_openat(AT_FDCWD, file, O_RDONLY, 0)) < 0)
+		if ((fd = filter_openat(AT_FDCWD, file, O_RDONLY, 0)) < 0)
 			exit_error("can't open %s", file);
 		if (sys_read(fd, ehdr, sizeof(*ehdr)) != sizeof(*ehdr))
 			exit_error("can't read ELF header %s", file);

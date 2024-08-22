@@ -31,7 +31,7 @@ const char *self_exe = _self_exe;
 
 static int install_filter();
 static void handler(int sig, siginfo_t *info, void *ucontext);
-static unsigned long handle_syscall(SysArgs *args, void *ucontext);
+static unsigned long handle_syscall(Context *ctx, SysArgs *args);
 
 void intercept_init(int recursing, const char *exe) {
 	static int initialized = 0;
@@ -59,20 +59,53 @@ void intercept_init(int recursing, const char *exe) {
 	}
 }
 
-static void handler(int sig, siginfo_t *info, void *ucontext) {
+__attribute__((noinline))
+static void __handler(Tls *tls, int sig, siginfo_t *info, void *ucontext) {
 	(void) sig;
 
-	if (info->si_errno) {
-		fprintf(stderr, "Invalid arch, terminating\n");
-		exit(1);
-	}
-
+	Context ctx = {tls, ucontext};
 	ssize_t ret;
 	SysArgs args;
 	fill_sysargs(&args, ucontext);
-	ret = handle_syscall(&args, ucontext);
+	ret = handle_syscall(&ctx, &args);
 
 	set_return(ucontext, ret);
+}
+
+__attribute__((noinline))
+static int _handler(Tls *tls, int sig, siginfo_t *info, void *ucontext) {
+	assert(!tls->jumpbuf_valid);
+
+	if (__builtin_setjmp(tls->jumpbuf)) {
+		return 1;
+	}
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(tls->jumpbuf_valid, 1);
+	__asm volatile ("" ::: "memory");
+
+	__handler(tls, sig, info, ucontext);
+
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(tls->jumpbuf_valid, 0);
+	__asm volatile ("" ::: "memory");
+
+	return 0;
+}
+
+static void handler(int sig, siginfo_t *info, void *ucontext) {
+	const pid_t tid = gettid();
+	trace_plus("gettid(): %u\n", tid);
+	Tls *tls = _tls_get(tid);
+
+	if (info->si_errno) {
+		exit_error("Invalid arch, terminating");
+	}
+
+	while(_handler(tls, sig, info, ucontext)) {
+		__asm volatile ("" ::: "memory");
+		WRITE_ONCE(tls->jumpbuf_valid, 0);
+		__asm volatile ("" ::: "memory");
+	}
 }
 
 extern char __start_text;
@@ -326,22 +359,14 @@ static ssize_t read_full(int fd, char *buf, size_t count)
 	return total;
 }
 
-static void context_fill(Context *ctx) {
-	pid_t tid = gettid();
-	trace_plus("gettid(): %u\n", tid);
-	ctx->tls = _tls_get(tid);
-}
-
 static void thread_exit() {
 	tls_free();
 }
 
 __attribute__((unused))
-static int handle_open(const char *path, int flags, mode_t mode) {
+static int handle_open(Context *ctx, const char *path, int flags, mode_t mode) {
 	trace("open(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallOpen call = {
 		.at = 0,
@@ -351,16 +376,15 @@ static int handle_open(const char *path, int flags, mode_t mode) {
 		.ret = &ret
 	};
 
-	_next->open(&ctx, _next->open_next, &call);
+	_next->open(ctx, _next->open_next, &call);
 
 	return ret.ret;
 }
 
-int handle_openat(int dirfd, const char *path, int flags, mode_t mode) {
+static int handle_openat(Context *ctx, int dirfd, const char *path, int flags,
+						 mode_t mode) {
 	trace("openat(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallOpen call = {
 		.at = 1,
@@ -371,17 +395,20 @@ int handle_openat(int dirfd, const char *path, int flags, mode_t mode) {
 		.ret = &ret
 	};
 
-	_next->open(&ctx, _next->open_next, &call);
+	_next->open(ctx, _next->open_next, &call);
 
 	return ret.ret;
 }
 
+int filter_openat(int dirfd, const char *path, int flags, mode_t mode) {
+	Context ctx = {tls_get(), NULL};
+	return handle_openat(&ctx, dirfd, path, flags, mode);
+}
+
 __attribute__((unused))
-static int handle_stat(const char *path, void *statbuf) {
+static int handle_stat(Context *ctx, const char *path, void *statbuf) {
 	trace("stat(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallStat call = {
 		.type = STATTYPE_PLAIN,
@@ -390,16 +417,14 @@ static int handle_stat(const char *path, void *statbuf) {
 		.ret = &ret
 	};
 
-	_next->stat(&ctx, _next->stat_next, &call);
+	_next->stat(ctx, _next->stat_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_fstat(int fd, void *statbuf) {
+static int handle_fstat(Context *ctx, int fd, void *statbuf) {
 	trace("fstat()\n");
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallStat call = {
 		.type = STATTYPE_F,
@@ -408,17 +433,15 @@ static int handle_fstat(int fd, void *statbuf) {
 		.ret = &ret
 	};
 
-	_next->stat(&ctx, _next->stat_next, &call);
+	_next->stat(ctx, _next->stat_next, &call);
 
 	return ret.ret;
 }
 
 __attribute__((unused))
-static int handle_lstat(const char *path, void *statbuf) {
+static int handle_lstat(Context *ctx, const char *path, void *statbuf) {
 	trace("lstat(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallStat call = {
 		.type = STATTYPE_L,
@@ -427,17 +450,15 @@ static int handle_lstat(const char *path, void *statbuf) {
 		.ret = &ret
 	};
 
-	_next->stat(&ctx, _next->stat_next, &call);
+	_next->stat(ctx, _next->stat_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_newfstatat(int dirfd, const char *path, void *statbuf,
-							 int flags) {
+static int handle_newfstatat(Context *ctx, int dirfd, const char *path,
+							 void *statbuf, int flags) {
 	trace("newfstatat(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallStat call = {
 		.type = STATTYPE_AT,
@@ -448,17 +469,15 @@ static int handle_newfstatat(int dirfd, const char *path, void *statbuf,
 		.ret = &ret
 	};
 
-	_next->stat(&ctx, _next->stat_next, &call);
+	_next->stat(ctx, _next->stat_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_statx(int dirfd, const char *path, int flags,
+static int handle_statx(Context *ctx, int dirfd, const char *path, int flags,
 						unsigned int mask, void *statbuf) {
 	trace("statx(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallStat call = {
 		.type = STATTYPE_X,
@@ -470,17 +489,16 @@ static int handle_statx(int dirfd, const char *path, int flags,
 		.ret = &ret
 	};
 
-	_next->stat(&ctx, _next->stat_next, &call);
+	_next->stat(ctx, _next->stat_next, &call);
 
 	return ret.ret;
 }
 
 __attribute__((unused))
-static ssize_t handle_readlink(const char *path, char *buf, size_t bufsiz) {
+static ssize_t handle_readlink(Context *ctx, const char *path, char *buf,
+							   size_t bufsiz) {
 	trace("readlink(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallReadlink call = {
 		.at = 0,
@@ -490,16 +508,15 @@ static ssize_t handle_readlink(const char *path, char *buf, size_t bufsiz) {
 		.ret = &ret
 	};
 
-	_next->readlink(&ctx, _next->readlink_next, &call);
+	_next->readlink(ctx, _next->readlink_next, &call);
 
 	return ret.ret;
 }
 
-static ssize_t handle_readlinkat(int dirfd, const char *path, char *buf, size_t bufsiz) {
+static ssize_t handle_readlinkat(Context *ctx, int dirfd, const char *path,
+								 char *buf, size_t bufsiz) {
 	trace("readlinkat(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallReadlink call = {
 		.at = 1,
@@ -510,17 +527,15 @@ static ssize_t handle_readlinkat(int dirfd, const char *path, char *buf, size_t 
 		.ret = &ret
 	};
 
-	_next->readlink(&ctx, _next->readlink_next, &call);
+	_next->readlink(ctx, _next->readlink_next, &call);
 
 	return ret.ret;
 }
 
 __attribute__((unused))
-static int handle_access(const char *path, int mode) {
+static int handle_access(Context *ctx, const char *path, int mode) {
 	trace("access(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallAccess call = {
 		.at = 0,
@@ -529,16 +544,14 @@ static int handle_access(const char *path, int mode) {
 		.ret = &ret
 	};
 
-	_next->access(&ctx, _next->access_next, &call);
+	_next->access(ctx, _next->access_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_faccessat(int dirfd, const char *path, int mode) {
+static int handle_faccessat(Context *ctx, int dirfd, const char *path, int mode) {
 	trace("accessat(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallAccess call = {
 		.at = 1,
@@ -548,16 +561,15 @@ static int handle_faccessat(int dirfd, const char *path, int mode) {
 		.ret = &ret
 	};
 
-	_next->access(&ctx, _next->access_next, &call);
+	_next->access(ctx, _next->access_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_execve(const char *path, char *const argv[], char *const envp[]) {
+static int handle_execve(Context *ctx, const char *path, char *const argv[],
+						 char *const envp[]) {
 	trace("execve(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallExec call = {
 		.at = 0,
@@ -567,17 +579,15 @@ static int handle_execve(const char *path, char *const argv[], char *const envp[
 		.ret = &ret
 	};
 
-	_next->exec(&ctx, _next->exec_next, &call);
+	_next->exec(ctx, _next->exec_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_execveat(int dirfd, const char *path, char *const argv[],
-						   char *const envp[], int flags) {
+static int handle_execveat(Context *ctx, int dirfd, const char *path,
+						   char *const argv[], char *const envp[], int flags) {
 	trace("exeveat(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallExec call = {
 		.at = 1,
@@ -589,19 +599,15 @@ static int handle_execveat(int dirfd, const char *path, char *const argv[],
 		.ret = &ret
 	};
 
-	_next->exec(&ctx, _next->exec_next, &call);
+	_next->exec(ctx, _next->exec_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_rt_sigprocmask(int how, const sigset_t *set,
-								 sigset_t *oldset, size_t sigsetsize,
-								 void *ucontext) {
+static int handle_rt_sigprocmask(Context *ctx, int how, const sigset_t *set,
+								 sigset_t *oldset, size_t sigsetsize) {
 	trace("rt_sigprocmask()\n");
 
-	Context ctx;
-	context_fill(&ctx);
-	ctx.ucontext = ucontext;
 	RetInt ret = { 0 };
 	CallSigprocmask call = {
 		.how = how,
@@ -611,17 +617,15 @@ static int handle_rt_sigprocmask(int how, const sigset_t *set,
 		.ret = &ret
 	};
 
-	_next->sigprocmask(&ctx, _next->sigprocmask_next, &call);
+	_next->sigprocmask(ctx, _next->sigprocmask_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_rt_sigaction(int signum, const struct sigaction *act,
+static int handle_rt_sigaction(Context *ctx, int signum, const struct sigaction *act,
 							   struct sigaction *oldact, size_t sigsetsize) {
 	trace("rt_sigaction(%d)\n", signum);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallSigaction call = {
 		.signum = signum,
@@ -631,17 +635,15 @@ static int handle_rt_sigaction(int signum, const struct sigaction *act,
 		.ret = &ret
 	};
 
-	_next->sigaction(&ctx, _next->sigaction_next, &call);
+	_next->sigaction(ctx, _next->sigaction_next, &call);
 
 	return ret.ret;
 }
 
 __attribute__((unused))
-static int handle_link(const char *oldpath, const char *newpath) {
+static int handle_link(Context *ctx, const char *oldpath, const char *newpath) {
 	trace("link(%s, %s)\n", oldpath, newpath);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallLink call = {
 		.at = 0,
@@ -650,17 +652,15 @@ static int handle_link(const char *oldpath, const char *newpath) {
 		.ret = &ret
 	};
 
-	_next->link(&ctx, _next->link_next, &call);
+	_next->link(ctx, _next->link_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_linkat(int olddirfd, const char *oldpath, int newdirfd,
-						 const char *newpath, int flags) {
+static int handle_linkat(Context *ctx, int olddirfd, const char *oldpath,
+						 int newdirfd, const char *newpath, int flags) {
 	trace("linkat(%s, %s)\n", oldpath, newpath);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallLink call = {
 		.at = 1,
@@ -672,17 +672,15 @@ static int handle_linkat(int olddirfd, const char *oldpath, int newdirfd,
 		.ret = &ret
 	};
 
-	_next->link(&ctx, _next->link_next, &call);
+	_next->link(ctx, _next->link_next, &call);
 
 	return ret.ret;
 }
 
 __attribute__((unused))
-static int handle_symlink(const char *oldpath, const char *newpath) {
+static int handle_symlink(Context *ctx, const char *oldpath, const char *newpath) {
 	trace("symlink(%s, %s)\n", oldpath, newpath);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallLink call = {
 		.at = 0,
@@ -691,17 +689,15 @@ static int handle_symlink(const char *oldpath, const char *newpath) {
 		.ret = &ret
 	};
 
-	_next->symlink(&ctx, _next->symlink_next, &call);
+	_next->symlink(ctx, _next->symlink_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_symlinkat(const char *oldpath, int newdirfd,
+static int handle_symlinkat(Context *ctx, const char *oldpath, int newdirfd,
 							const char *newpath) {
 	trace("symlinkat(%s, %s)\n", oldpath, newpath);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallLink call = {
 		.at = 1,
@@ -711,17 +707,15 @@ static int handle_symlinkat(const char *oldpath, int newdirfd,
 		.ret = &ret
 	};
 
-	_next->symlink(&ctx, _next->symlink_next, &call);
+	_next->symlink(ctx, _next->symlink_next, &call);
 
 	return ret.ret;
 }
 
 __attribute__((unused))
-static int handle_unlink(const char *pathname) {
+static int handle_unlink(Context *ctx, const char *pathname) {
 	trace("unlink(%s)\n", pathname);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallUnlink call = {
 		.at = 0,
@@ -729,16 +723,15 @@ static int handle_unlink(const char *pathname) {
 		.ret = &ret
 	};
 
-	_next->unlink(&ctx, _next->unlink_next, &call);
+	_next->unlink(ctx, _next->unlink_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_unlinkat(int dirfd, const char *pathname, int flags) {
+static int handle_unlinkat(Context *ctx, int dirfd, const char *pathname,
+						   int flags) {
 	trace("unlinkat(%s)\n", pathname);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallUnlink call = {
 		.at = 1,
@@ -748,16 +741,15 @@ static int handle_unlinkat(int dirfd, const char *pathname, int flags) {
 		.ret = &ret
 	};
 
-	_next->unlink(&ctx, _next->unlink_next, &call);
+	_next->unlink(ctx, _next->unlink_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_setxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
+static int handle_setxattr(Context *ctx, const char *path, const char *name,
+						   const void *value, size_t size, int flags) {
 	trace("setxattr(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_SET,
@@ -770,16 +762,15 @@ static int handle_setxattr(const char *path, const char *name, const void *value
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_lsetxattr(const char *path, const char *name, const void *value, size_t size, int flags) {
+static int handle_lsetxattr(Context *ctx, const char *path, const char *name,
+							const void *value, size_t size, int flags) {
 	trace("lsetxattr(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_SET,
@@ -792,16 +783,15 @@ static int handle_lsetxattr(const char *path, const char *name, const void *valu
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_fsetxattr(int fd, const char *name, const void *value, size_t size, int flags) {
+static int handle_fsetxattr(Context *ctx, int fd, const char *name,
+							const void *value, size_t size, int flags) {
 	trace("fsetxattr(%d)\n", fd);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_SET,
@@ -814,16 +804,15 @@ static int handle_fsetxattr(int fd, const char *name, const void *value, size_t 
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
-static ssize_t handle_getxattr(const char *path, const char *name, void *value, size_t size) {
+static ssize_t handle_getxattr(Context *ctx, const char *path, const char *name,
+							   void *value, size_t size) {
 	trace("getxattr(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_GET,
@@ -835,16 +824,15 @@ static ssize_t handle_getxattr(const char *path, const char *name, void *value, 
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
-static ssize_t handle_lgetxattr(const char *path, const char *name, void *value, size_t size) {
+static ssize_t handle_lgetxattr(Context *ctx, const char *path, const char *name,
+								void *value, size_t size) {
 	trace("lgetxattr(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_GET,
@@ -856,16 +844,15 @@ static ssize_t handle_lgetxattr(const char *path, const char *name, void *value,
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
-static ssize_t handle_fgetxattr(int fd, const char *name, void *value, size_t size) {
+static ssize_t handle_fgetxattr(Context *ctx, int fd, const char *name,
+								void *value, size_t size) {
 	trace("fgetxattr(%d)\n", fd);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_GET,
@@ -877,16 +864,15 @@ static ssize_t handle_fgetxattr(int fd, const char *name, void *value, size_t si
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
-static ssize_t handle_listxattr(const char *path, char *list, size_t size) {
+static ssize_t handle_listxattr(Context *ctx, const char *path, char *list,
+								size_t size) {
 	trace("listxattr(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_LIST,
@@ -897,16 +883,15 @@ static ssize_t handle_listxattr(const char *path, char *list, size_t size) {
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
-static ssize_t handle_llistxattr(const char *path, char *list, size_t size) {
+static ssize_t handle_llistxattr(Context *ctx, const char *path, char *list,
+								 size_t size) {
 	trace("llistxattr(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_LIST,
@@ -917,16 +902,14 @@ static ssize_t handle_llistxattr(const char *path, char *list, size_t size) {
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
-static ssize_t handle_flistxattr(int fd, char *list, size_t size) {
+static ssize_t handle_flistxattr(Context *ctx, int fd, char *list, size_t size) {
 	trace("flistxattr(%d)\n", fd);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_LIST,
@@ -937,16 +920,14 @@ static ssize_t handle_flistxattr(int fd, char *list, size_t size) {
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_removexattr(const char *path, const char *name) {
+static int handle_removexattr(Context *ctx, const char *path, const char *name) {
 	trace("removexattr(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_REMOVE,
@@ -956,16 +937,14 @@ static int handle_removexattr(const char *path, const char *name) {
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_lremovexattr(const char *path, const char *name) {
+static int handle_lremovexattr(Context *ctx, const char *path, const char *name) {
 	trace("lremovexattr(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_REMOVE,
@@ -975,16 +954,14 @@ static int handle_lremovexattr(const char *path, const char *name) {
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_fremovexattr(int fd, const char *name) {
+static int handle_fremovexattr(Context *ctx, int fd, const char *name) {
 	trace("fremovexattr(%d)\n", fd);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallXattr call = {
 		.type = XATTRTYPE_REMOVE,
@@ -994,17 +971,15 @@ static int handle_fremovexattr(int fd, const char *name) {
 		.ret = &ret
 	};
 
-	_next->xattr(&ctx, _next->xattr_next, &call);
+	_next->xattr(ctx, _next->xattr_next, &call);
 
 	return ret.ret;
 }
 
 __attribute__((unused))
-static int handle_rename(const char *oldpath, const char *newpath) {
+static int handle_rename(Context *ctx, const char *oldpath, const char *newpath) {
 	trace("rename(%s, %s)\n", oldpath, newpath);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallRename call = {
 		.type = RENAMETYPE_PLAIN,
@@ -1013,17 +988,15 @@ static int handle_rename(const char *oldpath, const char *newpath) {
 		.ret = &ret
 	};
 
-	_next->rename(&ctx, _next->rename_next, &call);
+	_next->rename(ctx, _next->rename_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_renameat(int olddirfd, const char *oldpath,
+static int handle_renameat(Context *ctx, int olddirfd, const char *oldpath,
 						   int newdirfd, const char *newpath) {
 	trace("renameat(%s, %s)\n", oldpath, newpath);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallRename call = {
 		.type = RENAMETYPE_AT,
@@ -1034,17 +1007,15 @@ static int handle_renameat(int olddirfd, const char *oldpath,
 		.ret = &ret
 	};
 
-	_next->rename(&ctx, _next->rename_next, &call);
+	_next->rename(ctx, _next->rename_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_renameat2(int olddirfd, const char *oldpath,
+static int handle_renameat2(Context *ctx, int olddirfd, const char *oldpath,
 							int newdirfd, const char *newpath, unsigned int flags) {
 	trace("renameat2(%s, %s)\n", oldpath, newpath);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallRename call = {
 		.type = RENAMETYPE_AT2,
@@ -1056,16 +1027,14 @@ static int handle_renameat2(int olddirfd, const char *oldpath,
 		.ret = &ret
 	};
 
-	_next->rename(&ctx, _next->rename_next, &call);
+	_next->rename(ctx, _next->rename_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_chdir(const char *path) {
+static int handle_chdir(Context *ctx, const char *path) {
 	trace("chdir(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallChdir call = {
 		.f = 0,
@@ -1073,16 +1042,14 @@ static int handle_chdir(const char *path) {
 		.ret = &ret
 	};
 
-	_next->chdir(&ctx, _next->chdir_next, &call);
+	_next->chdir(ctx, _next->chdir_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_fchdir(int fd) {
+static int handle_fchdir(Context *ctx, int fd) {
 	trace("fchdir(%d)\n", fd);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallChdir call = {
 		.f = 1,
@@ -1090,12 +1057,12 @@ static int handle_fchdir(int fd) {
 		.ret = &ret
 	};
 
-	_next->chdir(&ctx, _next->chdir_next, &call);
+	_next->chdir(ctx, _next->chdir_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_exit(int status) {
+static int handle_exit(Context *ctx, int status) {
 	trace("exit(%u)\n", status);
 
 	thread_exit();
@@ -1104,7 +1071,7 @@ static int handle_exit(int status) {
 	return 0;
 }
 
-static int handle_exit_group(int status) {
+static int handle_exit_group(Context *ctx, int status) {
 	trace("exit_group(%u)\n", status);
 
 	thread_exit();
@@ -1114,11 +1081,9 @@ static int handle_exit_group(int status) {
 }
 
 __attribute__((unused))
-static int handle_chmod(const char *path, mode_t mode) {
+static int handle_chmod(Context *ctx, const char *path, mode_t mode) {
 	trace("chmod(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallChmod call = {
 		.type = CHMODTYPE_PLAIN,
@@ -1127,16 +1092,14 @@ static int handle_chmod(const char *path, mode_t mode) {
 		.ret = &ret
 	};
 
-	_next->chmod(&ctx, _next->chmod_next, &call);
+	_next->chmod(ctx, _next->chmod_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_fchmod(int fd, mode_t mode) {
+static int handle_fchmod(Context *ctx, int fd, mode_t mode) {
 	trace("fchmod(%d)\n", fd);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallChmod call = {
 		.type = CHMODTYPE_F,
@@ -1145,16 +1108,14 @@ static int handle_fchmod(int fd, mode_t mode) {
 		.ret = &ret
 	};
 
-	_next->chmod(&ctx, _next->chmod_next, &call);
+	_next->chmod(ctx, _next->chmod_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_fchmodat(int dirfd, const char *path, mode_t mode) {
+static int handle_fchmodat(Context *ctx, int dirfd, const char *path, mode_t mode) {
 	trace("fchmodat(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallChmod call = {
 		.type = CHMODTYPE_AT,
@@ -1164,16 +1125,14 @@ static int handle_fchmodat(int dirfd, const char *path, mode_t mode) {
 		.ret = &ret
 	};
 
-	_next->chmod(&ctx, _next->chmod_next, &call);
+	_next->chmod(ctx, _next->chmod_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_truncate(const char *path, off_t length) {
+static int handle_truncate(Context *ctx, const char *path, off_t length) {
 	trace("truncate(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallTruncate call = {
 		.f = 0,
@@ -1182,16 +1141,14 @@ static int handle_truncate(const char *path, off_t length) {
 		.ret = &ret
 	};
 
-	_next->truncate(&ctx, _next->truncate_next, &call);
+	_next->truncate(ctx, _next->truncate_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_ftruncate(int fd, off_t length) {
+static int handle_ftruncate(Context *ctx, int fd, off_t length) {
 	trace("ftruncate(%d)\n", fd);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallTruncate call = {
 		.f = 1,
@@ -1200,17 +1157,15 @@ static int handle_ftruncate(int fd, off_t length) {
 		.ret = &ret
 	};
 
-	_next->truncate(&ctx, _next->truncate_next, &call);
+	_next->truncate(ctx, _next->truncate_next, &call);
 
 	return ret.ret;
 }
 
 __attribute__((unused))
-static int handle_mkdir(const char *path, mode_t mode) {
+static int handle_mkdir(Context *ctx, const char *path, mode_t mode) {
 	trace("mkdir(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallMkdir call = {
 		.at = 0,
@@ -1219,16 +1174,14 @@ static int handle_mkdir(const char *path, mode_t mode) {
 		.ret = &ret
 	};
 
-	_next->mkdir(&ctx, _next->mkdir_next, &call);
+	_next->mkdir(ctx, _next->mkdir_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_mkdirat(int dirfd, const char *path, mode_t mode) {
+static int handle_mkdirat(Context *ctx, int dirfd, const char *path, mode_t mode) {
 	trace("mkdirat(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallMkdir call = {
 		.at = 1,
@@ -1238,17 +1191,15 @@ static int handle_mkdirat(int dirfd, const char *path, mode_t mode) {
 		.ret = &ret
 	};
 
-	_next->mkdir(&ctx, _next->mkdir_next, &call);
+	_next->mkdir(ctx, _next->mkdir_next, &call);
 
 	return ret.ret;
 }
 
 __attribute__((unused))
-static ssize_t handle_getdents(int fd, void *dirp, size_t count) {
+static ssize_t handle_getdents(Context *ctx, int fd, void *dirp, size_t count) {
 	trace("getdents(%d)\n", fd);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallGetdents call = {
 		.is64 = 0,
@@ -1258,16 +1209,14 @@ static ssize_t handle_getdents(int fd, void *dirp, size_t count) {
 		.ret = &ret
 	};
 
-	_next->getdents(&ctx, _next->getdents_next, &call);
+	_next->getdents(ctx, _next->getdents_next, &call);
 
 	return ret.ret;
 }
 
-static ssize_t handle_getdents64(int fd, void *dirp, size_t count) {
+static ssize_t handle_getdents64(Context *ctx, int fd, void *dirp, size_t count) {
 	trace("getdents64(%d)\n", fd);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetSSize ret = { 0 };
 	CallGetdents call = {
 		.is64 = 1,
@@ -1277,17 +1226,16 @@ static ssize_t handle_getdents64(int fd, void *dirp, size_t count) {
 		.ret = &ret
 	};
 
-	_next->getdents(&ctx, _next->getdents_next, &call);
+	_next->getdents(ctx, _next->getdents_next, &call);
 
 	return ret.ret;
 }
 
 __attribute__((unused))
-static int handle_mknod(const char *path, mode_t mode, unsigned int dev) {
+static int handle_mknod(Context *ctx, const char *path, mode_t mode,
+						unsigned int dev) {
 	trace("mknod(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallMknod call = {
 		.at = 0,
@@ -1297,17 +1245,15 @@ static int handle_mknod(const char *path, mode_t mode, unsigned int dev) {
 		.ret = &ret
 	};
 
-	_next->mknod(&ctx, _next->mknod_next, &call);
+	_next->mknod(ctx, _next->mknod_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_mknodat(int dirfd, const char *path, mode_t mode,
+static int handle_mknodat(Context *ctx, int dirfd, const char *path, mode_t mode,
 						  unsigned int dev) {
 	trace("mknodat(%s)\n", path);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallMknod call = {
 		.at = 1,
@@ -1318,16 +1264,14 @@ static int handle_mknodat(int dirfd, const char *path, mode_t mode,
 		.ret = &ret
 	};
 
-	_next->mknod(&ctx, _next->mknod_next, &call);
+	_next->mknod(ctx, _next->mknod_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_accept(int fd, void *addr, int *addrlen) {
+static int handle_accept(Context *ctx, int fd, void *addr, int *addrlen) {
 	trace("accept()\n");
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallAccept call = {
 		.is4 = 0,
@@ -1337,16 +1281,14 @@ static int handle_accept(int fd, void *addr, int *addrlen) {
 		.ret = &ret
 	};
 
-	_next->accept(&ctx, _next->accept_next, &call);
+	_next->accept(ctx, _next->accept_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_accept4(int fd, void *addr, int *addrlen, int flags) {
+static int handle_accept4(Context *ctx, int fd, void *addr, int *addrlen, int flags) {
 	trace("accept4()\n");
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallAccept call = {
 		.is4 = 1,
@@ -1357,16 +1299,14 @@ static int handle_accept4(int fd, void *addr, int *addrlen, int flags) {
 		.ret = &ret
 	};
 
-	_next->accept(&ctx, _next->accept_next, &call);
+	_next->accept(ctx, _next->accept_next, &call);
 
 	return ret.ret;
 }
 
-int handle_bind(int fd, void *addr, int addrlen) {
+int handle_bind(Context *ctx, int fd, void *addr, int addrlen) {
 	trace("bind()\n");
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallConnect call = {
 		.is_bind = 1,
@@ -1376,16 +1316,14 @@ int handle_bind(int fd, void *addr, int addrlen) {
 		.ret = &ret
 	};
 
-	_next->connect(&ctx, _next->connect_next, &call);
+	_next->connect(ctx, _next->connect_next, &call);
 
 	return ret.ret;
 }
 
-int handle_connect(int fd, void *addr, int addrlen) {
+int handle_connect(Context *ctx, int fd, void *addr, int addrlen) {
 	trace("connect()\n");
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallConnect call = {
 		.is_bind = 0,
@@ -1395,17 +1333,15 @@ int handle_connect(int fd, void *addr, int addrlen) {
 		.ret = &ret
 	};
 
-	_next->connect(&ctx, _next->connect_next, &call);
+	_next->connect(ctx, _next->connect_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_fanotify_mark(int fanotify_fd, unsigned int flags,
+static int handle_fanotify_mark(Context *ctx, int fanotify_fd, unsigned int flags,
 								__u64 mask, int dfd, const char *pathname) {
 	trace("fanotify_mark(%s)\n", pathname);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallFanotifyMark call = {
 		.fd = fanotify_fd,
@@ -1416,16 +1352,15 @@ static int handle_fanotify_mark(int fanotify_fd, unsigned int flags,
 		.ret = &ret
 	};
 
-	_next->fanotify_mark(&ctx, _next->fanotify_mark_next, &call);
+	_next->fanotify_mark(ctx, _next->fanotify_mark_next, &call);
 
 	return ret.ret;
 }
 
-static int handle_inotify_add_watch(int fd, const char *pathname, __u32 mask) {
+static int handle_inotify_add_watch(Context *ctx, int fd, const char *pathname,
+									__u32 mask) {
 	trace("inotify_add_watch(%s)\n", pathname);
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallInotifyAddWatch call = {
 		.fd = fd,
@@ -1434,16 +1369,14 @@ static int handle_inotify_add_watch(int fd, const char *pathname, __u32 mask) {
 		.ret = &ret
 	};
 
-	_next->inotify_add_watch(&ctx, _next->inotify_add_watch_next, &call);
+	_next->inotify_add_watch(ctx, _next->inotify_add_watch_next, &call);
 
 	return ret.ret;
 }
 
-int handle_getrlimit(unsigned int resource, void *old_rlim) {
+int handle_getrlimit(Context *ctx, unsigned int resource, void *old_rlim) {
 	trace("getrlimit()\n");
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallRlimit call = {
 		.type = RLIMITTYPE_GET,
@@ -1452,16 +1385,14 @@ int handle_getrlimit(unsigned int resource, void *old_rlim) {
 		.ret = &ret
 	};
 
-	_next->rlimit(&ctx, _next->rlimit_next, &call);
+	_next->rlimit(ctx, _next->rlimit_next, &call);
 
 	return ret.ret;
 }
 
-int handle_setrlimit(unsigned int resource, const void *new_rlim) {
+int handle_setrlimit(Context *ctx, unsigned int resource, const void *new_rlim) {
 	trace("setrlimit()\n");
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallRlimit call = {
 		.type = RLIMITTYPE_SET,
@@ -1470,16 +1401,15 @@ int handle_setrlimit(unsigned int resource, const void *new_rlim) {
 		.ret = &ret
 	};
 
-	_next->rlimit(&ctx, _next->rlimit_next, &call);
+	_next->rlimit(ctx, _next->rlimit_next, &call);
 
 	return ret.ret;
 }
 
-int handle_prlimit64(pid_t pid, unsigned int resource, const void *new_rlim, void *old_rlim) {
+int handle_prlimit64(Context *ctx, pid_t pid, unsigned int resource,
+					 const void *new_rlim, void *old_rlim) {
 	trace("prlimit64()\n");
 
-	Context ctx;
-	context_fill(&ctx);
 	RetInt ret = { 0 };
 	CallRlimit call = {
 		.type = RLIMITTYPE_PR,
@@ -1490,316 +1420,315 @@ int handle_prlimit64(pid_t pid, unsigned int resource, const void *new_rlim, voi
 		.ret = &ret
 	};
 
-	_next->rlimit(&ctx, _next->rlimit_next, &call);
+	_next->rlimit(ctx, _next->rlimit_next, &call);
 
 	return ret.ret;
 }
 
 
-static unsigned long handle_syscall(SysArgs *args, void *ucontext) {
+static unsigned long handle_syscall(Context *ctx, SysArgs *args) {
 	ssize_t ret;
 
 	switch (args->num) {
 #ifdef __NR_open
 		case __NR_open:
-			ret = handle_open((const char *)args->arg1, args->arg2, args->arg3);
+			ret = handle_open(ctx, (const char *)args->arg1, args->arg2, args->arg3);
 		break;
 #endif
 
 		case __NR_openat:
-			ret = handle_openat(args->arg1, (const char *)args->arg2,
+			ret = handle_openat(ctx, args->arg1, (const char *)args->arg2,
 								args->arg3, args->arg4);
 		break;
 
 #ifdef __NR_stat
 		case __NR_stat:
-			ret = handle_stat((const char *)args->arg1, (void *)args->arg2);
+			ret = handle_stat(ctx, (const char *)args->arg1, (void *)args->arg2);
 		break;
 #endif
 
 		case __NR_fstat:
-			ret = handle_fstat(args->arg1, (void *)args->arg2);
+			ret = handle_fstat(ctx, args->arg1, (void *)args->arg2);
 		break;
 
 #ifdef __NR_lstat
 		case __NR_lstat:
-			ret = handle_lstat((const char *)args->arg1, (void *)args->arg2);
+			ret = handle_lstat(ctx, (const char *)args->arg1, (void *)args->arg2);
 		break;
 #endif
 
 		case __NR_newfstatat:
-			ret = handle_newfstatat(args->arg1, (const char *)args->arg2,
+			ret = handle_newfstatat(ctx, args->arg1, (const char *)args->arg2,
 									(void *)args->arg3, args->arg4);
 		break;
 
 		case __NR_statx:
-			ret = handle_statx(args->arg1, (const char *)args->arg2,
+			ret = handle_statx(ctx, args->arg1, (const char *)args->arg2,
 							   args->arg3, args->arg4, (void *)args->arg5);
 		break;
 
 #ifdef __NR_readlink
 		case __NR_readlink:
-			ret = handle_readlink((const char *)args->arg1, (char *)args->arg2,
+			ret = handle_readlink(ctx, (const char *)args->arg1, (char *)args->arg2,
 								  args->arg3);
 		break;
 #endif
 
 		case __NR_readlinkat:
-			ret = handle_readlinkat(args->arg1, (const char *)args->arg2,
+			ret = handle_readlinkat(ctx, args->arg1, (const char *)args->arg2,
 									(char *)args->arg3, args->arg4);
 		break;
 
 #ifdef __NR_access
 		case __NR_access:
-			ret = handle_access((const char *)args->arg1, args->arg2);
+			ret = handle_access(ctx, (const char *)args->arg1, args->arg2);
 		break;
 #endif
 
 		case __NR_faccessat:
-			ret = handle_faccessat(args->arg1, (const char *)args->arg2, args->arg3);
+			ret = handle_faccessat(ctx, args->arg1, (const char *)args->arg2, args->arg3);
 		break;
 
 		case __NR_execve:
-			ret = handle_execve((const char *)args->arg1,
+			ret = handle_execve(ctx, (const char *)args->arg1,
 								(char *const *)args->arg2,
 								(char *const *)args->arg3);
 		break;
 
 		case __NR_execveat:
-			ret = handle_execveat(args->arg1, (const char *)args->arg2,
+			ret = handle_execveat(ctx, args->arg1, (const char *)args->arg2,
 								  (char *const *)args->arg3,
 								  (char *const *)args->arg4,
 								  args->arg5);
 		break;
 
 		case __NR_rt_sigprocmask:
-			ret = handle_rt_sigprocmask(args->arg1, (const sigset_t *)args->arg2,
-										(sigset_t *)args->arg3, args->arg4,
-										ucontext);
+			ret = handle_rt_sigprocmask(ctx, args->arg1, (const sigset_t *)args->arg2,
+										(sigset_t *)args->arg3, args->arg4);
 		break;
 
 		case __NR_rt_sigaction:
-			ret = handle_rt_sigaction(args->arg1,
+			ret = handle_rt_sigaction(ctx, args->arg1,
 									  (const struct sigaction *)args->arg2,
 									  (struct sigaction *)args->arg3, args->arg4);
 		break;
 
 #ifdef __NR_link
 		case __NR_link:
-			ret = handle_link((const char *)args->arg1, (const char *)args->arg2);
+			ret = handle_link(ctx, (const char *)args->arg1, (const char *)args->arg2);
 		break;
 #endif
 
 		case __NR_linkat:
-			ret = handle_linkat(args->arg1, (const char *)args->arg2, args->arg3,
+			ret = handle_linkat(ctx, args->arg1, (const char *)args->arg2, args->arg3,
 								(const char *)args->arg4, args->arg5);
 		break;
 
 #ifdef __NR_symlink
 		case __NR_symlink:
-			ret = handle_symlink((const char *)args->arg1,
+			ret = handle_symlink(ctx, (const char *)args->arg1,
 								 (const char *)args->arg2);
 		break;
 #endif
 
 		case __NR_symlinkat:
-			ret = handle_symlinkat((const char *)args->arg1, args->arg2,
+			ret = handle_symlinkat(ctx, (const char *)args->arg1, args->arg2,
 								   (const char *)args->arg3);
 		break;
 
 #ifdef __NR_unlink
 		case __NR_unlink:
-			ret = handle_unlink((const char *)args->arg1);
+			ret = handle_unlink(ctx, (const char *)args->arg1);
 		break;
 #endif
 
 		case __NR_unlinkat:
-			ret = handle_unlinkat(args->arg1, (const char *)args->arg2, args->arg3);
+			ret = handle_unlinkat(ctx, args->arg1, (const char *)args->arg2, args->arg3);
 		break;
 
 		case __NR_setxattr:
-			ret = handle_setxattr((const char *)args->arg1,
+			ret = handle_setxattr(ctx, (const char *)args->arg1,
 								  (const char *)args->arg2,
 								  (const void *)args->arg3,
 								  args->arg4, args->arg5);
 		break;
 
 		case __NR_lsetxattr:
-			ret = handle_lsetxattr((const char *)args->arg1,
+			ret = handle_lsetxattr(ctx, (const char *)args->arg1,
 								   (const char *)args->arg2,
 								   (const void *)args->arg3,
 								   args->arg4, args->arg5);
 		break;
 
 		case __NR_fsetxattr:
-			ret = handle_fsetxattr(args->arg1, (const char *)args->arg2,
+			ret = handle_fsetxattr(ctx, args->arg1, (const char *)args->arg2,
 								   (const void *)args->arg3, args->arg4,
 								   args->arg5);
 		break;
 
 		case __NR_getxattr:
-			ret = handle_getxattr((const char *)args->arg1,
+			ret = handle_getxattr(ctx, (const char *)args->arg1,
 								  (const char *)args->arg2,
 								  (void *)args->arg3, args->arg4);
 		break;
 
 		case __NR_lgetxattr:
-			ret = handle_lgetxattr((const char *)args->arg1,
+			ret = handle_lgetxattr(ctx, (const char *)args->arg1,
 								   (const char *)args->arg2,
 								   (void *)args->arg3, args->arg4);
 		break;
 
 		case __NR_fgetxattr:
-			ret = handle_fgetxattr(args->arg1, (const char *)args->arg2,
+			ret = handle_fgetxattr(ctx, args->arg1, (const char *)args->arg2,
 								   (void *)args->arg3, args->arg4);
 		break;
 
 		case __NR_listxattr:
-			ret = handle_listxattr((const char *)args->arg1,
+			ret = handle_listxattr(ctx, (const char *)args->arg1,
 								   (char *)args->arg2, args->arg3);
 		break;
 
 		case __NR_llistxattr:
-			ret = handle_llistxattr((const char *)args->arg1,
+			ret = handle_llistxattr(ctx, (const char *)args->arg1,
 									(char *)args->arg2, args->arg3);
 		break;
 
 		case __NR_flistxattr:
-			ret = handle_flistxattr(args->arg1, (char *)args->arg2, args->arg3);
+			ret = handle_flistxattr(ctx, args->arg1, (char *)args->arg2, args->arg3);
 		break;
 
 		case __NR_removexattr:
-			ret = handle_removexattr((const char*)args->arg1,
+			ret = handle_removexattr(ctx, (const char*)args->arg1,
 									 (const char*)args->arg2);
 		break;
 
 		case __NR_lremovexattr:
-			ret = handle_lremovexattr((const char*)args->arg1,
+			ret = handle_lremovexattr(ctx, (const char*)args->arg1,
 									  (const char*)args->arg2);
 		break;
 
 		case __NR_fremovexattr:
-			ret = handle_fremovexattr(args->arg1, (const char*)args->arg2);
+			ret = handle_fremovexattr(ctx, args->arg1, (const char*)args->arg2);
 		break;
 
 #ifdef __NR_rename
 		case __NR_rename:
-			ret = handle_rename((const char *)args->arg1, (const char *)args->arg2);
+			ret = handle_rename(ctx, (const char *)args->arg1, (const char *)args->arg2);
 		break;
 #endif
 
 		case __NR_renameat:
-			ret = handle_renameat(args->arg1, (const char *)args->arg2,
+			ret = handle_renameat(ctx, args->arg1, (const char *)args->arg2,
 								  args->arg3, (const char *)args->arg4);
 		break;
 
 		case __NR_renameat2:
-			ret = handle_renameat2(args->arg1, (const char *)args->arg2,
+			ret = handle_renameat2(ctx, args->arg1, (const char *)args->arg2,
 								   args->arg3, (const char *)args->arg4, args->arg5);
 		break;
 
 		case __NR_chdir:
-			ret = handle_chdir((const char *)args->arg1);
+			ret = handle_chdir(ctx, (const char *)args->arg1);
 		break;
 
 		case __NR_fchdir:
-			ret = handle_fchdir(args->arg1);
+			ret = handle_fchdir(ctx, args->arg1);
 		break;
 
 		case __NR_exit:
-			ret = handle_exit(args->arg1);
+			ret = handle_exit(ctx, args->arg1);
 		break;
 
 		case __NR_exit_group:
-			ret = handle_exit_group(args->arg1);
+			ret = handle_exit_group(ctx, args->arg1);
 		break;
 
 #ifdef __NR_chmod
 		case __NR_chmod:
-			ret = handle_chmod((const char *)args->arg1, args->arg2);
+			ret = handle_chmod(ctx, (const char *)args->arg1, args->arg2);
 		break;
 #endif
 
 		case __NR_fchmod:
-			ret = handle_fchmod(args->arg1, args->arg2);
+			ret = handle_fchmod(ctx, args->arg1, args->arg2);
 		break;
 
 		case __NR_fchmodat:
-			ret = handle_fchmodat(args->arg1, (const char *)args->arg2, args->arg3);
+			ret = handle_fchmodat(ctx, args->arg1, (const char *)args->arg2, args->arg3);
 		break;
 
 		case __NR_truncate:
-			ret = handle_truncate((const char *)args->arg1, args->arg2);
+			ret = handle_truncate(ctx, (const char *)args->arg1, args->arg2);
 		break;
 
 		case __NR_ftruncate:
-			ret = handle_ftruncate(args->arg1, args->arg2);
+			ret = handle_ftruncate(ctx, args->arg1, args->arg2);
 		break;
 
 #ifdef __NR_mkdir
 		case __NR_mkdir:
-			ret = handle_mkdir((const char *)args->arg1, args->arg2);
+			ret = handle_mkdir(ctx, (const char *)args->arg1, args->arg2);
 		break;
 #endif
 
 		case __NR_mkdirat:
-			ret = handle_mkdirat(args->arg1, (const char *)args->arg2, args->arg3);
+			ret = handle_mkdirat(ctx, args->arg1, (const char *)args->arg2, args->arg3);
 		break;
 
 #ifdef __NR_getdents
 		case __NR_getdents:
-			ret = handle_getdents(args->arg1, (void *)args->arg2, args->arg3);
+			ret = handle_getdents(ctx, args->arg1, (void *)args->arg2, args->arg3);
 		break;
 #endif
 
 		case __NR_getdents64:
-			ret = handle_getdents64(args->arg1, (void *)args->arg2, args->arg3);
+			ret = handle_getdents64(ctx, args->arg1, (void *)args->arg2, args->arg3);
 		break;
 
 #ifdef __NR_mknod
 		case __NR_mknod:
-			ret = handle_mknod((const char *)args->arg1, args->arg2, args->arg3);
+			ret = handle_mknod(ctx, (const char *)args->arg1, args->arg2, args->arg3);
 		break;
 #endif
 
 		case __NR_mknodat:
-			ret = handle_mknodat(args->arg1, (const char *)args->arg2, args->arg3, args->arg4);
+			ret = handle_mknodat(ctx, args->arg1, (const char *)args->arg2, args->arg3, args->arg4);
 		break;
 
 		case __NR_accept:
-			ret = handle_accept(args->arg1, (void *)args->arg2, (int *)args->arg3);
+			ret = handle_accept(ctx, args->arg1, (void *)args->arg2, (int *)args->arg3);
 		break;
 
 		case __NR_accept4:
-			ret = handle_accept4(args->arg1, (void *)args->arg2, (int *)args->arg3, args->arg4);
+			ret = handle_accept4(ctx, args->arg1, (void *)args->arg2, (int *)args->arg3, args->arg4);
 		break;
 
 		case __NR_bind:
-			ret = handle_bind(args->arg1, (void *)args->arg2, args->arg3);
+			ret = handle_bind(ctx, args->arg1, (void *)args->arg2, args->arg3);
 		break;
 
 		case __NR_connect:
-			ret = handle_connect(args->arg1, (void *)args->arg2, args->arg3);
+			ret = handle_connect(ctx, args->arg1, (void *)args->arg2, args->arg3);
 		break;
 
 		case __NR_fanotify_mark:
-			ret = handle_fanotify_mark(args->arg1, args->arg2, args->arg3, args->arg4, (const char *)args->arg5);
+			ret = handle_fanotify_mark(ctx, args->arg1, args->arg2, args->arg3, args->arg4, (const char *)args->arg5);
 		break;
 
 		case __NR_inotify_add_watch:
-			ret = handle_inotify_add_watch(args->arg1, (const char *)args->arg2, args->arg3);
+			ret = handle_inotify_add_watch(ctx, args->arg1, (const char *)args->arg2, args->arg3);
 		break;
 
 		case __NR_getrlimit:
-			ret = handle_getrlimit(args->arg1, (void *)args->arg2);
+			ret = handle_getrlimit(ctx, args->arg1, (void *)args->arg2);
 		break;
 
 		case __NR_setrlimit:
-			ret = handle_setrlimit(args->arg1, (const void *)args->arg2);
+			ret = handle_setrlimit(ctx, args->arg1, (const void *)args->arg2);
 		break;
 
 		case __NR_prlimit64:
-			ret = handle_prlimit64(args->arg1, args->arg2, (const void *)args->arg3, (void *)args->arg4);
+			ret = handle_prlimit64(ctx, args->arg1, args->arg2, (const void *)args->arg3, (void *)args->arg4);
 		break;
 
 		default:
