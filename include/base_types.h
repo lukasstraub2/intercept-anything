@@ -1,5 +1,8 @@
 #pragma once
 
+typedef struct RMapEntry RMapEntry;
+typedef struct RMap RMap;
+
 typedef struct Cache Cache;
 typedef struct TlsList TlsList;
 typedef struct Tls Tls;

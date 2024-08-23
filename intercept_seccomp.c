@@ -47,6 +47,7 @@ void intercept_init(int recursing, const char *exe) {
 	}
 	memcpy(_self_exe, exe, exe_len);
 
+	tls_init();
 	mutex_init();
 
 	const CallHandler *signalmanager = signalmanager_init(&bottom);

@@ -220,6 +220,7 @@ int main(int argc, char **argv) {
 
 	install_sighandler();
 
+	tls_init();
 	mutex_init();
 	mutexa = mutex_alloc();
 	mutexb = mutex_alloc();

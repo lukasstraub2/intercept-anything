@@ -43,17 +43,6 @@ int spinlock_trylock(Spinlock *lock) {
 	return 0;
 }
 
-static int _mutex_trylock(pid_t tid, Mutex *lock) {
-	Mutex expected = 0;
-
-	if (!__atomic_compare_exchange_n(lock, &expected, tid, 0,
-									 __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
-		return -1;
-	}
-
-	return 0;
-}
-
 void spinlock_unlock(Spinlock *lock) {
 	__atomic_store_n(lock, 0, __ATOMIC_RELEASE);
 }
@@ -153,6 +142,12 @@ void mutex_unlock(Tls *tls, RobustMutex *mutex) {
 	__asm volatile ("" ::: "memory");
 	WRITE_ONCE(list->pending, NULL);
 	__asm volatile ("" ::: "memory");
+}
+
+int mutex_locked(Tls *tls, RobustMutex *mutex) {
+	uint32_t val = __atomic_load_n(&mutex->mutex, __ATOMIC_RELAXED);
+
+	return val == (uint32_t) tls->tid;
 }
 
 static void mutex_recover_pending(Tls *tls) {

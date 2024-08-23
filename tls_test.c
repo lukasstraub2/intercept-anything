@@ -5,6 +5,8 @@
 #include "tls.h"
 
 int main(int argc, char **argv) {
+	tls_init();
+
 	for (int i = 1; i <= TLS_LIST_ALLOC; i++) {
 		Tls *tls = _tls_get(i);
 		if (!tls) {
@@ -17,7 +19,7 @@ int main(int argc, char **argv) {
 	}
 
 	for (int i = 1; i <= TLS_LIST_ALLOC; i++) {
-		TlsList *tls = tls_search_binary(i);
+		RMapEntry *tls = tls_search_binary(i);
 		if (!tls) {
 			abort();
 		}
