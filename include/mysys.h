@@ -318,3 +318,8 @@ static __attribute__((unused))
 int sys_madvise(void *start, size_t len_in, int behavior) {
 	return my_syscall3(__NR_madvise, start, len_in, behavior);
 }
+
+static __attribute__((unused))
+long sys_ptrace(long request, long pid, void *addr, void *data) {
+	return my_syscall4(__NR_ptrace, request, pid, addr, data);
+}

@@ -590,6 +590,29 @@ struct CallSigaction {
 	RetInt *ret;
 };
 
+typedef struct RetLong RetLong;
+struct RetLong {
+	long ret;
+};
+
+typedef struct CallPtrace CallPtrace;
+struct CallPtrace {
+	long request;
+	long pid;
+	void *addr;
+	void *data;
+	RetLong *ret;
+};
+
+__attribute__((unused))
+static void callptrace_copy(CallPtrace *dst, const CallPtrace *call) {
+	dst->request = call->request;
+	dst->pid = call->pid;
+	dst->addr = call->addr;
+	dst->data = call->data;
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -639,6 +662,8 @@ struct CallHandler {
 	const This *sigprocmask_next;
 	int (*sigaction)(Context *ctx, const This *this, const CallSigaction *call);
 	const This *sigaction_next;
+	long (*ptrace)(Context *ctx, const This *this, const CallPtrace *call);
+	const This *ptrace_next;
 };
 
 extern const char *self_exe;

@@ -19,7 +19,7 @@ build_main() {
 	# and we need to load to the same address in all processes
 	cc -g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -Wno-error=incompatible-pointer-types -fno-ident -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include" \
 		-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -Wl,--no-undefined -static -o "$out" \
-		loader.c mylock.c tls.c intercept_seccomp.c util.c signalmanager.c noxattrs.c hardlinkshim.c rootlink.c rootshim.c androidislinux.c "$@" -lgcc
+		loader.c mylock.c tls.c intercept_seccomp.c util.c signalmanager.c noxattrs.c hardlinkshim.c rootlink.c rootshim.c androidislinux.c workarounds.c "$@" -lgcc
 	#LDFLAGS += -Wl,-Bsymbolic,--no-undefined,--build-id=none -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -static
 }
 

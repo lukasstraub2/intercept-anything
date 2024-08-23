@@ -26,6 +26,7 @@ static int install_generic_handler(int signum, const struct sigaction *act);
 static struct sigaction mysignal[mysignal_size];
 static struct sigaction staging_signal;
 static int staging_signum = -1;
+static pid_t mysignal_pid;
 static RobustMutex *mutex = NULL;
 
 static struct sigaction *get_mysignal(int signum) {
@@ -58,28 +59,7 @@ static void update_mysignal(int signum, const struct sigaction *act) {
 	__asm volatile ("" ::: "memory");
 }
 
-static void action_terminate(int signum) {
-	int ret;
-	struct sigaction act = {0};
-	act.sa_handler = SIG_DFL;
-	// noop
-
-	ret = sys_rt_sigaction(signum, &act, NULL, sizeof(sigset_t));
-	if (ret < 0) {
-		exit_error("rt_sigaction(%d): %d", signum, ret);
-	}
-
-	const sigset_t empty = 0;
-	ret = sys_rt_sigprocmask(SIG_SETMASK, &empty, NULL, sizeof(sigset_t));
-	if (ret < 0) {
-		exit_error("rt_sigprocmask(0): %d", ret);
-	}
-
-	raise(signum);
-	while (1);
-}
-
-static void action_stop(int signum) {
+static void raise_unmasked(int signum) {
 	int ret;
 	struct sigaction act = {0};
 	act.sa_handler = SIG_DFL;
@@ -110,181 +90,19 @@ static void action_stop(int signum) {
 	}
 }
 
-static void default_action(int signum) {
-	switch (signum) {
-		case SIGHUP:
-			// Term
-			action_terminate(signum);
-		break;
+static void handle_default(int signum) {
+	DefaultAction def = default_action(signum);
 
-		case SIGINT:
-			// Term
-			action_terminate(signum);
-		break;
+	switch (def) {
+		case ACTION_CONT:
+		case ACTION_IGNORE:
+			return;
 
-		case SIGQUIT:
-			// Core
-			action_terminate(signum);
-		break;
-
-		case SIGILL:
-			// Core
-			action_terminate(signum);
-		break;
-
-		case SIGTRAP:
-			// Core
-			action_terminate(signum);
-		break;
-
-		case SIGABRT:
-			// Core
-			action_terminate(signum);
-		break;
-
-/*
-		case SIGIOT:
-		// equivalent to SIGABRT
-		break;
-*/
-
-		case SIGBUS:
-			// Core
-			action_terminate(signum);
-		break;
-
-		case SIGFPE:
-			// Core
-			action_terminate(signum);
-		break;
-
-		case SIGKILL:
-			// Term
-			action_terminate(signum);
-		break;
-
-		case SIGUSR1:
-			// Term
-			action_terminate(signum);
-		break;
-
-		case SIGSEGV:
-			// Core
-			action_terminate(signum);
-		break;
-
-		case SIGUSR2:
-			// Term
-			action_terminate(signum);
-		break;
-
-		case SIGPIPE:
-			// Term
-			action_terminate(signum);
-		break;
-
-		case SIGALRM:
-			// Term
-			action_terminate(signum);
-		break;
-
-		case SIGTERM:
-			// Term
-			action_terminate(signum);
-		break;
-
-		case SIGSTKFLT:
-			// Term
-			action_terminate(signum);
-		break;
-
-		case SIGCHLD:
-			// Ign
-		break;
-
-		case SIGCONT:
-			// Cont
-		break;
-
-		case SIGSTOP:
-			// Stop
-			//action_stop();
-		break;
-
-		case SIGTSTP:
-			// Stop
-			action_stop(signum);
-		break;
-
-		case SIGTTIN:
-			// Stop
-			action_stop(signum);
-		break;
-
-		case SIGTTOU:
-			// Stop
-			action_stop(signum);
-		break;
-
-		case SIGURG:
-			// Ign
-		break;
-
-		case SIGXCPU:
-			// Core
-			action_terminate(signum);
-		break;
-
-		case SIGXFSZ:
-			// Core
-			action_terminate(signum);
-		break;
-
-		case SIGVTALRM:
-			// Term
-			action_terminate(signum);
-		break;
-
-		case SIGPROF:
-			// Term
-			action_terminate(signum);
-		break;
-
-		case SIGWINCH:
-			// Ign
-		break;
-
-		case SIGIO:
-			// Term
-			action_terminate(signum);
-		break;
-/*
-		case SIGPOLL:
-
-		break;
-*/
-		case SIGPWR:
-			// Term
-			action_terminate(signum);
-		break;
-
-		case SIGSYS:
-			// Core
-			action_terminate(signum);
-		break;
-/*
-		case SIGUNUSED:
-
-		break;
-*/
-		default:
-			if (signum >= 32 && signum <= 64) {
-				// realtime signal
-				// Term
-				action_terminate(signum);
-			}
-			abort();
-		break;
+		case ACTION_STOP:
+		case ACTION_TERM:
+		case ACTION_CORE:
+		case ACTION_STOP_KILL:
+			raise_unmasked(signum);
 	}
 }
 
@@ -306,11 +124,11 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 	mutex_unlock(tls, mutex);
 
 	const __sighandler_t handler = act.sa_handler;
-	const myhandler_t _handler = (myhandler_t) handler;
+	const myhandler_t _handler = (void *) handler;
 
 	if (handler == SIG_DFL) {
 		trace_plus("signal %d: SIG_DFL\n", signum);
-		default_action(signum);
+		handle_default(signum);
 	} else if (handler == SIG_IGN) {
 		trace_plus("signal %d: SIG_IGN\n", signum);
 		// noop
@@ -421,7 +239,7 @@ out:
 void signalmanager_install_sigsys(myhandler_t handler) {
 	int ret;
 	struct sigaction sig = {0};
-	sig.sa_handler = (__sighandler_t) handler;
+	sig.sa_handler = (void *) handler;
 	sig.sa_flags = SA_NODEFER | SA_SIGINFO;
 
 	ret = sigaction(SIGSYS, &sig, NULL);
@@ -433,12 +251,36 @@ void signalmanager_install_sigsys(myhandler_t handler) {
 }
 
 static int install_generic_handler(int signum, const struct sigaction *act) {
+	DefaultAction def = default_action(signum);
 	struct sigaction copy;
 	memcpy(&copy, act, sizeof(struct sigaction));
-	copy.sa_handler = (__sighandler_t) generic_handler;
-	copy.sa_mask &= ~unmask;
-	copy.sa_flags &= ~(SA_RESETHAND);
-	// TODO: enforce SA_NODEFER for unmasked signals
+
+	if (act->sa_handler == SIG_DFL) {
+		switch (def) {
+			case ACTION_CONT:
+			case ACTION_IGNORE:
+			break;
+
+			case ACTION_STOP:
+			case ACTION_TERM:
+			case ACTION_CORE:
+				copy.sa_handler = (void *) generic_handler;
+				copy.sa_mask &= ~unmask;
+				copy.sa_flags &= ~(SA_RESETHAND);
+				// TODO: enforce SA_NODEFER for unmasked signals
+			break;
+
+			case ACTION_STOP_KILL:
+			break;
+		}
+	} else if (act->sa_handler == SIG_IGN) {
+		// noop
+	} else {
+		copy.sa_handler = (void *) generic_handler;
+		copy.sa_mask &= ~unmask;
+		copy.sa_flags &= ~(SA_RESETHAND);
+		// TODO: enforce SA_NODEFER for unmasked signals
+	}
 
 	copy.sa_flags |= SA_RESTORER;
 	copy.sa_restorer = __restore_rt;
@@ -461,6 +303,7 @@ const CallHandler *signalmanager_init(const CallHandler *next) {
 	this.sigaction = signalmanager_sigaction;
 	this.sigaction_next = NULL;
 
+	mysignal_pid = sys_getpid();
 	mutex = mutex_alloc();
 
 	for (int signum = 1; signum <= mysignal_size; signum++) {

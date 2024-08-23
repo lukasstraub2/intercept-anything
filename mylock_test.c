@@ -63,7 +63,7 @@ static pid_t thread_new(void (*fn)()) {
 static void handler(int sig, siginfo_t *info, void *ucontext);
 static void install_sighandler() {
 	struct sigaction sig = {0};
-	sig.sa_handler = handler;
+	sig.sa_handler = (void *) handler;
 	//sigemptyset(&sig.sa_mask);
 	sig.sa_flags = SA_NODEFER | SA_SIGINFO;
 
@@ -94,7 +94,7 @@ static void rsplice(int from, int to) {
 static int rpending(int fd) {
 	int ret, pending;
 
-	ret = sys_ioctl(stage[0], FIONREAD, &pending);
+	ret = sys_ioctl(fd, FIONREAD, &pending);
 	if (ret < 0) {
 		abort();
 	}

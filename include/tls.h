@@ -42,6 +42,7 @@ struct Tls {
 	RobustMutexList my_robust_mutex_list;
 	int jumpbuf_valid;
 	void *jumpbuf[5];
+	int workarounds_traceme;
 };
 
 TlsList *tls_search_binary(uint32_t tid);

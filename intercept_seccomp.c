@@ -119,6 +119,10 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_ptrace, 61, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getrlimit, 60, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_setrlimit, 59, 0),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_prlimit64, 58, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fanotify_mark, 57, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_inotify_add_watch, 56, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_connect, 55, 0),
@@ -1425,6 +1429,24 @@ int handle_prlimit64(Context *ctx, pid_t pid, unsigned int resource,
 	return ret.ret;
 }
 
+static long handle_ptrace(Context *ctx, long request, long pid,
+						  void *addr, void *data) {
+	trace("ptrace()\n");
+
+	RetLong ret = { 0 };
+	CallPtrace call = {
+		.request = request,
+		.pid = pid,
+		.addr = addr,
+		.data = data,
+		.ret = &ret
+	};
+
+	_next->ptrace(ctx, _next->ptrace_next, &call);
+
+	return ret.ret;
+}
+
 
 static unsigned long handle_syscall(Context *ctx, SysArgs *args) {
 	ssize_t ret;
@@ -1729,6 +1751,10 @@ static unsigned long handle_syscall(Context *ctx, SysArgs *args) {
 
 		case __NR_prlimit64:
 			ret = handle_prlimit64(ctx, args->arg1, args->arg2, (const void *)args->arg3, (void *)args->arg4);
+		break;
+
+		case __NR_ptrace:
+			ret = handle_ptrace(ctx, args->arg1, args->arg2, (void *)args->arg3, (void *)args->arg4);
 		break;
 
 		default:
@@ -2424,6 +2450,15 @@ static int bottom_rlimit(Context *ctx, const This *this, const CallRlimit *call)
 	return ret;
 }
 
+static long bottom_ptrace(Context *ctx, const This *this, const CallPtrace *call) {
+	long ret;
+	RetLong *_ret = call->ret;
+
+	ret = sys_ptrace(call->request, call->pid, call->addr, call->data);
+
+	_ret->ret = ret;
+	return ret;
+}
 
 static const CallHandler bottom = {
 	bottom_open,
@@ -2471,5 +2506,7 @@ static const CallHandler bottom = {
 	NULL,
 	NULL,
 	NULL,
+	NULL,
+	bottom_ptrace,
 	NULL,
 };
