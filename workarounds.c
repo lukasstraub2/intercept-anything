@@ -12,22 +12,27 @@ struct This {
 	const CallHandler *next;
 };
 
+static void rectify_traceme(Tls *tls) {
+	long ret = sys_ptrace(PTRACE_TRACEME, 0, 0, 0);
+	if (ret < 0) {
+		abort();
+	}
+
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(tls->workarounds_traceme, 0);
+	__asm volatile ("" ::: "memory");
+}
+
 static void maybe_recitfy_traceme(Tls *tls) {
 	if (tls->workarounds_traceme) {
-		long ret = sys_ptrace(PTRACE_TRACEME, 0, 0, 0);
-		if (ret < 0) {
-			abort();
-		}
+		rectify_traceme(tls);
 	}
 }
 
 int workarounds_rethrow_signal(Tls *tls, int signum) {
 	if (signum == SIGBUS || signum == SIGFPE || signum == SIGILL || signum == SIGSEGV) {
 		if (tls->workarounds_traceme) {
-			long ret = sys_ptrace(PTRACE_TRACEME, 0, 0, 0);
-			if (ret < 0) {
-				abort();
-			}
+			rectify_traceme(tls);
 
 			return 1;
 		}
@@ -52,7 +57,8 @@ static long workarounds_ptrace(Context *ctx, const This *this,
 	const char *basename = strrchr(self_exe, '/') + 1;
 
 	if (!strcmp(basename, "gdb") && call->request == PTRACE_TRACEME) {
-		ctx->tls->workarounds_traceme = 1;
+		WRITE_ONCE(ctx->tls->workarounds_traceme, 1);
+		__asm volatile ("" ::: "memory");
 		return 0;
 	}
 
