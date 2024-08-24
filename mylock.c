@@ -14,15 +14,6 @@ struct LocalMutexes {
 
 static LocalMutexes *local_mutexes = NULL;
 
-typedef struct rwlock_t rwlock_t;
-struct rwlock_t {
-	Mutex serialize_lockers;
-	Mutex update_lock;
-	int rcount_new;
-	Mutex write_lock;
-	int rcount;
-};
-
 void spinlock_lock(Spinlock *lock) {
 	Spinlock expected = 0;
 
@@ -233,52 +224,3 @@ RobustMutex *mutex_alloc() {
 
 	return local_mutexes->data + idx;
 }
-
-/*
-void rwlock_read_lock(rwlock_t *lock) {
-	int rcount;
-
-	_mutex_lock(1, &lock->serialize_lockers);
-	_mutex_lock(1, &lock->update_lock);
-
-	rcount = lock->rcount + 1;
-
-	lock->rcount_new = rcount;
-	__asm volatile ("" ::: "memory");
-	lock->rcount = rcount;
-
-	_mutex_unlock(&lock->serialize_lockers);
-	if (rcount == 1) {
-		_mutex_lock(1, &lock->write_lock);
-	}
-
-	_mutex_unlock(&lock->update_lock);
-}
-
-void rwlock_read_unlock(rwlock_t *lock) {
-	int rcount;
-
-	_mutex_lock(1, &lock->update_lock);
-
-	rcount = lock->rcount - 1;
-
-	lock->rcount_new = rcount;
-	__asm volatile ("" ::: "memory");
-	lock->rcount = rcount;
-
-	if (rcount == 0) {
-		_mutex_unlock(&lock->write_lock);
-	}
-	_mutex_unlock(&lock->update_lock);
-}
-
-void rwlock_write_lock(rwlock_t *lock) {
-	_mutex_lock(1, &lock->serialize_lockers);
-	_mutex_lock(1, &lock->write_lock);
-	_mutex_unlock(&lock->serialize_lockers);
-}
-
-void rwlock_write_unlock(rwlock_t *lock) {
-	_mutex_unlock(&lock->write_lock);
-}
-*/
