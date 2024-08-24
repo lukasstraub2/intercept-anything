@@ -10,6 +10,7 @@
 #include "mylock.h"
 #include "myseccomp.h"
 #include "signalmanager.h"
+#include "rmap.h"
 
 #define DEBUG_ENV "DEBUG_SIGNAL"
 #include "debug.h"
@@ -23,39 +24,69 @@ const sigset_t unmask = SIG_BIT(SIGBUS)|SIG_BIT(SIGFPE)|SIG_BIT(SIGILL)|
 static int install_generic_handler(int signum, const struct sigaction *act);
 
 #define mysignal_size (64)
-static struct sigaction mysignal[mysignal_size];
-static struct sigaction staging_signal;
-static int staging_signum = -1;
-static pid_t mysignal_pid;
+typedef struct MySignal MySignal;
+struct MySignal {
+	int staging_signum;
+	struct sigaction staging_signal;
+	struct sigaction mysignal[mysignal_size];
+};
+
+static RMap *map;
 static RobustMutex *mutex = NULL;
 
-static struct sigaction *get_mysignal(int signum) {
-	assert(signum > 0);
-	return mysignal + signum - 1;
+static void recover_mysignal(MySignal *mysignal);
+static MySignal *_get_mysignal(Tls *tls) {
+	assert(mutex_locked(tls, mutex));
+	RMapEntry *entry = rmap_get(map, tls->pid);
+	assert(entry->id == (uint32_t) tls->pid);
+
+	if (entry->data) {
+		recover_mysignal(entry->data);
+		return entry->data;
+	}
+
+	MySignal *alloc = malloc(sizeof(*alloc));
+	const RMapEntry *_parent = rmap_get_noalloc(map, getppid());
+	if (_parent && _parent->data) {
+		MySignal *parent = _parent->data;
+		recover_mysignal(parent);
+		memcpy(alloc->mysignal, parent->mysignal, sizeof(parent->mysignal));
+	}
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(entry->data, alloc);
+	__asm volatile ("" ::: "memory");
+
+	return alloc;
 }
 
-static void recover_mysignal() {
-	int signum = staging_signum;
-	struct sigaction *mysig = get_mysignal(signum);
+static struct sigaction *get_mysignal(MySignal *mysignal, int signum) {
+	assert(signum > 0);
+	return mysignal->mysignal + signum - 1;
+}
 
-	if (signum > 0) {
-		memcpy(mysig, &staging_signal, sizeof(struct sigaction));
+static void recover_mysignal(MySignal *mysignal) {
+	int signum = mysignal->staging_signum;
+
+	if (signum) {
+		struct sigaction *mysig = get_mysignal(mysignal, signum);
+		memcpy(mysig, &mysignal->staging_signal, sizeof(struct sigaction));
 		__asm volatile ("" ::: "memory");
-		WRITE_ONCE(staging_signum, -1);
+		WRITE_ONCE(mysignal->staging_signum, 0);
 		__asm volatile ("" ::: "memory");
 	}
 }
 
-static void update_mysignal(int signum, const struct sigaction *act) {
-	struct sigaction *mysig = get_mysignal(signum);
+static void update_mysignal(MySignal *mysignal,int signum,
+							const struct sigaction *act) {
+	struct sigaction *mysig = get_mysignal(mysignal, signum);
 
-	memcpy(&staging_signal, act, sizeof(struct sigaction));
+	memcpy(&mysignal->staging_signal, act, sizeof(struct sigaction));
 	__asm volatile ("" ::: "memory");
-	WRITE_ONCE(staging_signum, signum);
+	WRITE_ONCE(mysignal->staging_signum, signum);
 	__asm volatile ("" ::: "memory");
-	memcpy(mysig, &staging_signal, sizeof(struct sigaction));
+	memcpy(mysig, &mysignal->staging_signal, sizeof(struct sigaction));
 	__asm volatile ("" ::: "memory");
-	WRITE_ONCE(staging_signum, -1);
+	WRITE_ONCE(mysignal->staging_signum, 0);
 	__asm volatile ("" ::: "memory");
 }
 
@@ -107,16 +138,14 @@ static void handle_default(int signum) {
 }
 
 static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
-	struct sigaction *ptr = get_mysignal(signum);
-	struct sigaction act;
 	Tls *tls = tls_get();
-
 	mutex_recover(tls);
 
-	int ownerdead = mutex_lock(tls, mutex);
-	if (ownerdead) {
-		recover_mysignal();
-	}
+	mutex_lock(tls, mutex);
+	MySignal *mysignal = _get_mysignal(tls);
+	struct sigaction *ptr = get_mysignal(mysignal, signum);
+	struct sigaction act;
+
 	memcpy(&act, ptr, sizeof(struct sigaction));
 	if (ptr->sa_flags & SA_RESETHAND) {
 		ptr->sa_handler = SIG_DFL;
@@ -133,7 +162,7 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 		trace_plus("signal %d: SIG_IGN\n", signum);
 		// noop
 	} else {
-		trace_plus("signal %d: registered handler\n", signum);
+		trace_plus("signal %d: registered handler restart:\n");
 		if (act.sa_flags & SA_SIGINFO) {
 			_handler(signum, info, ucontext);
 		} else {
@@ -143,6 +172,18 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 
 	if (tls->jumpbuf_valid) {
 		__builtin_longjmp(tls->jumpbuf, 1);
+	}
+}
+
+void signalmanager_mask_until_sigreturn(Context *ctx) {
+	int ret;
+	const sigset_t fullmask = ~unmask;
+	struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
+	sigset_t *uctx_set = &uctx->uc_sigmask;
+
+	ret = sys_rt_sigprocmask(SIG_SETMASK, &fullmask, uctx_set, sizeof(sigset_t));
+	if (ret < 0) {
+		exit_error("rt_sigprocmask(0): %d", ret);
 	}
 }
 
@@ -165,9 +206,9 @@ static int signalmanager_sigprocmask(Context *ctx, const This *this, const CallS
 	sigset_t set = *call->set;
 	set &= ~unmask;
 
-	_ret->ret = sys_rt_sigprocmask(call->how, &set, call->oldset, call->sigsetsize);
-	if (_ret->ret < 0) {
-		goto out;
+	signalmanager_mask_until_sigreturn(ctx);
+	if (call->oldset) {
+		*call->oldset = *uctx_set;
 	}
 
 	// Any changes to sigprocmask would be reset on sigreturn
@@ -204,21 +245,18 @@ static int signalmanager_sigaction(Context *ctx, const This *this, const CallSig
 		goto out;
 	}
 
-	struct sigaction *mysig = get_mysignal(call->signum);
-
-	int ownerdead = mutex_lock(ctx->tls, mutex);
-	if (ownerdead) {
-		recover_mysignal();
-	}
+	mutex_lock(ctx->tls, mutex);
+	signalmanager_mask_until_sigreturn(ctx);
+	MySignal *mysignal = _get_mysignal(ctx->tls);
+	struct sigaction *mysig = get_mysignal(mysignal, call->signum);
 
 	if (call->oldact) {
 		memcpy(call->oldact, mysig, sizeof(struct sigaction));
 	}
 
 	if (call->act) {
-		update_mysignal(call->signum, call->act);
+		update_mysignal(mysignal, call->signum, call->act);
 	}
-
 	mutex_unlock(ctx->tls, mutex);
 
 	if (call->signum == SIGSYS) {
@@ -303,8 +341,12 @@ const CallHandler *signalmanager_init(const CallHandler *next) {
 	this.sigaction = signalmanager_sigaction;
 	this.sigaction_next = NULL;
 
-	mysignal_pid = sys_getpid();
 	mutex = mutex_alloc();
+	map = rmap_alloc(32);
+
+	Tls *tls = tls_get();
+	mutex_lock(tls, mutex);
+	MySignal *mysignal = _get_mysignal(tls);
 
 	for (int signum = 1; signum <= mysignal_size; signum++) {
 		struct sigaction act;
@@ -312,7 +354,7 @@ const CallHandler *signalmanager_init(const CallHandler *next) {
 		if (ret < 0) {
 			exit_error("rt_sigaction(): %ld", -ret);
 		}
-		update_mysignal(signum, &act);
+		update_mysignal(mysignal, signum, &act);
 	}
 
 	int ret = sys_rt_sigprocmask(SIG_UNBLOCK, &unmask, NULL, sizeof(unmask));
@@ -325,11 +367,12 @@ const CallHandler *signalmanager_init(const CallHandler *next) {
 			continue;
 		}
 
-		long ret = install_generic_handler(signum, get_mysignal(signum));
+		long ret = install_generic_handler(signum, get_mysignal(mysignal, signum));
 		if (ret < 0) {
 			exit_error("rt_sigaction(): %ld", -ret);
 		}
 	}
+	mutex_unlock(tls, mutex);
 
 	return &this;
 }
