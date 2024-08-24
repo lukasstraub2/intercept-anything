@@ -12,13 +12,19 @@ struct This {
 	const CallHandler *next;
 };
 
-static int workarounds_exec(Context *ctx, const This *this,
-							const CallExec *call) {
-	if (call->final && ctx->tls->workarounds_traceme) {
+static void maybe_recitfy_traceme(Context *ctx) {
+	if (ctx->tls->workarounds_traceme) {
 		long ret = sys_ptrace(PTRACE_TRACEME, 0, 0, 0);
 		if (ret < 0) {
 			abort();
 		}
+	}
+}
+
+static int workarounds_exec(Context *ctx, const This *this,
+							const CallExec *call) {
+	if (call->final) {
+		maybe_recitfy_traceme(ctx);
 	}
 
 	return this->next->exec(ctx, this->next->exec_next, call);
@@ -38,6 +44,13 @@ static long workarounds_ptrace(Context *ctx, const This *this,
 	return this->next->ptrace(ctx, this->next->ptrace_next, call);
 }
 
+static int workarounds_kill(Context *ctx, const This *this,
+							const CallKill *call) {
+	maybe_recitfy_traceme(ctx);
+
+	return this->next->kill(ctx, this->next->kill_next, call);
+}
+
 const CallHandler *workarounds_init(const CallHandler *next) {
 	static int initialized = 0;
 	static This this;
@@ -54,6 +67,8 @@ const CallHandler *workarounds_init(const CallHandler *next) {
 	this.this.exec_next = &this;
 	this.this.ptrace = workarounds_ptrace;
 	this.this.ptrace_next = &this;
+	this.this.kill = workarounds_kill;
+	this.this.kill_next = &this;
 
 	return &this.this;
 }

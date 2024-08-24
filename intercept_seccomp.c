@@ -120,6 +120,7 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_kill, 62, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_ptrace, 61, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getrlimit, 60, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_setrlimit, 59, 0),
@@ -1448,6 +1449,21 @@ static long handle_ptrace(Context *ctx, long request, long pid,
 	return ret.ret;
 }
 
+int handle_kill(Context *ctx, pid_t pid, int sig) {
+	trace("kill()\n");
+
+	RetInt ret = { 0 };
+	CallKill call = {
+		.pid = pid,
+		.sig = sig,
+		.ret = &ret
+	};
+
+	_next->kill(ctx, _next->kill_next, &call);
+
+	return ret.ret;
+}
+
 
 static unsigned long handle_syscall(Context *ctx, SysArgs *args) {
 	ssize_t ret;
@@ -1756,6 +1772,10 @@ static unsigned long handle_syscall(Context *ctx, SysArgs *args) {
 
 		case __NR_ptrace:
 			ret = handle_ptrace(ctx, args->arg1, args->arg2, (void *)args->arg3, (void *)args->arg4);
+		break;
+
+		case __NR_kill:
+			ret = handle_kill(ctx, args->arg1, args->arg2);
 		break;
 
 		default:
@@ -2479,6 +2499,17 @@ static long bottom_ptrace(Context *ctx, const This *this, const CallPtrace *call
 	return ret;
 }
 
+static int bottom_kill(Context *ctx, const This *this, const CallKill *call) {
+	int ret;
+	RetInt *_ret = call->ret;
+
+	signalmanager_mask_until_sigreturn(ctx);
+	ret = sys_kill(call->pid, call->sig);
+
+	_ret->ret = ret;
+	return ret;
+}
+
 static const CallHandler bottom = {
 	bottom_open,
 	NULL,
@@ -2527,5 +2558,7 @@ static const CallHandler bottom = {
 	NULL,
 	NULL,
 	bottom_ptrace,
+	NULL,
+	bottom_kill,
 	NULL,
 };

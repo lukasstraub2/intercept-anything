@@ -613,6 +613,20 @@ static void callptrace_copy(CallPtrace *dst, const CallPtrace *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct CallKill CallKill;
+struct CallKill {
+	pid_t pid;
+	int sig;
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void callkill_copy(CallKill *dst, const CallKill *call) {
+	dst->pid = call->pid;
+	dst->sig = call->sig;
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -664,6 +678,8 @@ struct CallHandler {
 	const This *sigaction_next;
 	long (*ptrace)(Context *ctx, const This *this, const CallPtrace *call);
 	const This *ptrace_next;
+	int (*kill)(Context *ctx, const This *this, const CallKill *call);
+	const This *kill_next;
 };
 
 extern const char *self_exe;
