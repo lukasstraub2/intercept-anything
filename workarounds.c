@@ -12,8 +12,8 @@ struct This {
 	const CallHandler *next;
 };
 
-static void maybe_recitfy_traceme(Context *ctx) {
-	if (ctx->tls->workarounds_traceme) {
+static void maybe_recitfy_traceme(Tls *tls) {
+	if (tls->workarounds_traceme) {
 		long ret = sys_ptrace(PTRACE_TRACEME, 0, 0, 0);
 		if (ret < 0) {
 			abort();
@@ -21,10 +21,25 @@ static void maybe_recitfy_traceme(Context *ctx) {
 	}
 }
 
+int workarounds_rethrow_signal(Tls *tls, int signum) {
+	if (signum == SIGBUS || signum == SIGFPE || signum == SIGILL || signum == SIGSEGV) {
+		if (tls->workarounds_traceme) {
+			long ret = sys_ptrace(PTRACE_TRACEME, 0, 0, 0);
+			if (ret < 0) {
+				abort();
+			}
+
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
 static int workarounds_exec(Context *ctx, const This *this,
 							const CallExec *call) {
 	if (call->final) {
-		maybe_recitfy_traceme(ctx);
+		maybe_recitfy_traceme(ctx->tls);
 	}
 
 	return this->next->exec(ctx, this->next->exec_next, call);
@@ -46,7 +61,7 @@ static long workarounds_ptrace(Context *ctx, const This *this,
 
 static int workarounds_kill(Context *ctx, const This *this,
 							const CallKill *call) {
-	maybe_recitfy_traceme(ctx);
+	maybe_recitfy_traceme(ctx->tls);
 
 	return this->next->kill(ctx, this->next->kill_next, call);
 }

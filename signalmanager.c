@@ -11,6 +11,7 @@
 #include "myseccomp.h"
 #include "signalmanager.h"
 #include "rmap.h"
+#include "workarounds.h"
 
 #define DEBUG_ENV "DEBUG_SIGNAL"
 #include "debug.h"
@@ -140,6 +141,10 @@ static void handle_default(int signum) {
 static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 	Tls *tls = tls_get();
 	mutex_recover(tls);
+
+	if (workarounds_rethrow_signal(tls, signum)) {
+		return;
+	}
 
 	mutex_lock(tls, mutex);
 	MySignal *mysignal = _get_mysignal(tls);
