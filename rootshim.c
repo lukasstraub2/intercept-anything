@@ -8,6 +8,7 @@
 #include "intercept.h"
 #include "mytypes.h"
 #include "util.h"
+#include "signalmanager.h"
 
 struct This {
 	CallHandler this;
@@ -147,12 +148,15 @@ static ssize_t handle_exe(Shim *shim, ssize_t shim_len) {
 	return 0;
 }
 
-static ssize_t handle_path(Shim *shim, ssize_t shim_len, const char *path) {
+static ssize_t handle_path(Context *ctx, Shim *shim, ssize_t shim_len,
+						   const char *path) {
 	const ssize_t len = sizeof(Shim);
 
-    if (!strcmp(path, "/proc/uptime")) {
+	if (!strcmp(path, "/proc/uptime")) {
+		signalmanager_mask_until_sigreturn(ctx);
 		return handle_uptime(shim, shim_len);
 	} else if (!strcmp(path, "/proc/self/exe")) {
+		signalmanager_mask_until_sigreturn(ctx);
 		return handle_exe(shim, shim_len);
 	}
 
@@ -168,23 +172,23 @@ static ssize_t handle_path(Shim *shim, ssize_t shim_len, const char *path) {
     return 0;
 }
 
-#define _FILL_SHIM(__path, prefix) \
-	ssize_t prefix ## shim_ret = handle_path(NULL, 0, (__path)); \
+#define _FILL_SHIM(ctx, __path, prefix) \
+	ssize_t prefix ## shim_ret = handle_path((ctx), NULL, 0, (__path)); \
 	if (prefix ## shim_ret < 0) { \
 		call->ret->ret = prefix ## shim_ret; \
 		return prefix ## shim_ret; \
 	} \
 	\
 	Shim * prefix ## shim = alloca(prefix ## shim_ret); \
-	prefix ## shim_ret = handle_path(prefix ## shim, prefix ## shim_ret, (__path)); \
+	prefix ## shim_ret = handle_path((ctx), prefix ## shim, prefix ## shim_ret, (__path)); \
 	if (prefix ## shim_ret < 0) { \
 		call->ret->ret = prefix ## shim_ret; \
 		return prefix ## shim_ret; \
 	} \
 	(__path) = prefix ## shim->target;
 
-#define FILL_SHIM(__path) \
-	_FILL_SHIM(__path, )
+#define FILL_SHIM(ctx, __path) \
+	_FILL_SHIM((ctx), __path, )
 
 static int rootshim_open(Context *ctx, const This *this,
 						 const CallOpen *call) {
@@ -196,7 +200,7 @@ static int rootshim_open(Context *ctx, const This *this,
 		return this->next->open(ctx, this->next->open_next, call);
 	}
 
-	FILL_SHIM(_call.path);
+	FILL_SHIM(ctx, _call.path);
 
 	if (shim->is_handled) {
 		if ((call->flags & O_NOFOLLOW) && shim->is_symlink) {
@@ -228,7 +232,7 @@ static int rootshim_stat(Context *ctx, const This *this,
 		return this->next->stat(ctx, this->next->stat_next, call);
 	}
 
-	FILL_SHIM(_call.path);
+	FILL_SHIM(ctx, _call.path);
 
 	if (shim->is_handled) {
 		// TODO: Do this properly
@@ -257,7 +261,7 @@ static ssize_t rootshim_readlink(Context *ctx, const This *this,
 		return this->next->readlink(ctx, this->next->readlink_next, call);
 	}
 
-	FILL_SHIM(_call.path);
+	FILL_SHIM(ctx, _call.path);
 
 	if (shim->is_handled) {
 		size_t len = strlen(shim->target) +1;
@@ -292,7 +296,7 @@ static int rootshim_access(Context *ctx, const This *this,
 		return this->next->access(ctx, this->next->access_next, call);
 	}
 
-	FILL_SHIM(_call.path);
+	FILL_SHIM(ctx, _call.path);
 
 	if (shim->is_handled) {
 		this->next->access(ctx, this->next->access_next, &_call);
@@ -314,7 +318,7 @@ static ssize_t rootshim_xattr(Context *ctx, const This *this,
 		return this->next->xattr(ctx, this->next->xattr_next, call);
 	}
 
-	FILL_SHIM(_call.path);
+	FILL_SHIM(ctx, _call.path);
 
 	if (shim->is_handled) {
 		shim_unlink(shim);

@@ -186,10 +186,16 @@ void signalmanager_mask_until_sigreturn(Context *ctx) {
 	struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
 	sigset_t *uctx_set = &uctx->uc_sigmask;
 
+	if (ctx->signalmanager_masked) {
+		return;
+	}
+
 	ret = sys_rt_sigprocmask(SIG_SETMASK, &fullmask, uctx_set, sizeof(sigset_t));
 	if (ret < 0) {
 		exit_error("rt_sigprocmask(0): %d", ret);
 	}
+
+	ctx->signalmanager_masked = 1;
 }
 
 static int signalmanager_sigprocmask(Context *ctx, const This *this, const CallSigprocmask *call) {

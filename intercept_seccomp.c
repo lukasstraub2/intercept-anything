@@ -64,7 +64,7 @@ __attribute__((noinline))
 static void __handler(Tls *tls, int sig, siginfo_t *info, void *ucontext) {
 	(void) sig;
 
-	Context ctx = {tls, ucontext};
+	Context ctx = {tls, ucontext, 0};
 	ssize_t ret;
 	SysArgs args;
 	fill_sysargs(&args, ucontext);
@@ -407,7 +407,7 @@ static int handle_openat(Context *ctx, int dirfd, const char *path, int flags,
 }
 
 int filter_openat(int dirfd, const char *path, int flags, mode_t mode) {
-	Context ctx = {tls_get(), NULL};
+	Context ctx = {tls_get(), NULL, 0};
 	return handle_openat(&ctx, dirfd, path, flags, mode);
 }
 

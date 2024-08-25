@@ -8,6 +8,7 @@ typedef struct Context Context;
 struct Context {
 	Tls *tls;
 	void *ucontext;
+	int signalmanager_masked;
 };
 
 typedef struct RetInt RetInt;
