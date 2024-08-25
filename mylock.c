@@ -60,7 +60,7 @@ static void futex_wait(Mutex *mutex, Mutex expected) {
 	struct timespec timeout = {1, 0};
 
 	ret = sys_futex(mutex, FUTEX_WAIT, expected, &timeout, NULL, 0);
-	if (ret < 0 && ret != -EAGAIN) {
+	if (ret < 0 && ret != -EAGAIN && ret != -ETIMEDOUT) {
 		abort();
 	}
 }
