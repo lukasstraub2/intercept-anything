@@ -1791,6 +1791,7 @@ static int bottom_open(Context *ctx, const This *this, const CallOpen *call) {
 	int ret;
 	RetInt *_ret = call->ret;
 
+	signalmanager_mask_until_sigreturn(ctx);
 	if (call->at) {
 		ret = sys_openat(call->dirfd, call->path, call->flags, call->mode);
 	} else {
@@ -1805,6 +1806,7 @@ static int bottom_stat(Context *ctx, const This *this, const CallStat *call) {
 	int ret;
 	RetInt *_ret = call->ret;
 
+	signalmanager_mask_until_sigreturn(ctx);
 	switch (call->type) {
 		case STATTYPE_PLAIN:
 			ret = sys_stat(call->path, call->statbuf);
@@ -1842,6 +1844,7 @@ static ssize_t bottom_readlink(Context *ctx, const This *this,
 	ssize_t ret;
 	RetSSize *_ret = call->ret;
 
+	signalmanager_mask_until_sigreturn(ctx);
 	if (call->at) {
 		ret = sys_readlinkat(call->dirfd, call->path, call->buf,
 							 call->bufsiz);
@@ -1858,6 +1861,7 @@ static int bottom_access(Context *ctx, const This *this,
 	int ret;
 	RetInt *_ret = call->ret;
 
+	signalmanager_mask_until_sigreturn(ctx);
 	if (call->at) {
 		ret = sys_faccessat(call->dirfd, call->path, call->mode);
 	} else {
