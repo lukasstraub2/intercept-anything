@@ -38,7 +38,7 @@ void spinlock_unlock(Spinlock *lock) {
 	__atomic_store_n(lock, 0, __ATOMIC_RELEASE);
 }
 
-static int is_ownerdead(Mutex expected) {
+static int is_ownerdead(uint32_t expected) {
 	while (1) {
 		int ret = sys_tkill(expected, 0);
 		if (ret < 0) {
@@ -61,6 +61,13 @@ static void futex_wait(Mutex *mutex, Mutex expected) {
 
 	ret = sys_futex(mutex, FUTEX_WAIT, expected, &timeout, NULL, 0);
 	if (ret < 0 && ret != -EAGAIN && ret != -ETIMEDOUT) {
+		abort();
+	}
+}
+
+static void futex_wake(Mutex *mutex) {
+	signed long ret = sys_futex(mutex, FUTEX_WAKE, 1, NULL, NULL, 0);
+	if (ret < 0) {
 		abort();
 	}
 }
@@ -91,16 +98,17 @@ static int _mutex_lock(const pid_t tid, Mutex *mutex) {
 }
 
 static void __mutex_unlock(Mutex *mutex, pid_t val) {
-	signed long ret;
 	__atomic_store_n(mutex, val, __ATOMIC_RELEASE);
-	ret = sys_futex(mutex, FUTEX_WAKE, 1, NULL, NULL, 0);
-	if (ret < 0) {
-		abort();
-	}
+	futex_wake(mutex);
 }
 
 static void _mutex_unlock(Mutex *mutex) {
 	__mutex_unlock(mutex, 0);
+}
+
+static void _mutex_wait(Mutex *mutex) {
+	Mutex expected = __atomic_load_n(mutex, __ATOMIC_ACQUIRE);
+	futex_wait(mutex, expected);
 }
 
 int mutex_lock(Tls *tls, RobustMutex *mutex) {
@@ -155,6 +163,7 @@ static void mutex_recover_pending(Tls *tls) {
 	RLIST_FOREACH(elm, &list->head, next, temp) {
 		if (elm == mutex) {
 			found = 1;
+			break;
 		}
 	}
 
@@ -188,14 +197,23 @@ static void mutex_recover_one(Tls *tls, RobustMutex *mutex) {
 	__asm volatile ("" ::: "memory");
 }
 
+static void rwlock_recover_pending(Tls *tls);
+static void rwlock_recover_one(Tls *tls, RwLock *lock);
 void mutex_recover(Tls *tls) {
 	RobustMutexList *list = &tls->my_robust_mutex_list;
+	RwLockList *rwlock_list = &tls->my_rwlock_list;
 
 	mutex_recover_pending(tls);
 
 	RobustMutex *elm, *temp;
 	RLIST_FOREACH(elm, &list->head, next, temp) {
 		mutex_recover_one(tls, elm);
+	}
+
+	rwlock_recover_pending(tls);
+	RwLockHolder *relm, *rtemp;
+	RLIST_FOREACH(relm, &rwlock_list->head, next, rtemp) {
+		rwlock_recover_one(tls, relm->lock);
 	}
 }
 
@@ -223,4 +241,306 @@ RobustMutex *mutex_alloc() {
 	}
 
 	return local_mutexes->data + idx;
+}
+
+static int rwlock_cleanup_dead(RwLock *lock) {
+	int dead;
+	if (lock->writer && is_ownerdead(lock->writer)) {
+		dead = 1;
+		__asm volatile ("" ::: "memory");
+		WRITE_ONCE(lock->writer, FUTEX_TID_MASK);
+		__asm volatile ("" ::: "memory");
+	}
+
+	if (lock->writer_waiter && is_ownerdead(lock->writer_waiter)) {
+		__asm volatile ("" ::: "memory");
+		WRITE_ONCE(lock->writer_waiter, 0);
+		__asm volatile ("" ::: "memory");
+	}
+
+	for (int i = 0; i < holders_alloc; i++) {
+		uint32_t *reader = lock->reader + i;
+
+		if (*reader && is_ownerdead(*reader)) {
+			dead = 1;
+			lock->num_readers--;
+			__asm volatile ("" ::: "memory");
+			WRITE_ONCE(*reader, 0);
+			__asm volatile ("" ::: "memory");
+		}
+	}
+
+	return dead;
+}
+
+static void _rwlock_recover(RwLock *lock) {
+	uint32_t num_readers = 0;
+	for (int i = 0; i < holders_alloc; i++) {
+		if (lock->reader[i]) {
+			num_readers++;
+		}
+	}
+
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(lock->num_readers, num_readers);
+	__asm volatile ("" ::: "memory");
+}
+
+static void __rwlock_lock(Tls *tls, RwLock *lock, uint32_t *thelock,
+						  RwLockHolder *entry) {
+	RwLockList *list = &tls->my_rwlock_list;
+
+	assert(thelock);
+	assert(!list->pending);
+
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(list->pending, lock);
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(*thelock, tls->tid);
+	__asm volatile ("" ::: "memory");
+	RLIST_INSERT_HEAD(&list->head, entry, next);
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(list->pending, NULL);
+}
+
+static void __rwlock_unlock(Tls *tls, RwLock *lock, uint32_t *thelock,
+							RwLockHolder *entry) {
+	RwLockList *list = &tls->my_rwlock_list;
+
+	assert(thelock);
+	assert(!list->pending);
+
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(list->pending, lock);
+	__asm volatile ("" ::: "memory");
+	RLIST_REMOVE(&list->head, entry, next);
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(*thelock, 0);
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(list->pending, NULL);
+}
+
+static void _rwlock_lock_read(Tls *tls, RwLock *lock, int i) {
+	uint32_t *reader = lock->reader + i;
+	RwLockHolder *reader_entry = lock->reader_entry + i;
+
+	lock->num_readers++;
+	reader_entry->lock = lock;
+
+	__rwlock_lock(tls, lock, reader, reader_entry);
+}
+
+static void _rwlock_unlock_read(Tls *tls, RwLock *lock, int i) {
+	uint32_t *reader = lock->reader + i;
+	RwLockHolder *reader_entry = lock->reader_entry + i;
+
+	assert(*reader == (uint32_t)tls->tid);
+	lock->num_readers--;
+
+	__rwlock_unlock(tls, lock, reader, reader_entry);
+}
+
+static void _rwlock_lock_write(Tls *tls, RwLock *lock) {
+	lock->writer_entry.lock = lock;
+
+	__rwlock_lock(tls, lock, &lock->writer, &lock->writer_entry);
+}
+
+static void _rwlock_unlock_write(Tls *tls, RwLock *lock) {
+	assert(lock->writer == (uint32_t)tls->tid);
+
+	__rwlock_unlock(tls, lock, &lock->writer, &lock->writer_entry);
+}
+
+void rwlock_lock_read(Tls *tls, RwLock *lock) {
+	while (1) {
+		int ownerdead = mutex_lock(tls, &lock->mutex);
+		if (ownerdead) {
+			_rwlock_recover(lock);
+		}
+
+		if (lock->writer || lock->num_readers == holders_alloc ||
+				(lock->writer_waiter && lock->num_readers) ) {
+			int dead = rwlock_cleanup_dead(lock);
+			mutex_unlock(tls, &lock->mutex);
+			if (!dead) {
+				_mutex_wait(&lock->waiters);
+			}
+			continue;
+		}
+
+		if (lock->writer_waiter) {
+			WRITE_ONCE(lock->writer_waiter, 0);
+		}
+
+		for (int i = 0; i < holders_alloc; i++) {
+			if (!lock->reader[i]) {
+				_rwlock_lock_read(tls, lock, i);
+
+				mutex_unlock(tls, &lock->mutex);
+				return;
+			}
+		}
+
+		//mutex_unlock(tls, &lock->mutex);
+		abort();
+	}
+}
+
+void rwlock_unlock_read(Tls *tls, RwLock *lock) {
+	int ownerdead = mutex_lock(tls, &lock->mutex);
+	if (ownerdead) {
+		_rwlock_recover(lock);
+	}
+
+	for (int i = 0; i < holders_alloc; i++) {
+		if (lock->reader[i] == (uint32_t)tls->tid) {
+			_rwlock_unlock_read(tls, lock, i);
+
+			mutex_unlock(tls, &lock->mutex);
+			futex_wake(&lock->waiters);
+			return;
+		}
+	}
+
+	//mutex_unlock(tls, &lock->mutex);
+	abort();
+}
+
+int rwlock_lock_write(Tls *tls, RwLock *lock) {
+	while (1) {
+		int ownerdead = mutex_lock(tls, &lock->mutex);
+		if (ownerdead) {
+			_rwlock_recover(lock);
+		}
+
+		if (lock->writer) {
+			int ownerdead = is_ownerdead(lock->writer);
+			if (ownerdead) {
+				_rwlock_lock_write(tls, lock);
+				if (lock->writer_waiter == (uint32_t)tls->tid) {
+					WRITE_ONCE(lock->writer_waiter, 0);
+				}
+
+				mutex_unlock(tls, &lock->mutex);
+				return 1;
+			}
+		}
+
+		if (lock->writer || lock->num_readers) {
+			int dead = rwlock_cleanup_dead(lock);
+			if (!lock->writer_waiter) {
+				WRITE_ONCE(lock->writer_waiter, tls->tid);
+			}
+			mutex_unlock(tls, &lock->mutex);
+			if (!dead) {
+				_mutex_wait(&lock->waiters);
+			}
+			continue;
+		}
+
+		_rwlock_lock_write(tls, lock);
+		if (lock->writer_waiter == (uint32_t)tls->tid) {
+			WRITE_ONCE(lock->writer_waiter, 0);
+		}
+
+		mutex_unlock(tls, &lock->mutex);
+		return 0;
+	}
+}
+
+void rwlock_unlock_write(Tls *tls, RwLock *lock) {
+	int ownerdead = mutex_lock(tls, &lock->mutex);
+	if (ownerdead) {
+		_rwlock_recover(lock);
+	}
+
+	_rwlock_unlock_write(tls, lock);
+
+	mutex_unlock(tls, &lock->mutex);
+}
+
+static void rwlock_recover_pending(Tls *tls) {
+	RwLockList *list = &tls->my_rwlock_list;
+	RwLock *lock = list->pending;
+
+	if (!lock) {
+		return;
+	}
+
+	int ownerdead = mutex_lock(tls, &lock->mutex);
+	if (ownerdead) {
+		_rwlock_recover(lock);
+	}
+
+	uint32_t *thelock = NULL;
+	RwLockHolder *entry = NULL;
+	if (lock->writer == (uint32_t)tls->tid) {
+		thelock = &lock->writer;
+		entry = &lock->writer_entry;
+	}
+	for (int i = 0; i < holders_alloc; i++) {
+		if (lock->reader[i] == (uint32_t)tls->tid) {
+			thelock = lock->reader + i;
+			entry = lock->reader_entry + i;
+		}
+	}
+
+	int found = 0;
+	RwLockHolder *elm, *temp;
+	RLIST_FOREACH(elm, &list->head, next, temp) {
+		if (elm == entry) {
+			found = 1;
+			break;
+		}
+	}
+
+	__asm volatile ("" ::: "memory");
+	if (found) {
+		RLIST_REMOVE(&list->head, entry, next);
+	}
+	__asm volatile ("" ::: "memory");
+	if (thelock) {
+		WRITE_ONCE(*thelock, FUTEX_TID_MASK);
+	}
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(list->pending, NULL);
+	__asm volatile ("" ::: "memory");
+
+	mutex_unlock(tls, &lock->mutex);
+}
+
+static void rwlock_recover_one(Tls *tls, RwLock *lock) {
+	RwLockList *list = &tls->my_rwlock_list;
+
+	assert(!list->pending);
+
+	int ownerdead = mutex_lock(tls, &lock->mutex);
+	if (ownerdead) {
+		_rwlock_recover(lock);
+	}
+
+	uint32_t *thelock = NULL;
+	RwLockHolder *entry = NULL;
+	if (lock->writer == (uint32_t)tls->tid) {
+		thelock = &lock->writer;
+		entry = &lock->writer_entry;
+	}
+	for (int i = 0; i < holders_alloc; i++) {
+		if (lock->reader[i] == (uint32_t)tls->tid) {
+			thelock = lock->reader + i;
+			entry = lock->reader_entry + i;
+		}
+	}
+
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(list->pending, lock);
+	__asm volatile ("" ::: "memory");
+	RLIST_REMOVE(&list->head, entry, next);
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(*thelock, FUTEX_TID_MASK);
+	__asm volatile ("" ::: "memory");
+	WRITE_ONCE(list->pending, NULL);
+
+	mutex_unlock(tls, &lock->mutex);
 }

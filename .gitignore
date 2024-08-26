@@ -13,3 +13,4 @@ rootlink.*
 tls_test
 mylock_test
 norootlink
+rwlock_test

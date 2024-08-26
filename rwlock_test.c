@@ -22,8 +22,8 @@
 #error Unsupported Architecture
 #endif
 
-static RobustMutex *mutexa = NULL;
-static RobustMutex *mutexb = NULL;
+static RwLock rwlocka = {0};
+static RwLock rwlockb = {0};
 static int stage[2];
 static uint64_t stage_counter = 0;
 
@@ -132,8 +132,15 @@ static void do_recover(Tls *tls) {
 }
 
 static void do_work(Tls *tls) {
-	mutex_lock(tls, mutexa);
-	int ownerdead = mutex_lock(tls, mutexb);
+	int lock_write = tls->tid % 8 == 0;
+
+	if (lock_write) {
+		rwlock_lock_write(tls, &rwlocka);
+	} else {
+		rwlock_lock_read(tls, &rwlocka);
+	}
+
+	int ownerdead = rwlock_lock_write(tls, &rwlockb);
 	if (ownerdead) {
 		do_recover(tls);
 	} else {
@@ -147,8 +154,13 @@ static void do_work(Tls *tls) {
 		__asm volatile ("" ::: "memory");
 		rsplice(stage[0], pipefd[1]);
 	}
-	mutex_unlock(tls, mutexb);
-	mutex_unlock(tls, mutexa);
+	rwlock_unlock_write(tls, &rwlockb);
+
+	if (lock_write) {
+		rwlock_unlock_write(tls, &rwlocka);
+	} else {
+		rwlock_unlock_read(tls, &rwlocka);
+	}
 }
 
 static void handler(int sig, siginfo_t *info, void *ucontext) {
@@ -222,8 +234,6 @@ int main(int argc, char **argv) {
 
 	tls_init();
 	mutex_init();
-	mutexa = mutex_alloc();
-	mutexb = mutex_alloc();
 
 	ret = sys_pipe2(stage, O_CLOEXEC);
 	if (ret < 0) {

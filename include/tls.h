@@ -41,6 +41,7 @@ struct Tls {
 	Cache cache;
 	int hardlink_lock_cnt;
 	RobustMutexList my_robust_mutex_list;
+	RwLockList my_rwlock_list;
 	int jumpbuf_valid;
 	void *jumpbuf[5];
 	int workarounds_traceme;
