@@ -103,7 +103,7 @@ static void raise_unmasked(int signum) {
 	struct sigaction act = {0};
 	act.sa_handler = SIG_DFL;
 	struct sigaction oldact;
-	const sigset_t empty = 0;
+	const mysigset_t empty = { .cast = 0 };
 	sigset_t oldset;
 
 	ret = sys_rt_sigaction(signum, &act, &oldact, sizeof(sigset_t));
@@ -111,7 +111,7 @@ static void raise_unmasked(int signum) {
 		exit_error("rt_sigaction(%d): %d", signum, ret);
 	}
 
-	ret = sys_rt_sigprocmask(SIG_SETMASK, &empty, &oldset, sizeof(sigset_t));
+	ret = sys_rt_sigprocmask(SIG_SETMASK, &empty.sigset, &oldset, sizeof(sigset_t));
 	if (ret < 0) {
 		exit_error("rt_sigprocmask(0): %d", ret);
 	}
@@ -222,7 +222,7 @@ static int signalmanager_sigprocmask(Context *ctx, const This *this, const CallS
 		 goto out;
 	}
 
-	mysigset_t set = { .cast = *call->set };
+	mysigset_t set = { .sigset = *call->set };
 	set.cast &= ~unmask.cast;
 
 	signalmanager_mask_until_sigreturn(ctx);
