@@ -112,6 +112,11 @@ static void handler(int sig, siginfo_t *info, void *ucontext) {
 extern char __start_text;
 extern char __etext;
 
+int pc_in_our_code(void *ucontext) {
+	char *pc = get_pc(ucontext);
+	return pc >= &__start_text && pc <= &__etext;
+}
+
 static int install_filter() {
 	int ret;
 

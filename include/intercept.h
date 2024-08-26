@@ -689,3 +689,4 @@ void intercept_init(int recursing, const char *exe);
 const CallHandler *main_init(const CallHandler *bottom, int recursing);
 
 int filter_openat(int dirfd, const char *path, int flags, mode_t mode);
+int pc_in_our_code(void *ucontext);

@@ -174,7 +174,7 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 		trace_plus("signal %d: SIG_IGN\n", signum);
 		// noop
 	} else {
-		trace_plus("signal %d: registered handler restart:\n");
+		trace_plus("signal %d: registered handler\n");
 		if (act.sa_flags & SA_SIGINFO) {
 			_handler(signum, info, ucontext);
 		} else {
@@ -182,7 +182,7 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 		}
 	}
 
-	if (tls->jumpbuf_valid) {
+	if (pc_in_our_code(ucontext) && tls->jumpbuf_valid) {
 		__builtin_longjmp(tls->jumpbuf, 1);
 	}
 }

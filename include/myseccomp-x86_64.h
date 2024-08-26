@@ -27,3 +27,10 @@ static void set_return(void *ucontext, unsigned long ret) {
 
 	ctx->uc_mcontext.rax = ret;
 }
+
+__attribute__((unused))
+static void *get_pc(void *ucontext) {
+	struct ucontext* ctx = (struct ucontext*)ucontext;
+
+	return (void *)ctx->uc_mcontext.rip;
+}
