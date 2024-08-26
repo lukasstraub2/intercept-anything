@@ -12,7 +12,7 @@ struct RMap {
 	RMapEntry list[];
 };
 
-static int rmap_size(RMap *this) {
+static uint32_t rmap_size(RMap *this) {
 	uint32_t size = __atomic_load_n(&this->size, __ATOMIC_RELAXED);
 
 	return min(size, this->alloc);
@@ -70,10 +70,10 @@ static RMapEntry *rmap_search_linear(RMap *this, const uint32_t id) {
 }
 
 static RMapEntry *rmap_alloc_append(RMap *this, const uint32_t tid) {
-	int size = rmap_size(this);
+	uint32_t size = rmap_size(this);
 	Spinlock expected = 0;
 
-	if (size >= TLS_LIST_ALLOC) {
+	if (size >= this->alloc) {
 		return NULL;
 	}
 
@@ -81,7 +81,7 @@ static RMapEntry *rmap_alloc_append(RMap *this, const uint32_t tid) {
 		uint32_t idx = __atomic_fetch_add(&this->size, 1, __ATOMIC_ACQUIRE);
 		RMapEntry *current_entry = this->list + idx;
 
-		if (idx >= TLS_LIST_ALLOC) {
+		if (idx >= this->alloc) {
 			return NULL;
 		}
 
@@ -173,7 +173,7 @@ RMapEntry *rmap_get(RMap *this, const uint32_t id) {
 
 void _rmap_free(RMap *this, RMapEntry *entry) {
 	uint32_t size = __atomic_load_n(&this->size, __ATOMIC_ACQUIRE);
-	uint32_t actual_size = min(size, (uint32_t)TLS_LIST_ALLOC);
+	uint32_t actual_size = min(size, (uint32_t)this->alloc);
 	uint32_t idx = entry - this->list;
 	Spinlock expected = size;
 	void *data = entry->data;
