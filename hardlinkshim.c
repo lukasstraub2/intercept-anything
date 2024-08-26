@@ -24,18 +24,26 @@ struct This {
 	const CallHandler *next;
 	const CallHandler *bottom;
 	struct statx prefix;
-	RobustMutex *mapped_mutex;
+	RwLock *mapped_rwlock;
 };
 
 #define HARDLINK_PREFIX PREFIX "/tmp/hardlinkshim/"
 #define LOCKFILE "lock"
 
-static void lock(Tls *tls, const This *this, int operation) {
-	mutex_lock(tls, this->mapped_mutex);
+static void lock_read(Tls *tls, const This *this) {
+	rwlock_lock_read(tls, this->mapped_rwlock);
 }
 
-static void unlock(Tls *tls, const This *this) {
-	mutex_unlock(tls, this->mapped_mutex);
+static void unlock_read(Tls *tls, const This *this) {
+	rwlock_unlock_read(tls, this->mapped_rwlock);
+}
+
+static void lock_write(Tls *tls, const This *this) {
+	rwlock_lock_write(tls, this->mapped_rwlock);
+}
+
+static void unlock_write(Tls *tls, const This *this) {
+	rwlock_unlock_write(tls, this->mapped_rwlock);
 }
 
 static int changeprefix(char *linkname, const char *newprefix) {
@@ -444,7 +452,7 @@ static int hardlink_open(Context *ctx, const This *this,
 	int ret;
 	RetInt *_ret = call->ret;
 
-	lock(ctx->tls, this, LOCK_SH);
+	lock_read(ctx->tls, this);
 
 	ret = is_hardlinkat(ctx, (call->at? call->dirfd: AT_FDCWD), call->path);
 	if (ret < 0) {
@@ -461,11 +469,11 @@ static int hardlink_open(Context *ctx, const This *this,
 		this->next->open(ctx, this->next->open_next, call);
 	}
 
-	unlock(ctx->tls, this);
+	unlock_read(ctx->tls, this);
 	return _ret->ret;
 
 err:
-	unlock(ctx->tls, this);
+	unlock_read(ctx->tls, this);
 	_ret->ret = ret;
 	return ret;
 }
@@ -476,7 +484,7 @@ static int hardlink_stat(Context *ctx, const This *this,
 	RetInt *_ret = call->ret;
 	const int dirfd = (stattype_is_at(call->type)? call->dirfd: AT_FDCWD);
 
-	lock(ctx->tls, this, LOCK_SH);
+	lock_read(ctx->tls, this);
 
 	if (call->type == STATTYPE_F) {
 		ret = 0;
@@ -508,7 +516,7 @@ static int hardlink_stat(Context *ctx, const This *this,
 
 		ret = this->next->stat(ctx, this->next->stat_next, &_call);
 		if (ret < 0) {
-			unlock(ctx->tls, this);
+			unlock_read(ctx->tls, this);
 			return ret;
 		}
 
@@ -533,11 +541,11 @@ static int hardlink_stat(Context *ctx, const This *this,
 		this->next->stat(ctx, this->next->stat_next, call);
 	}
 
-	unlock(ctx->tls, this);
+	unlock_read(ctx->tls, this);
 	return _ret->ret;
 
 err:
-	unlock(ctx->tls, this);
+	unlock_read(ctx->tls, this);
 	_ret->ret = ret;
 	return ret;
 }
@@ -547,7 +555,7 @@ static ssize_t hardlink_readlink(Context *ctx, const This *this,
 	int ret;
 	RetSSize *_ret = call->ret;
 
-	lock(ctx->tls, this, LOCK_SH);
+	lock_read(ctx->tls, this);
 
 	ret = is_hardlinkat(ctx, (call->at? call->dirfd: AT_FDCWD), call->path);
 	if (ret < 0) {
@@ -560,11 +568,11 @@ static ssize_t hardlink_readlink(Context *ctx, const This *this,
 		this->next->readlink(ctx, this->next->readlink_next, call);
 	}
 
-	unlock(ctx->tls, this);
+	unlock_read(ctx->tls, this);
 	return _ret->ret;
 
 err:
-	unlock(ctx->tls, this);
+	unlock_read(ctx->tls, this);
 	_ret->ret = ret;
 	return ret;
 }
@@ -573,11 +581,11 @@ static int hardlink_access(Context *ctx, const This *this,
 						   const CallAccess *call) {
 	RetInt *_ret = call->ret;
 
-	lock(ctx->tls, this, LOCK_SH);
+	lock_read(ctx->tls, this);
 
 	this->next->access(ctx, this->next->access_next, call);
 
-	unlock(ctx->tls, this);
+	unlock_read(ctx->tls, this);
 	return _ret->ret;
 }
 
@@ -677,7 +685,7 @@ static int hardlink_link(Context *ctx, const This *this,
 		return -ENOENT;
 	}
 
-	lock(ctx->tls, this, LOCK_EX);
+	lock_write(ctx->tls, this);
 
 	ret = is_hardlinkat(ctx, olddirfd, call->oldpath);
 	if (ret < 0) {
@@ -753,11 +761,11 @@ static int hardlink_link(Context *ctx, const This *this,
 		}
 	}
 
-	unlock(ctx->tls, this);
+	unlock_write(ctx->tls, this);
 	return 0;
 
 err:
-	unlock(ctx->tls, this);
+	unlock_write(ctx->tls, this);
 	_ret->ret = ret;
 	return ret;
 }
@@ -766,11 +774,11 @@ static int hardlink_symlink(Context *ctx, const This *this,
 							const CallLink *call) {
 	RetInt *_ret = call->ret;
 
-	lock(ctx->tls, this, LOCK_SH);
+	lock_read(ctx->tls, this);
 
 	this->next->symlink(ctx, this->next->symlink_next, call);
 
-	unlock(ctx->tls, this);
+	unlock_read(ctx->tls, this);
 	return _ret->ret;
 }
 
@@ -780,7 +788,7 @@ static int hardlink_unlink(Context *ctx, const This *this,
 	RetInt *_ret = call->ret;
 	int dirfd = (call->at? call->dirfd: AT_FDCWD);
 
-	lock(ctx->tls, this, LOCK_EX);
+	lock_write(ctx->tls, this);
 
 	ret = is_hardlinkat(ctx, dirfd, call->path);
 	if (ret < 0) {
@@ -814,11 +822,11 @@ static int hardlink_unlink(Context *ctx, const This *this,
 		this->next->unlink(ctx, this->next->unlink_next, call);
 	}
 
-	unlock(ctx->tls, this);
+	unlock_write(ctx->tls, this);
 	return _ret->ret;
 
 err:
-	unlock(ctx->tls, this);
+	unlock_write(ctx->tls, this);
 	_ret->ret = ret;
 	return ret;
 }
@@ -828,7 +836,7 @@ static ssize_t hardlink_xattr(Context *ctx, const This *this,
 	int ret;
 	RetSSize *_ret = call->ret;
 
-	lock(ctx->tls, this, LOCK_SH);
+	lock_read(ctx->tls, this);
 
 	if (call->type2 == XATTRTYPE_F) {
 		ret = 0;
@@ -852,11 +860,11 @@ static ssize_t hardlink_xattr(Context *ctx, const This *this,
 		this->next->xattr(ctx, this->next->xattr_next, call);
 	}
 
-	unlock(ctx->tls, this);
+	unlock_read(ctx->tls, this);
 	return _ret->ret;
 
 err:
-	unlock(ctx->tls, this);
+	unlock_read(ctx->tls, this);
 	_ret->ret = ret;
 	return ret;
 }
@@ -878,7 +886,7 @@ static int hardlink_rename(Context *ctx, const This *this,
 		}
 	}
 
-	lock(ctx->tls, this, LOCK_EX);
+	lock_write(ctx->tls, this);
 
 	if (call->type == RENAMETYPE_AT2 &&
 			call->flags & (RENAME_EXCHANGE | RENAME_NOREPLACE)) {
@@ -917,11 +925,11 @@ static int hardlink_rename(Context *ctx, const This *this,
 		this->next->rename(ctx, this->next->rename_next, call);
 	}
 
-	unlock(ctx->tls, this);
+	unlock_write(ctx->tls, this);
 	return _ret->ret;
 
 err:
-	unlock(ctx->tls, this);
+	unlock_write(ctx->tls, this);
 	_ret->ret = ret;
 	return ret;
 }
@@ -960,7 +968,7 @@ static ssize_t hardlink_getdents(Context *ctx, const This *this,
 								 const CallGetdents *call) {
 	RetSSize *_ret = call->ret;
 
-	lock(ctx->tls, this, LOCK_SH);
+	lock_read(ctx->tls, this);
 
 	this->next->getdents(ctx, this->next->getdents_next, call);
 
@@ -987,7 +995,7 @@ static ssize_t hardlink_getdents(Context *ctx, const This *this,
 		}
 	}
 
-	unlock(ctx->tls, this);
+	unlock_read(ctx->tls, this);
 	return _ret->ret;
 }
 
@@ -1055,7 +1063,7 @@ const CallHandler *hardlinkshim_init(const CallHandler *next,
 	if ((unsigned long)ptr >= -4095UL) {
 		abort();
 	}
-	this.mapped_mutex = ptr;
+	this.mapped_rwlock = ptr;
 
 	sys_close(fd);
 
