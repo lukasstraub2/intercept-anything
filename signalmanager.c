@@ -188,14 +188,14 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 }
 
 void signalmanager_mask_until_sigreturn(Context *ctx) {
+	if (ctx->signalmanager_masked || !ctx->ucontext) {
+		return;
+	}
+
 	int ret;
 	const mysigset_t fullmask = { .cast = ~unmask.cast };
 	struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
 	sigset_t *uctx_set = &uctx->uc_sigmask;
-
-	if (ctx->signalmanager_masked) {
-		return;
-	}
 
 	ret = sys_rt_sigprocmask(SIG_SETMASK, &fullmask.sigset, uctx_set, sizeof(sigset_t));
 	if (ret < 0) {
