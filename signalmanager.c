@@ -145,7 +145,10 @@ static void handle_default(int signum) {
 	}
 }
 
+__attribute__((noinline, section("signal_entry")))
 static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
+	struct ucontext* uctx = (struct ucontext*) ucontext;
+	sigset_t *uctx_set = &uctx->uc_sigmask;
 	Tls *tls = tls_get();
 	mutex_recover(tls);
 
@@ -182,8 +185,30 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 		}
 	}
 
-	if (pc_in_our_code(ucontext) && tls->jumpbuf_valid) {
-		__builtin_longjmp(tls->jumpbuf, 1);
+	MyJumpbuf *sp = get_sp(ucontext);
+	MyJumpbuf **_jumpbuf;
+	for (int i = jumpbuf_alloc - 1; i >= 0; i--) {
+		_jumpbuf = tls->jumpbuf + i;
+#ifdef stack_grows_down
+		if (*_jumpbuf && *_jumpbuf >= sp) {
+			break;
+		}
+#else
+#error Unsupported Architecture
+#endif
+	}
+
+	if (pc_in_our_code(ucontext) && *_jumpbuf) {
+		MyJumpbuf *jumpbuf = *_jumpbuf;
+		__asm volatile ("" ::: "memory");
+		WRITE_ONCE(*_jumpbuf, NULL);
+		__asm volatile ("" ::: "memory");
+
+		int ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, NULL, sizeof(sigset_t));
+		if (ret < 0) {
+			exit_error("rt_sigprocmask(uctx_set): %d", ret);
+		}
+		__builtin_longjmp(jumpbuf->jumpbuf, 1);
 	}
 }
 
@@ -344,8 +369,10 @@ static int install_generic_handler(int signum, const struct sigaction *act) {
 		// TODO: enforce SA_NODEFER for unmasked signals
 	}
 
-	copy.sa_flags |= SA_RESTORER;
-	copy.sa_restorer = __restore_rt;
+	if (!(copy.sa_flags & SA_RESTORER)) {
+		copy.sa_flags |= SA_RESTORER;
+		copy.sa_restorer = __restore_rt;
+	}
 
 	return sys_rt_sigaction(signum, &copy, NULL, sizeof(sigset_t));
 }

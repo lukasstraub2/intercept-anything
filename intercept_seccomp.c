@@ -73,26 +73,27 @@ static void __handler(Tls *tls, int sig, siginfo_t *info, void *ucontext) {
 	set_return(ucontext, ret);
 }
 
-__attribute__((noinline))
-static int _handler(Tls *tls, int sig, siginfo_t *info, void *ucontext) {
-	assert(!tls->jumpbuf_valid);
+__attribute__((noinline, section("signal_entry")))
+static int _handler(Tls *tls, MyJumpbuf **_jumpbuf, int sig, siginfo_t *info, void *ucontext) {
+	MyJumpbuf jumpbuf = {0};
 
-	if (__builtin_setjmp(tls->jumpbuf)) {
+	if (__builtin_setjmp(jumpbuf.jumpbuf)) {
 		return 1;
 	}
 	__asm volatile ("" ::: "memory");
-	WRITE_ONCE(tls->jumpbuf_valid, 1);
+	WRITE_ONCE(*_jumpbuf, &jumpbuf);
 	__asm volatile ("" ::: "memory");
 
 	__handler(tls, sig, info, ucontext);
 
 	__asm volatile ("" ::: "memory");
-	WRITE_ONCE(tls->jumpbuf_valid, 0);
+	WRITE_ONCE(*_jumpbuf, NULL);
 	__asm volatile ("" ::: "memory");
 
 	return 0;
 }
 
+__attribute__((noinline, section("signal_entry")))
 static void handler(int sig, siginfo_t *info, void *ucontext) {
 	const pid_t tid = gettid();
 	trace_plus("gettid(): %u\n", tid);
@@ -102,19 +103,36 @@ static void handler(int sig, siginfo_t *info, void *ucontext) {
 		exit_error("Invalid arch, terminating");
 	}
 
-	while(_handler(tls, sig, info, ucontext)) {
-		__asm volatile ("" ::: "memory");
-		WRITE_ONCE(tls->jumpbuf_valid, 0);
-		__asm volatile ("" ::: "memory");
+	MyJumpbuf *sp = get_sp(ucontext);
+	MyJumpbuf **jumpbuf;
+	for (int i = 0; i < jumpbuf_alloc; i++) {
+		jumpbuf = tls->jumpbuf + i;
+		if (!*jumpbuf) {
+			break;
+		}
+#ifdef stack_grows_down
+		if (*jumpbuf < sp) {
+			break;
+		}
+#else
+#error Unsupported Architecture
+#endif
 	}
+
+	while(_handler(tls, jumpbuf, sig, info, ucontext));
 }
 
 extern char __start_text;
 extern char __etext;
 
+extern char __start_signal_entry;
+extern char __stop_signal_entry;
+
 int pc_in_our_code(void *ucontext) {
 	char *pc = get_pc(ucontext);
-	return pc >= &__start_text && pc <= &__etext;
+	int in_text = pc >= &__start_text && pc <= &__etext;
+	int in_signal_entry = pc >= &__start_signal_entry && pc <= &__stop_signal_entry;
+	return in_text && !in_signal_entry;
 }
 
 static int install_filter() {

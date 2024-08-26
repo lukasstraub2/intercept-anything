@@ -7,6 +7,7 @@
 #include <asm/ucontext.h>
 
 #define AUDIT_ARCH_CURRENT AUDIT_ARCH_AARCH64
+#define stack_grows_down
 
 __attribute__((unused))
 static void fill_sysargs(SysArgs *args, void *ucontext) {
@@ -33,4 +34,11 @@ static void *get_pc(void *ucontext) {
 	struct ucontext* ctx = (struct ucontext*)ucontext;
 
 	return (void *)ctx->uc_mcontext.pc;
+}
+
+__attribute__((unused))
+static void *get_sp(void *ucontext) {
+	struct ucontext* ctx = (struct ucontext*)ucontext;
+
+	return (void *)ctx->uc_mcontext.sp;
 }

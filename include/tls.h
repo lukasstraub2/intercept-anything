@@ -34,16 +34,20 @@ struct Cache {
 	char out[SCRATCH_SIZE];
 };
 
+typedef struct MyJumpbuf MyJumpbuf;
+struct MyJumpbuf {
+	void *jumpbuf[5];
+};
+
 #define TLS_LIST_ALLOC 4096
+#define jumpbuf_alloc (32)
 struct Tls {
 	pid_t pid;
 	pid_t tid;
 	Cache cache;
-	int hardlink_lock_cnt;
 	RobustMutexList my_robust_mutex_list;
 	RwLockList my_rwlock_list;
-	int jumpbuf_valid;
-	void *jumpbuf[5];
+	MyJumpbuf *jumpbuf[jumpbuf_alloc];
 	int workarounds_traceme;
 };
 
