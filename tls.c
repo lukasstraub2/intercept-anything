@@ -6,6 +6,7 @@
 #include "mylock.h"
 #include "util.h"
 #include "rmap.h"
+#include "mysys.h"
 
 _Static_assert(sizeof(Spinlock) >= sizeof(pid_t), "pid_t > Spinlock");
 
@@ -15,6 +16,40 @@ RMapEntry *tls_search_binary(const uint32_t tid) {
 	return rmap_search_binary(map, tid);
 }
 
+static int is_dead(pid_t tid) {
+	while (1) {
+		int ret = sys_tkill(tid, 0);
+		if (ret < 0) {
+			if (ret == -EAGAIN) {
+				continue;
+			} else if (ret == -ESRCH) {
+				return 1;
+			} else {
+				abort();
+			}
+		} else {
+			return 0;
+		}
+	}
+}
+
+void tls_clean_dead() {
+	for (int i = 0; i < (int)map->alloc; i++) {
+		RMapEntry *entry = map->list + i;
+		if (entry->id && is_dead(entry->id)) {
+			void *data = entry->data;
+			if (data) {
+				WRITE_ONCE(entry->data, NULL);
+				__asm volatile ("" ::: "memory");
+				free(data);
+			}
+			__asm volatile ("" ::: "memory");
+			WRITE_ONCE(entry->id, 0);
+			__asm volatile ("" ::: "memory");
+		}
+	}
+}
+
 // TODO: This is not reentrant at all
 static Tls *tls_alloc(RMapEntry *entry, const uint32_t tid) {
 	if (entry->data) {
@@ -22,6 +57,8 @@ static Tls *tls_alloc(RMapEntry *entry, const uint32_t tid) {
 		assert((uint32_t)tls->tid == tid);
 		return entry->data;
 	}
+
+	tls_clean_dead();
 
 	Tls *tls;
 	pid_t pid = getpid();
@@ -55,10 +92,14 @@ Tls *_tls_get_noalloc(const uint32_t tid) {
 Tls *_tls_get(const uint32_t tid) {
 	RMapEntry *tls;
 
-	tls = rmap_get(map, tid);
-	if (tls) {
-		assert(tls->id > 0);
-		return tls_alloc(tls, tid);
+	for (int i = 0; i < 2; i++) {
+		tls = rmap_get(map, tid);
+		if (tls) {
+			assert(tls->id > 0);
+			return tls_alloc(tls, tid);
+		}
+
+		tls_clean_dead();
 	}
 
 	abort();
@@ -66,6 +107,7 @@ Tls *_tls_get(const uint32_t tid) {
 }
 
 void _tls_free(const uint32_t tid) {
+	tls_clean_dead();
 	rmap_free(map, tid);
 }
 

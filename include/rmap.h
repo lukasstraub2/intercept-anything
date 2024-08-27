@@ -9,6 +9,12 @@ struct RMapEntry {
 	void *data;
 };
 
+struct RMap {
+	Spinlock size;
+	uint32_t alloc;
+	RMapEntry list[];
+};
+
 RMapEntry *rmap_search_binary(RMap *this, const uint32_t id);
 RMapEntry *rmap_get_noalloc(RMap *this, const uint32_t id);
 RMapEntry *rmap_get(RMap *this, const uint32_t id);

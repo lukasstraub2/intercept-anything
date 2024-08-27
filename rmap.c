@@ -6,12 +6,6 @@
 #include "mylock.h"
 #include "util.h"
 
-struct RMap {
-	Spinlock size;
-	uint32_t alloc;
-	RMapEntry list[];
-};
-
 static uint32_t rmap_size(RMap *this) {
 	uint32_t size = __atomic_load_n(&this->size, __ATOMIC_RELAXED);
 
@@ -167,7 +161,6 @@ RMapEntry *rmap_get(RMap *this, const uint32_t id) {
 		return entry;
 	}
 
-	abort();
 	return NULL;
 }
 

@@ -52,6 +52,7 @@ struct Tls {
 };
 
 RMapEntry *tls_search_binary(uint32_t tid);
+void tls_clean_dead();
 
 Tls *_tls_get_noalloc(uint32_t tid);
 Tls *_tls_get(uint32_t tid);
