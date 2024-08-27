@@ -98,6 +98,7 @@ static void handler(int sig, siginfo_t *info, void *ucontext) {
 	const pid_t tid = gettid();
 	trace_plus("gettid(): %u\n", tid);
 	Tls *tls = _tls_get(tid);
+	signalmanager_please_callback(tls);
 
 	if (info->si_errno) {
 		exit_error("Invalid arch, terminating");

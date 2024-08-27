@@ -89,8 +89,6 @@ static MySignal *_get_mysignal(Tls *tls) {
 		return entry->data;
 	}
 
-	_signalmanager_clean_dead(tls);
-
 	MySignal *alloc = malloc(sizeof(*alloc));
 	const RMapEntry *_parent = rmap_get_noalloc(map, getppid());
 	if (_parent && _parent->data) {
@@ -101,6 +99,8 @@ static MySignal *_get_mysignal(Tls *tls) {
 	__asm volatile ("" ::: "memory");
 	WRITE_ONCE(entry->data, alloc);
 	__asm volatile ("" ::: "memory");
+
+	_signalmanager_clean_dead(tls);
 
 	return alloc;
 }
@@ -134,6 +134,13 @@ static void update_mysignal(MySignal *mysignal,int signum,
 	__asm volatile ("" ::: "memory");
 	WRITE_ONCE(mysignal->staging_signum, 0);
 	__asm volatile ("" ::: "memory");
+}
+
+// Get the chance to inherit signal dispositions
+void signalmanager_please_callback(Tls *tls) {
+	mutex_lock(tls, mutex);
+	_get_mysignal(tls);
+	mutex_unlock(tls, mutex);
 }
 
 static void raise_unmasked(int signum) {
