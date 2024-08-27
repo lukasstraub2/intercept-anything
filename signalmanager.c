@@ -94,7 +94,9 @@ static MySignal *_get_mysignal(Tls *tls) {
 		entry = rmap_get(map, tls->pid);
 		if (!entry) {
 			_signalmanager_clean_dead(tls);
+			continue;
 		}
+		break;
 	}
 	assert(entry);
 	assert(entry->id == (uint32_t) tls->pid);
