@@ -392,7 +392,21 @@ static ssize_t read_full(int fd, char *buf, size_t count)
 	return total;
 }
 
-static void thread_exit() {
+static void thread_exit(Tls *tls) {
+	signalmanager_clean_dead(tls);
+	tls_free();
+}
+
+static void thread_exit_exec(Tls *tls) {
+	// No locks shall be held, since exec inherits tid of parent
+	// and then locks can't be detected as dead
+	assert(!tls->my_robust_mutex_list.pending);
+	assert(RLIST_EMPTY(&tls->my_robust_mutex_list.head));
+	assert(!tls->my_rwlock_list.pending);
+	assert(RLIST_EMPTY(&tls->my_rwlock_list.head));
+
+	mutex_recover(tls);
+	signalmanager_clean_dead(tls);
 	tls_free();
 }
 
@@ -1098,7 +1112,7 @@ static int handle_fchdir(Context *ctx, int fd) {
 static int handle_exit(Context *ctx, int status) {
 	trace("exit(%u)\n", status);
 
-	thread_exit();
+	thread_exit(ctx->tls);
 
 	sys_exit(status);
 	return 0;
@@ -1107,7 +1121,7 @@ static int handle_exit(Context *ctx, int status) {
 static int handle_exit_group(Context *ctx, int status) {
 	trace("exit_group(%u)\n", status);
 
-	thread_exit();
+	thread_exit(ctx->tls);
 
 	sys_exit_group(status);
 	return 0;
@@ -1939,7 +1953,7 @@ static int _bottom_exec(Context *ctx, const This *this, CallExec *call) {
 	call->argv = new_argv;
 
 	// TODO: What if execve fails?
-	thread_exit();
+	thread_exit_exec(ctx->tls);
 	ctx->tls = NULL;
 
 	ret = sys_execve(call->path, call->argv, call->envp);

@@ -5,6 +5,7 @@
 
 typedef void (*myhandler_t)(int sig, siginfo_t *info, void *ucontext);
 
+void signalmanager_clean_dead(Tls *tls);
 void signalmanager_install_sigsys(myhandler_t handler);
 void signalmanager_sigsys_mask_until_sigreturn(Context *ctx);
 void signalmanager_sigsys_unmask(void *ucontext);

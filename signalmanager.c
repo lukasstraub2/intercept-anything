@@ -43,10 +43,59 @@ struct MySignal {
 static RMap *map;
 static RobustMutex *mutex = NULL;
 
+static int is_dead(pid_t pid) {
+	while (1) {
+		int ret = sys_kill(pid, 0);
+		if (ret < 0) {
+			if (ret == -EAGAIN) {
+				continue;
+			} else if (ret == -ESRCH) {
+				return 1;
+			} else {
+				abort();
+			}
+		} else {
+			return 0;
+		}
+	}
+}
+
+static void _signalmanager_clean_dead(Tls *tls) {
+	assert(mutex_locked(tls, mutex));
+
+	for (int i = 0; i < (int)map->alloc; i++) {
+		RMapEntry *entry = map->list + i;
+		if (entry->id && is_dead(entry->id)) {
+			void *data = entry->data;
+			if (data) {
+				WRITE_ONCE(entry->data, NULL);
+				__asm volatile ("" ::: "memory");
+				free(data);
+			}
+			__asm volatile ("" ::: "memory");
+			WRITE_ONCE(entry->id, 0);
+			__asm volatile ("" ::: "memory");
+		}
+	}
+}
+
+void signalmanager_clean_dead(Tls *tls) {
+	mutex_lock(tls, mutex);
+	_signalmanager_clean_dead(tls);
+	mutex_unlock(tls, mutex);
+}
+
 static void recover_mysignal(MySignal *mysignal);
 static MySignal *_get_mysignal(Tls *tls) {
 	assert(mutex_locked(tls, mutex));
-	RMapEntry *entry = rmap_get(map, tls->pid);
+
+	RMapEntry *entry;
+	for (int i = 0; i < 2; i++) {
+		entry = rmap_get(map, tls->pid);
+		if (!entry) {
+			_signalmanager_clean_dead(tls);
+		}
+	}
 	assert(entry);
 	assert(entry->id == (uint32_t) tls->pid);
 
@@ -54,6 +103,8 @@ static MySignal *_get_mysignal(Tls *tls) {
 		recover_mysignal(entry->data);
 		return entry->data;
 	}
+
+	_signalmanager_clean_dead(tls);
 
 	MySignal *alloc = malloc(sizeof(*alloc));
 	const RMapEntry *_parent = rmap_get_noalloc(map, getppid());
@@ -424,7 +475,7 @@ const CallHandler *signalmanager_init(const CallHandler *next) {
 	this.sigaction_next = NULL;
 
 	mutex = mutex_alloc();
-	map = rmap_alloc(32);
+	map = rmap_alloc(64);
 
 	Tls *tls = tls_get();
 	mutex_lock(tls, mutex);
