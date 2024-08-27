@@ -323,3 +323,12 @@ static __attribute__((unused))
 long sys_ptrace(long request, long pid, void *addr, void *data) {
 	return my_syscall4(__NR_ptrace, request, pid, addr, data);
 }
+
+static __attribute__((unused))
+int sys_close_range(unsigned int fd, unsigned int max_fd, unsigned int flags) {
+#ifdef __NR_close_range
+	return my_syscall(__NR_close_range, fd, max_fd, flags);
+#else
+	return __nolibc_enosys(__func__, fd, max_fd, flags);
+#endif
+}

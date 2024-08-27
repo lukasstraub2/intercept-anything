@@ -628,6 +628,26 @@ static void callkill_copy(CallKill *dst, const CallKill *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct CallClose CallClose;
+struct CallClose {
+	int is_range;
+	unsigned int fd;
+	unsigned int max_fd;  // Only used for close_range
+	unsigned int flags;   // Only used for close_range
+	RetInt *ret;
+};
+
+__attribute__((unused))
+static void callclose_copy(CallClose *dst, const CallClose *call) {
+	dst->is_range = call->is_range;
+	dst->fd = call->fd;
+	if (call->is_range) {
+		dst->max_fd = call->max_fd;
+		dst->flags = call->flags;
+	}
+	dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -681,6 +701,8 @@ struct CallHandler {
 	const This *ptrace_next;
 	int (*kill)(Context *ctx, const This *this, const CallKill *call);
 	const This *kill_next;
+	int (*close)(Context *ctx, const This *this, const CallClose *call);
+	const This *close_next;
 };
 
 extern const char *self_exe;

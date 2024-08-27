@@ -147,6 +147,12 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+#ifdef __NR_close_range
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_close_range, 64, 0),
+#else
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 64, 0),
+#endif
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_close, 63, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_kill, 62, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_ptrace, 61, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getrlimit, 60, 0),
@@ -1505,6 +1511,39 @@ int handle_kill(Context *ctx, pid_t pid, int sig) {
 	return ret.ret;
 }
 
+static int handle_close(Context *ctx, unsigned int fd) {
+	trace("close(%u)\n", fd);
+
+	RetInt ret = { 0 };
+	CallClose call = {
+		.is_range = 0,
+		.fd = fd,
+		.ret = &ret
+	};
+
+	_next->close(ctx, _next->close_next, &call);
+
+	return ret.ret;
+}
+
+__attribute__((unused))
+static int handle_close_range(Context *ctx, unsigned int first, unsigned int last, unsigned int flags) {
+	trace("close_range(%u, %u)\n", first, last);
+
+	RetInt ret = { 0 };
+	CallClose call = {
+		.is_range = 1,
+		.fd = first,
+		.max_fd = last,
+		.flags = flags,
+		.ret = &ret
+	};
+
+	_next->close(ctx, _next->close_next, &call);
+
+	return ret.ret;
+}
+
 
 static unsigned long handle_syscall(Context *ctx, SysArgs *args) {
 	ssize_t ret;
@@ -1818,6 +1857,16 @@ static unsigned long handle_syscall(Context *ctx, SysArgs *args) {
 		case __NR_kill:
 			ret = handle_kill(ctx, args->arg1, args->arg2);
 		break;
+
+		case __NR_close:
+			ret = handle_close(ctx, args->arg1);
+		break;
+
+#ifdef __NR_close_range
+		case __NR_close_range:
+			ret = handle_close_range(ctx, args->arg1, args->arg2, args->arg3);
+		break;
+#endif
 
 		default:
 			debug("Unhandled syscall no. %lu\n", args->num);
@@ -2555,6 +2604,20 @@ static int bottom_kill(Context *ctx, const This *this, const CallKill *call) {
 	return ret;
 }
 
+static int bottom_close(Context *ctx, const This *this, const CallClose *call) {
+	int ret;
+
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
+	if (call->is_range) {
+		ret = sys_close_range(call->fd, call->max_fd, call->flags);
+	} else {
+		ret = sys_close(call->fd);
+	}
+
+	call->ret->ret = ret;
+	return ret;
+}
+
 static const CallHandler bottom = {
 	bottom_open,
 	NULL,
@@ -2605,5 +2668,7 @@ static const CallHandler bottom = {
 	bottom_ptrace,
 	NULL,
 	bottom_kill,
+	NULL,
+	bottom_close,
 	NULL,
 };
