@@ -75,7 +75,7 @@ static void __handler(Tls *tls, int sig, siginfo_t *info, void *ucontext) {
 
 __attribute__((noinline, section("signal_entry")))
 static int _handler(Tls *tls, MyJumpbuf **_jumpbuf, int sig, siginfo_t *info, void *ucontext) {
-	MyJumpbuf jumpbuf = {0};
+	MyJumpbuf jumpbuf = {JUMPBUF_MAGIC, {0}};
 
 	if (__builtin_setjmp(jumpbuf.jumpbuf)) {
 		return 1;

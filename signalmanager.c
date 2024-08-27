@@ -269,6 +269,10 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 #endif
 	}
 
+	if (*_jumpbuf) {
+		assert(!memcmp((*_jumpbuf)->magic, JUMPBUF_MAGIC, JUMPBUF_MAGIC_LEN));
+	}
+
 	if (pc_in_our_code(ucontext) && *_jumpbuf) {
 		MyJumpbuf *jumpbuf = *_jumpbuf;
 		__asm volatile ("" ::: "memory");

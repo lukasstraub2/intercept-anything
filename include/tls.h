@@ -34,8 +34,11 @@ struct Cache {
 	char out[SCRATCH_SIZE];
 };
 
+#define JUMPBUF_MAGIC "jumpbuf magic .o0o._.o0o._.o0o._.o0o._.o0o._.o0o._.o0o._.o0o._.o"
+#define JUMPBUF_MAGIC_LEN (64)
 typedef struct MyJumpbuf MyJumpbuf;
 struct MyJumpbuf {
+	char magic[JUMPBUF_MAGIC_LEN];
 	void *jumpbuf[5];
 };
 
