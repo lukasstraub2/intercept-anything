@@ -3,6 +3,7 @@
 #include "types.h"
 #include "tls.h"
 #include "config.h"
+#include "myseccomp.h"
 
 typedef struct Context Context;
 struct Context {
@@ -648,6 +649,17 @@ static void callclose_copy(CallClose *dst, const CallClose *call) {
 	dst->ret = call->ret;
 }
 
+typedef struct RetUL RetUL;
+struct RetUL {
+	unsigned long ret;
+};
+
+typedef struct CallMisc CallMisc;
+struct CallMisc {
+	SysArgs args;
+	RetUL *ret;
+};
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -703,6 +715,8 @@ struct CallHandler {
 	const This *kill_next;
 	int (*close)(Context *ctx, const This *this, const CallClose *call);
 	const This *close_next;
+	unsigned long (*misc)(Context *ctx, const This *this, const CallMisc *call);
+	const This *misc_next;
 };
 
 extern const char *self_exe;

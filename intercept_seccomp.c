@@ -1544,6 +1544,19 @@ static int handle_close_range(Context *ctx, unsigned int first, unsigned int las
 	return ret.ret;
 }
 
+static unsigned long handle_misc(Context *ctx, SysArgs *args) {
+	trace("misc(%lu)\n", args->num);
+
+	RetUL ret = { 0 };
+	CallMisc call = {
+		.args = *args,
+		.ret = &ret
+	};
+
+	_next->misc(ctx, _next->misc_next, &call);
+
+	return ret.ret;
+}
 
 static unsigned long handle_syscall(Context *ctx, SysArgs *args) {
 	ssize_t ret;
@@ -1869,8 +1882,7 @@ static unsigned long handle_syscall(Context *ctx, SysArgs *args) {
 #endif
 
 		default:
-			debug("Unhandled syscall no. %lu\n", args->num);
-			ret = -ENOSYS;
+			ret = handle_misc(ctx, args);
 		break;
 	}
 
@@ -2618,6 +2630,13 @@ static int bottom_close(Context *ctx, const This *this, const CallClose *call) {
 	return ret;
 }
 
+static unsigned long bottom_misc(Context *ctx, const This *this, const CallMisc *call) {
+	debug("Unhandled syscall no. %lu\n", call->args.num);
+
+	call->ret->ret = -ENOSYS;
+	return call->ret->ret;
+}
+
 static const CallHandler bottom = {
 	bottom_open,
 	NULL,
@@ -2670,5 +2689,7 @@ static const CallHandler bottom = {
 	bottom_kill,
 	NULL,
 	bottom_close,
+	NULL,
+	bottom_misc,
 	NULL,
 };
