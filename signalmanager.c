@@ -90,6 +90,18 @@ static MySignal *_get_mysignal(Tls *tls) {
 	}
 
 	MySignal *alloc = malloc(sizeof(*alloc));
+
+	for (int i = 0; i < (int)map->size; i++) {
+		const RMapEntry *_parent_parent = map->list + i;
+		if (_parent_parent->id && _parent_parent->id < (uint32_t)tls->pid &&
+				_parent_parent->data) {
+			MySignal *parent_parent = _parent_parent->data;
+			recover_mysignal(parent_parent);
+			memcpy(alloc->mysignal, parent_parent->mysignal,
+				   sizeof(parent_parent->mysignal));
+		}
+	}
+
 	const RMapEntry *_parent = rmap_get_noalloc(map, getppid());
 	if (_parent && _parent->data) {
 		MySignal *parent = _parent->data;
