@@ -47,6 +47,7 @@ static void recover_mysignal(MySignal *mysignal);
 static MySignal *_get_mysignal(Tls *tls) {
 	assert(mutex_locked(tls, mutex));
 	RMapEntry *entry = rmap_get(map, tls->pid);
+	assert(entry);
 	assert(entry->id == (uint32_t) tls->pid);
 
 	if (entry->data) {
