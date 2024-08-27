@@ -119,6 +119,10 @@ static void handler(int sig, siginfo_t *info, void *ucontext) {
 #endif
 	}
 
+	__asm volatile ("" ::: "memory");
+	signalmanager_sigsys_unmask(ucontext);
+	__asm volatile ("" ::: "memory");
+
 	while(_handler(tls, jumpbuf, sig, info, ucontext));
 }
 
@@ -1814,7 +1818,7 @@ static int bottom_open(Context *ctx, const This *this, const CallOpen *call) {
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->at) {
 		ret = sys_openat(call->dirfd, call->path, call->flags, call->mode);
 	} else {
@@ -1829,7 +1833,7 @@ static int bottom_stat(Context *ctx, const This *this, const CallStat *call) {
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	switch (call->type) {
 		case STATTYPE_PLAIN:
 			ret = sys_stat(call->path, call->statbuf);
@@ -1867,7 +1871,7 @@ static ssize_t bottom_readlink(Context *ctx, const This *this,
 	ssize_t ret;
 	RetSSize *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->at) {
 		ret = sys_readlinkat(call->dirfd, call->path, call->buf,
 							 call->bufsiz);
@@ -1884,7 +1888,7 @@ static int bottom_access(Context *ctx, const This *this,
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->at) {
 		ret = sys_faccessat(call->dirfd, call->path, call->mode);
 	} else {
@@ -2125,7 +2129,7 @@ static int bottom_link(Context *ctx, const This *this, const CallLink *call) {
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->at) {
 		ret = sys_linkat(call->olddirfd, call->oldpath, call->newdirfd,
 						 call->newpath, call->flags);
@@ -2141,7 +2145,7 @@ static int bottom_symlink(Context *ctx, const This *this,
 						  const CallLink *call) {
 	int ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->at) {
 		ret = sys_symlinkat(call->oldpath, call->newdirfd,
 							call->newpath);
@@ -2157,7 +2161,7 @@ static int bottom_unlink(Context *ctx, const This *this,
 						 const CallUnlink *call) {
 	int ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->at) {
 		ret = sys_unlinkat(call->dirfd, call->path, call->flags);
 	} else {
@@ -2281,7 +2285,7 @@ static int bottom_removexattr(Context *ctx, const This *this,
 static ssize_t bottom_xattr(Context *ctx, const This *this,
 							const CallXattr *call) {
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	switch (call->type) {
 		case XATTRTYPE_SET:
 			return bottom_setxattr(ctx, this, call);
@@ -2309,7 +2313,7 @@ static int bottom_rename(Context *ctx, const This *this,
 						 const CallRename *call) {
 	int ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	switch (call->type) {
 		case RENAMETYPE_PLAIN:
 			ret = sys_rename(call->oldpath, call->newpath);
@@ -2338,7 +2342,7 @@ static int bottom_chdir(Context *ctx, const This *this, const CallChdir *call) {
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->f) {
 		ret = sys_fchdir(call->fd);
 	} else {
@@ -2353,7 +2357,7 @@ static int bottom_chmod(Context *ctx, const This *this, const CallChmod *call) {
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	switch(call->type) {
 		case CHMODTYPE_PLAIN:
 			ret = sys_chmod(call->path, call->mode);
@@ -2380,7 +2384,7 @@ static int bottom_truncate(Context *ctx, const This *this, const CallTruncate *c
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->f) {
 		ret = sys_ftruncate(call->fd, call->length);
 	} else {
@@ -2395,7 +2399,7 @@ static int bottom_mkdir(Context *ctx, const This *this, const CallMkdir *call) {
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->at) {
 		ret = sys_mkdirat(call->dirfd, call->path, call->mode);
 	} else {
@@ -2410,7 +2414,7 @@ static ssize_t bottom_getdents(Context *ctx, const This *this, const CallGetdent
 	ssize_t ret;
 	RetSSize *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->is64) {
 		ret = sys_getdents64(call->fd, call->dirp, call->count);
 	} else {
@@ -2425,7 +2429,7 @@ static int bottom_mknod(Context *ctx, const This *this, const CallMknod *call) {
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->at) {
 		ret = sys_mknodat(call->dirfd, call->path, call->mode, call->dev);
 	} else {
@@ -2440,7 +2444,7 @@ static int bottom_accept(Context *ctx, const This *this, const CallAccept *call)
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->is4) {
 		ret = sys_accept4(call->fd, call->addr, call->addrlen, call->flags);
 	} else {
@@ -2455,7 +2459,7 @@ static int bottom_connect(Context *ctx, const This *this, const CallConnect *cal
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->is_bind) {
 		ret = sys_bind(call->fd, call->addr, call->addrlen);
 	} else {
@@ -2470,7 +2474,7 @@ static int bottom_fanotify_mark(Context *ctx, const This *this, const CallFanoti
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	ret = sys_fanotify_mark(call->fd, call->flags, call->mask, call->dirfd, call->path);
 
 	_ret->ret = ret;
@@ -2481,7 +2485,7 @@ static int bottom_inotify_add_watch(Context *ctx, const This *this, const CallIn
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	ret = sys_inotify_add_watch(call->fd, call->path, call->mask);
 
 	_ret->ret = ret;
@@ -2492,7 +2496,7 @@ static int bottom_rlimit(Context *ctx, const This *this, const CallRlimit *call)
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	switch (call->type) {
 		case RLIMITTYPE_GET:
 			ret = sys_getrlimit(call->resource, call->old_rlim);
@@ -2519,7 +2523,7 @@ static long bottom_ptrace(Context *ctx, const This *this, const CallPtrace *call
 	long ret;
 	RetLong *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	ret = sys_ptrace(call->request, call->pid, call->addr, call->data);
 
 	_ret->ret = ret;
@@ -2530,7 +2534,7 @@ static int bottom_kill(Context *ctx, const This *this, const CallKill *call) {
 	int ret;
 	RetInt *_ret = call->ret;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	ret = sys_kill(call->pid, call->sig);
 
 	_ret->ret = ret;

@@ -26,8 +26,9 @@ union mysigset_t {
 };
 
 #define SIG_BIT(signum) (1lu << ((signum) -1))
-const mysigset_t unmask = { .cast = SIG_BIT(SIGBUS)|SIG_BIT(SIGFPE)|
-							SIG_BIT(SIGILL)|SIG_BIT(SIGSEGV)|SIG_BIT(SIGSYS) };
+const mysigset_t full_mask = { .cast = ~(SIG_BIT(SIGBUS)|SIG_BIT(SIGFPE)|
+							   SIG_BIT(SIGILL)|SIG_BIT(SIGSEGV)|SIG_BIT(SIGSYS)|
+							   SIG_BIT(SIGABRT)) };
 
 static int install_generic_handler(int signum, const struct sigaction *act);
 
@@ -156,18 +157,21 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 		return;
 	}
 
+	if (pc_in_our_code(ucontext) && ~full_mask.cast & SIG_BIT(signum)) {
+		raise_unmasked(signum);
+	}
+
 	mutex_lock(tls, mutex);
 	MySignal *mysignal = _get_mysignal(tls);
 	struct sigaction *ptr = get_mysignal(mysignal, signum);
-	struct sigaction act;
+	const struct sigaction copy = *ptr;
 
-	memcpy(&act, ptr, sizeof(struct sigaction));
 	if (ptr->sa_flags & SA_RESETHAND) {
 		ptr->sa_handler = SIG_DFL;
 	}
 	mutex_unlock(tls, mutex);
 
-	const __sighandler_t handler = act.sa_handler;
+	const __sighandler_t handler = copy.sa_handler;
 	const myhandler_t _handler = (void *) handler;
 
 	if (handler == SIG_DFL) {
@@ -178,7 +182,20 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 		// noop
 	} else {
 		trace_plus("signal %d: registered handler\n");
-		if (act.sa_flags & SA_SIGINFO) {
+		mysigset_t sa_mask = { .sigset = copy.sa_mask };
+		if (!(copy.sa_flags & SA_NODEFER)) {
+			sa_mask.cast |= SIG_BIT(signum);
+		}
+		mysigset_t set = { .sigset = *uctx_set };
+		set.cast |= sa_mask.cast;
+		set.cast &= full_mask.cast;
+
+		int ret = sys_rt_sigprocmask(SIG_SETMASK, &set.sigset, NULL, sizeof(sigset_t));
+		if (ret < 0) {
+			exit_error("rt_sigprocmask(uctx_set): %d", ret);
+		}
+
+		if (copy.sa_flags & SA_SIGINFO) {
 			_handler(signum, info, ucontext);
 		} else {
 			handler(signum);
@@ -212,22 +229,36 @@ static void generic_handler(int signum, siginfo_t *info, void *ucontext) {
 	}
 }
 
-void signalmanager_mask_until_sigreturn(Context *ctx) {
+void signalmanager_sigsys_mask_until_sigreturn(Context *ctx) {
 	if (ctx->signalmanager_masked || !ctx->ucontext) {
 		return;
 	}
 
 	int ret;
-	const mysigset_t fullmask = { .cast = ~unmask.cast };
 	struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
 	sigset_t *uctx_set = &uctx->uc_sigmask;
 
-	ret = sys_rt_sigprocmask(SIG_SETMASK, &fullmask.sigset, uctx_set, sizeof(sigset_t));
+	ret = sys_rt_sigprocmask(SIG_SETMASK, &full_mask.sigset, uctx_set, sizeof(sigset_t));
 	if (ret < 0) {
 		exit_error("rt_sigprocmask(0): %d", ret);
 	}
 
 	ctx->signalmanager_masked = 1;
+}
+
+void signalmanager_sigsys_unmask(void *ucontext) {
+	if (!ucontext) {
+		return;
+	}
+
+	int ret;
+	struct ucontext* uctx = (struct ucontext*)ucontext;
+	sigset_t *uctx_set = &uctx->uc_sigmask;
+
+	ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, NULL, sizeof(sigset_t));
+	if (ret < 0) {
+		exit_error("rt_sigprocmask(uctx_set): %d", ret);
+	}
 }
 
 static int signalmanager_sigprocmask(Context *ctx, const This *this, const CallSigprocmask *call) {
@@ -248,9 +279,9 @@ static int signalmanager_sigprocmask(Context *ctx, const This *this, const CallS
 	}
 
 	mysigset_t set = { .sigset = *call->set };
-	set.cast &= ~unmask.cast;
+	set.cast &= full_mask.cast;
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	if (call->oldset) {
 		*call->oldset = uctx_set.sigset;
 	}
@@ -291,7 +322,7 @@ static int signalmanager_sigaction(Context *ctx, const This *this, const CallSig
 	}
 
 	mutex_lock(ctx->tls, mutex);
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 	MySignal *mysignal = _get_mysignal(ctx->tls);
 	struct sigaction *mysig = get_mysignal(mysignal, call->signum);
 
@@ -323,6 +354,7 @@ void signalmanager_install_sigsys(myhandler_t handler) {
 	int ret;
 	struct sigaction sig = {0};
 	sig.sa_handler = (void *) handler;
+	sig.sa_mask = full_mask.sigset;
 	sig.sa_flags = SA_NODEFER | SA_SIGINFO;
 
 	ret = sigaction(SIGSYS, &sig, NULL);
@@ -348,9 +380,7 @@ static int install_generic_handler(int signum, const struct sigaction *act) {
 			case ACTION_TERM:
 			case ACTION_CORE:
 				copy.sa_handler = (void *) generic_handler;
-				mysigset_t sa_mask = { .sigset = copy.sa_mask };
-				sa_mask.cast &= ~unmask.cast;
-				copy.sa_mask = sa_mask.sigset;
+				copy.sa_mask = full_mask.sigset;
 				copy.sa_flags &= ~(SA_RESETHAND);
 				// TODO: enforce SA_NODEFER for unmasked signals
 			break;
@@ -362,12 +392,12 @@ static int install_generic_handler(int signum, const struct sigaction *act) {
 		// noop
 	} else {
 		copy.sa_handler = (void *) generic_handler;
-		mysigset_t sa_mask = { .sigset = copy.sa_mask };
-		sa_mask.cast &= ~unmask.cast;
-		copy.sa_mask = sa_mask.sigset;
+		copy.sa_mask = full_mask.sigset;
 		copy.sa_flags &= ~(SA_RESETHAND);
 		// TODO: enforce SA_NODEFER for unmasked signals
 	}
+
+	copy.sa_flags |= SA_SIGINFO;
 
 	if (!(copy.sa_flags & SA_RESTORER)) {
 		copy.sa_flags |= SA_RESTORER;
@@ -408,7 +438,9 @@ const CallHandler *signalmanager_init(const CallHandler *next) {
 		update_mysignal(mysignal, signum, &act);
 	}
 
-	int ret = sys_rt_sigprocmask(SIG_UNBLOCK, &unmask.sigset, NULL, sizeof(sigset_t));
+	mysigset_t unblock = { .cast = full_mask.cast };
+	unblock.cast = ~unblock.cast;
+	int ret = sys_rt_sigprocmask(SIG_UNBLOCK, &unblock.sigset, NULL, sizeof(sigset_t));
 	if (ret < 0) {
 		exit_error("rt_sigprocmask(): %d", -ret);
 	}

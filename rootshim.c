@@ -153,10 +153,10 @@ static ssize_t handle_path(Context *ctx, Shim *shim, ssize_t shim_len,
 	const ssize_t len = sizeof(Shim);
 
 	if (!strcmp(path, "/proc/uptime")) {
-		signalmanager_mask_until_sigreturn(ctx);
+		signalmanager_sigsys_mask_until_sigreturn(ctx);
 		return handle_uptime(shim, shim_len);
 	} else if (!strcmp(path, "/proc/self/exe")) {
-		signalmanager_mask_until_sigreturn(ctx);
+		signalmanager_sigsys_mask_until_sigreturn(ctx);
 		return handle_exe(shim, shim_len);
 	}
 

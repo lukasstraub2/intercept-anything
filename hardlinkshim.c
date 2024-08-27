@@ -692,7 +692,7 @@ static int hardlink_link(Context *ctx, const This *this,
 		goto err;
 	}
 
-	signalmanager_mask_until_sigreturn(ctx);
+	signalmanager_sigsys_mask_until_sigreturn(ctx);
 
 	if (ret) {
 		ret = add_hardlink(ctx, call);
@@ -796,7 +796,7 @@ static int hardlink_unlink(Context *ctx, const This *this,
 	}
 
 	if (ret) {
-		signalmanager_mask_until_sigreturn(ctx);
+		signalmanager_sigsys_mask_until_sigreturn(ctx);
 
 		ret = readlink_cache(&ctx->tls->cache, NULL, 0, dirfd, call->path);
 		if (ret < 0) {
@@ -899,7 +899,7 @@ static int hardlink_rename(Context *ctx, const This *this,
 	}
 
 	if (ret) {
-		signalmanager_mask_until_sigreturn(ctx);
+		signalmanager_sigsys_mask_until_sigreturn(ctx);
 
 		ret = readlink_cache(cache, NULL, 0, newdirfd, call->newpath);
 		if (ret < 0) {
