@@ -16,27 +16,10 @@ RMapEntry *tls_search_binary(const uint32_t tid) {
 	return rmap_search_binary(map, tid);
 }
 
-static int is_dead(pid_t tid) {
-	while (1) {
-		int ret = sys_tkill(tid, 0);
-		if (ret < 0) {
-			if (ret == -EAGAIN) {
-				continue;
-			} else if (ret == -ESRCH) {
-				return 1;
-			} else {
-				abort();
-			}
-		} else {
-			return 0;
-		}
-	}
-}
-
 void tls_clean_dead() {
 	for (int i = 0; i < (int)map->alloc; i++) {
 		RMapEntry *entry = map->list + i;
-		if (entry->id && is_dead(entry->id)) {
+		if (entry->id && is_tid_dead(entry->id)) {
 			void *data = entry->data;
 			if (data) {
 				WRITE_ONCE(entry->data, NULL);

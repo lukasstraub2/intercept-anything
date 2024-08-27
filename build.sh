@@ -28,12 +28,12 @@ build_main norootlink norootlink.c
 
 cc -g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-ident -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include" \
 	-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -Wl,--no-undefined -static -o tls_test \
-        rmap.c tls.c tls_test.c -lgcc
+        util.c rmap.c tls.c tls_test.c -lgcc
 
 cc -g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-ident -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include" \
 	-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -Wl,--no-undefined -static -o mylock_test \
-        rmap.c tls.c mylock.c mylock_test.c -lgcc
+        util.c rmap.c tls.c mylock.c mylock_test.c -lgcc
 
 cc -g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-ident -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include" \
 	-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -Wl,--no-undefined -static -o rwlock_test \
-        rmap.c tls.c mylock.c rwlock_test.c -lgcc
+        util.c rmap.c tls.c mylock.c rwlock_test.c -lgcc

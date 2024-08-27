@@ -43,29 +43,12 @@ struct MySignal {
 static RMap *map;
 static RobustMutex *mutex = NULL;
 
-static int is_dead(pid_t pid) {
-	while (1) {
-		int ret = sys_kill(pid, 0);
-		if (ret < 0) {
-			if (ret == -EAGAIN) {
-				continue;
-			} else if (ret == -ESRCH) {
-				return 1;
-			} else {
-				abort();
-			}
-		} else {
-			return 0;
-		}
-	}
-}
-
 static void _signalmanager_clean_dead(Tls *tls) {
 	assert(mutex_locked(tls, mutex));
 
 	for (int i = 0; i < (int)map->alloc; i++) {
 		RMapEntry *entry = map->list + i;
-		if (entry->id && is_dead(entry->id)) {
+		if (entry->id && is_pid_dead(entry->id)) {
 			void *data = entry->data;
 			if (data) {
 				WRITE_ONCE(entry->data, NULL);

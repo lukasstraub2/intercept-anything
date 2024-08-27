@@ -38,23 +38,6 @@ void spinlock_unlock(Spinlock *lock) {
 	__atomic_store_n(lock, 0, __ATOMIC_RELEASE);
 }
 
-static int is_ownerdead(uint32_t expected) {
-	while (1) {
-		int ret = sys_tkill(expected, 0);
-		if (ret < 0) {
-			if (ret == -EAGAIN) {
-				continue;
-			} else if (ret == -ESRCH) {
-				return 1;
-			} else {
-				abort();
-			}
-		} else {
-			return 0;
-		}
-	}
-}
-
 static void futex_wait(Mutex *mutex, Mutex expected) {
 	signed long ret;
 	struct timespec timeout = {1, 0};
@@ -82,7 +65,7 @@ static int _mutex_lock(const pid_t tid, Mutex *mutex) {
 		if (tries++ > 1000) {
 			tries = 0;
 
-			if (is_ownerdead(expected)) {
+			if (is_tid_dead(expected)) {
 				ownerdead = 1;
 				continue;
 			}
@@ -245,14 +228,14 @@ RobustMutex *mutex_alloc() {
 
 static int rwlock_cleanup_dead(RwLock *lock) {
 	int dead;
-	if (lock->writer && is_ownerdead(lock->writer)) {
+	if (lock->writer && is_tid_dead(lock->writer)) {
 		dead = 1;
 		__asm volatile ("" ::: "memory");
 		WRITE_ONCE(lock->writer, FUTEX_TID_MASK);
 		__asm volatile ("" ::: "memory");
 	}
 
-	if (lock->writer_waiter && is_ownerdead(lock->writer_waiter)) {
+	if (lock->writer_waiter && is_tid_dead(lock->writer_waiter)) {
 		__asm volatile ("" ::: "memory");
 		WRITE_ONCE(lock->writer_waiter, 0);
 		__asm volatile ("" ::: "memory");
@@ -261,7 +244,7 @@ static int rwlock_cleanup_dead(RwLock *lock) {
 	for (int i = 0; i < holders_alloc; i++) {
 		uint32_t *reader = lock->reader + i;
 
-		if (*reader && is_ownerdead(*reader)) {
+		if (*reader && is_tid_dead(*reader)) {
 			dead = 1;
 			lock->num_readers--;
 			__asm volatile ("" ::: "memory");
@@ -415,7 +398,7 @@ int rwlock_lock_write(Tls *tls, RwLock *lock) {
 		}
 
 		if (lock->writer) {
-			int ownerdead = is_ownerdead(lock->writer);
+			int ownerdead = is_tid_dead(lock->writer);
 			if (ownerdead) {
 				_rwlock_lock_write(tls, lock);
 				if (lock->writer_waiter == (uint32_t)tls->tid) {

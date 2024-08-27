@@ -6,6 +6,44 @@
 #include "tls.h"
 #include "mysys.h"
 
+int is_tid_dead(pid_t tid) {
+	while (1) {
+		int ret = sys_tkill(tid, 0);
+		if (ret < 0) {
+			if (ret == -EAGAIN) {
+				continue;
+			} else if (ret == -EPERM){
+				return 0;
+			} else if (ret == -ESRCH) {
+				return 1;
+			} else {
+				abort();
+			}
+		} else {
+			return 0;
+		}
+	}
+}
+
+int is_pid_dead(pid_t pid) {
+	while (1) {
+		int ret = sys_kill(pid, 0);
+		if (ret < 0) {
+			if (ret == -EAGAIN) {
+				continue;
+			} else if (ret == -EPERM){
+				return 0;
+			} else if (ret == -ESRCH) {
+				return 1;
+			} else {
+				abort();
+			}
+		} else {
+			return 0;
+		}
+	}
+}
+
 size_t concat(char *out, size_t out_len, const char *a, const char *b) {
 	const size_t a_len = strlen(a);
 	const size_t b_len = strlen(b);

@@ -24,6 +24,9 @@
 
 #define alloca	__builtin_alloca
 
+int is_tid_dead(pid_t tid);
+int is_pid_dead(pid_t pid);
+
 size_t concat(char *out, size_t out_len, const char *a, const char *b);
 size_t concat3(char *out, size_t out_len,
 			   const char *a, const char *b, const char *c);
