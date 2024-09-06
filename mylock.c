@@ -227,7 +227,7 @@ RobustMutex *mutex_alloc() {
 }
 
 static int rwlock_cleanup_dead(RwLock *lock) {
-	int dead;
+	int dead = 0;
 	if (lock->writer && is_tid_dead(lock->writer)) {
 		dead = 1;
 		__asm volatile ("" ::: "memory");
