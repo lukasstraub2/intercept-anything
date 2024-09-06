@@ -336,6 +336,7 @@ static void _rwlock_unlock_write(Tls *tls, RwLock *lock) {
 }
 
 void rwlock_lock_read(Tls *tls, RwLock *lock) {
+	int defer_once = 1;
 	while (1) {
 		int ownerdead = mutex_lock(tls, &lock->mutex);
 		if (ownerdead) {
@@ -343,11 +344,12 @@ void rwlock_lock_read(Tls *tls, RwLock *lock) {
 		}
 
 		if (lock->writer || lock->num_readers == holders_alloc ||
-				(lock->writer_waiter && lock->num_readers) ) {
+				(lock->writer_waiter && lock->num_readers && defer_once) ) {
 			int dead = rwlock_cleanup_dead(lock);
 			mutex_unlock(tls, &lock->mutex);
 			if (!dead) {
 				_mutex_wait(&lock->waiters);
+				defer_once = 0;
 			}
 			continue;
 		}
