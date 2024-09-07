@@ -459,9 +459,21 @@ int filter_openat(int dirfd, const char *path, int flags, mode_t mode) {
 	return handle_openat(&ctx, dirfd, path, flags, mode);
 }
 
+static const char *or_null(const char *str) {
+	if (str) {
+		return str;
+	} else {
+		return "NULL";
+	}
+}
+
 __attribute__((unused))
 static int handle_stat(Context *ctx, const char *path, void *statbuf) {
-	trace("stat(%s)\n", path);
+	trace("stat(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallStat call = {
@@ -494,7 +506,11 @@ static int handle_fstat(Context *ctx, int fd, void *statbuf) {
 
 __attribute__((unused))
 static int handle_lstat(Context *ctx, const char *path, void *statbuf) {
-	trace("lstat(%s)\n", path);
+	trace("lstat(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallStat call = {
@@ -511,7 +527,11 @@ static int handle_lstat(Context *ctx, const char *path, void *statbuf) {
 
 static int handle_newfstatat(Context *ctx, int dirfd, const char *path,
 							 void *statbuf, int flags) {
-	trace("newfstatat(%s)\n", path);
+	trace("newfstatat(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallStat call = {
@@ -530,7 +550,11 @@ static int handle_newfstatat(Context *ctx, int dirfd, const char *path,
 
 static int handle_statx(Context *ctx, int dirfd, const char *path, int flags,
 						unsigned int mask, void *statbuf) {
-	trace("statx(%s)\n", path);
+	trace("statx(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallStat call = {
@@ -551,7 +575,15 @@ static int handle_statx(Context *ctx, int dirfd, const char *path, int flags,
 __attribute__((unused))
 static ssize_t handle_readlink(Context *ctx, const char *path, char *buf,
 							   size_t bufsiz) {
-	trace("readlink(%s)\n", path);
+	trace("readlink(%s)\n", or_null(path));
+
+	if (!bufsiz) {
+		return -EINVAL;
+	} else if (!path) {
+		return -EFAULT;
+	}
+	// Not a symlink: -EINVAL
+	// buf NULL: -EFAULT
 
 	RetSSize ret = { 0 };
 	CallReadlink call = {
@@ -569,7 +601,13 @@ static ssize_t handle_readlink(Context *ctx, const char *path, char *buf,
 
 static ssize_t handle_readlinkat(Context *ctx, int dirfd, const char *path,
 								 char *buf, size_t bufsiz) {
-	trace("readlinkat(%s)\n", path);
+	trace("readlinkat(%s)\n", or_null(path));
+
+	if (!bufsiz) {
+		return -EINVAL;
+	} else if (!path) {
+		return -EFAULT;
+	}
 
 	RetSSize ret = { 0 };
 	CallReadlink call = {
@@ -588,7 +626,11 @@ static ssize_t handle_readlinkat(Context *ctx, int dirfd, const char *path,
 
 __attribute__((unused))
 static int handle_access(Context *ctx, const char *path, int mode) {
-	trace("access(%s)\n", path);
+	trace("access(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallAccess call = {
@@ -604,7 +646,11 @@ static int handle_access(Context *ctx, const char *path, int mode) {
 }
 
 static int handle_faccessat(Context *ctx, int dirfd, const char *path, int mode) {
-	trace("accessat(%s)\n", path);
+	trace("accessat(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallAccess call = {
@@ -622,7 +668,11 @@ static int handle_faccessat(Context *ctx, int dirfd, const char *path, int mode)
 
 static int handle_execve(Context *ctx, const char *path, char *const argv[],
 						 char *const envp[]) {
-	trace("execve(%s)\n", path);
+	trace("execve(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallExec call = {
@@ -640,7 +690,11 @@ static int handle_execve(Context *ctx, const char *path, char *const argv[],
 
 static int handle_execveat(Context *ctx, int dirfd, const char *path,
 						   char *const argv[], char *const envp[], int flags) {
-	trace("exeveat(%s)\n", path);
+	trace("exeveat(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallExec call = {
@@ -696,7 +750,11 @@ static int handle_rt_sigaction(Context *ctx, int signum, const struct sigaction 
 
 __attribute__((unused))
 static int handle_link(Context *ctx, const char *oldpath, const char *newpath) {
-	trace("link(%s, %s)\n", oldpath, newpath);
+	trace("link(%s, %s)\n", or_null(oldpath), or_null(newpath));
+
+	if (!oldpath || !newpath) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallLink call = {
@@ -713,7 +771,11 @@ static int handle_link(Context *ctx, const char *oldpath, const char *newpath) {
 
 static int handle_linkat(Context *ctx, int olddirfd, const char *oldpath,
 						 int newdirfd, const char *newpath, int flags) {
-	trace("linkat(%s, %s)\n", oldpath, newpath);
+	trace("linkat(%s, %s)\n", or_null(oldpath), or_null(newpath));
+
+	if (!oldpath || !newpath) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallLink call = {
@@ -733,7 +795,11 @@ static int handle_linkat(Context *ctx, int olddirfd, const char *oldpath,
 
 __attribute__((unused))
 static int handle_symlink(Context *ctx, const char *oldpath, const char *newpath) {
-	trace("symlink(%s, %s)\n", oldpath, newpath);
+	trace("symlink(%s, %s)\n", or_null(oldpath), or_null(newpath));
+
+	if (!oldpath || !newpath) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallLink call = {
@@ -750,7 +816,11 @@ static int handle_symlink(Context *ctx, const char *oldpath, const char *newpath
 
 static int handle_symlinkat(Context *ctx, const char *oldpath, int newdirfd,
 							const char *newpath) {
-	trace("symlinkat(%s, %s)\n", oldpath, newpath);
+	trace("symlinkat(%s, %s)\n", or_null(oldpath), or_null(newpath));
+
+	if (!oldpath || !newpath) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallLink call = {
@@ -768,7 +838,11 @@ static int handle_symlinkat(Context *ctx, const char *oldpath, int newdirfd,
 
 __attribute__((unused))
 static int handle_unlink(Context *ctx, const char *pathname) {
-	trace("unlink(%s)\n", pathname);
+	trace("unlink(%s)\n", or_null(pathname));
+
+	if (!pathname) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallUnlink call = {
@@ -784,7 +858,11 @@ static int handle_unlink(Context *ctx, const char *pathname) {
 
 static int handle_unlinkat(Context *ctx, int dirfd, const char *pathname,
 						   int flags) {
-	trace("unlinkat(%s)\n", pathname);
+	trace("unlinkat(%s)\n", or_null(pathname));
+
+	if (!pathname) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallUnlink call = {
@@ -802,7 +880,11 @@ static int handle_unlinkat(Context *ctx, int dirfd, const char *pathname,
 
 static int handle_setxattr(Context *ctx, const char *path, const char *name,
 						   const void *value, size_t size, int flags) {
-	trace("setxattr(%s)\n", path);
+	trace("setxattr(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetSSize ret = { 0 };
 	CallXattr call = {
@@ -823,7 +905,11 @@ static int handle_setxattr(Context *ctx, const char *path, const char *name,
 
 static int handle_lsetxattr(Context *ctx, const char *path, const char *name,
 							const void *value, size_t size, int flags) {
-	trace("lsetxattr(%s)\n", path);
+	trace("lsetxattr(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetSSize ret = { 0 };
 	CallXattr call = {
@@ -865,7 +951,11 @@ static int handle_fsetxattr(Context *ctx, int fd, const char *name,
 
 static ssize_t handle_getxattr(Context *ctx, const char *path, const char *name,
 							   void *value, size_t size) {
-	trace("getxattr(%s)\n", path);
+	trace("getxattr(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetSSize ret = { 0 };
 	CallXattr call = {
@@ -885,7 +975,11 @@ static ssize_t handle_getxattr(Context *ctx, const char *path, const char *name,
 
 static ssize_t handle_lgetxattr(Context *ctx, const char *path, const char *name,
 								void *value, size_t size) {
-	trace("lgetxattr(%s)\n", path);
+	trace("lgetxattr(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetSSize ret = { 0 };
 	CallXattr call = {
@@ -925,7 +1019,11 @@ static ssize_t handle_fgetxattr(Context *ctx, int fd, const char *name,
 
 static ssize_t handle_listxattr(Context *ctx, const char *path, char *list,
 								size_t size) {
-	trace("listxattr(%s)\n", path);
+	trace("listxattr(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetSSize ret = { 0 };
 	CallXattr call = {
@@ -944,7 +1042,11 @@ static ssize_t handle_listxattr(Context *ctx, const char *path, char *list,
 
 static ssize_t handle_llistxattr(Context *ctx, const char *path, char *list,
 								 size_t size) {
-	trace("llistxattr(%s)\n", path);
+	trace("llistxattr(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetSSize ret = { 0 };
 	CallXattr call = {
@@ -980,7 +1082,11 @@ static ssize_t handle_flistxattr(Context *ctx, int fd, char *list, size_t size) 
 }
 
 static int handle_removexattr(Context *ctx, const char *path, const char *name) {
-	trace("removexattr(%s)\n", path);
+	trace("removexattr(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetSSize ret = { 0 };
 	CallXattr call = {
@@ -997,7 +1103,11 @@ static int handle_removexattr(Context *ctx, const char *path, const char *name) 
 }
 
 static int handle_lremovexattr(Context *ctx, const char *path, const char *name) {
-	trace("lremovexattr(%s)\n", path);
+	trace("lremovexattr(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetSSize ret = { 0 };
 	CallXattr call = {
@@ -1032,7 +1142,11 @@ static int handle_fremovexattr(Context *ctx, int fd, const char *name) {
 
 __attribute__((unused))
 static int handle_rename(Context *ctx, const char *oldpath, const char *newpath) {
-	trace("rename(%s, %s)\n", oldpath, newpath);
+	trace("rename(%s, %s)\n", or_null(oldpath), or_null(newpath));
+
+	if (!oldpath || !newpath) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallRename call = {
@@ -1049,7 +1163,11 @@ static int handle_rename(Context *ctx, const char *oldpath, const char *newpath)
 
 static int handle_renameat(Context *ctx, int olddirfd, const char *oldpath,
 						   int newdirfd, const char *newpath) {
-	trace("renameat(%s, %s)\n", oldpath, newpath);
+	trace("renameat(%s, %s)\n", or_null(oldpath), or_null(newpath));
+
+	if (!oldpath || !newpath) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallRename call = {
@@ -1068,7 +1186,11 @@ static int handle_renameat(Context *ctx, int olddirfd, const char *oldpath,
 
 static int handle_renameat2(Context *ctx, int olddirfd, const char *oldpath,
 							int newdirfd, const char *newpath, unsigned int flags) {
-	trace("renameat2(%s, %s)\n", oldpath, newpath);
+	trace("renameat2(%s, %s)\n", or_null(oldpath), or_null(newpath));
+
+	if (!oldpath || !newpath) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallRename call = {
@@ -1087,7 +1209,11 @@ static int handle_renameat2(Context *ctx, int olddirfd, const char *oldpath,
 }
 
 static int handle_chdir(Context *ctx, const char *path) {
-	trace("chdir(%s)\n", path);
+	trace("chdir(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallChdir call = {
@@ -1136,7 +1262,11 @@ static int handle_exit_group(Context *ctx, int status) {
 
 __attribute__((unused))
 static int handle_chmod(Context *ctx, const char *path, mode_t mode) {
-	trace("chmod(%s)\n", path);
+	trace("chmod(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallChmod call = {
@@ -1168,7 +1298,11 @@ static int handle_fchmod(Context *ctx, int fd, mode_t mode) {
 }
 
 static int handle_fchmodat(Context *ctx, int dirfd, const char *path, mode_t mode) {
-	trace("fchmodat(%s)\n", path);
+	trace("fchmodat(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallChmod call = {
@@ -1185,7 +1319,11 @@ static int handle_fchmodat(Context *ctx, int dirfd, const char *path, mode_t mod
 }
 
 static int handle_truncate(Context *ctx, const char *path, off_t length) {
-	trace("truncate(%s)\n", path);
+	trace("truncate(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallTruncate call = {
@@ -1218,7 +1356,11 @@ static int handle_ftruncate(Context *ctx, int fd, off_t length) {
 
 __attribute__((unused))
 static int handle_mkdir(Context *ctx, const char *path, mode_t mode) {
-	trace("mkdir(%s)\n", path);
+	trace("mkdir(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallMkdir call = {
@@ -1234,7 +1376,11 @@ static int handle_mkdir(Context *ctx, const char *path, mode_t mode) {
 }
 
 static int handle_mkdirat(Context *ctx, int dirfd, const char *path, mode_t mode) {
-	trace("mkdirat(%s)\n", path);
+	trace("mkdirat(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallMkdir call = {
@@ -1288,7 +1434,11 @@ static ssize_t handle_getdents64(Context *ctx, int fd, void *dirp, size_t count)
 __attribute__((unused))
 static int handle_mknod(Context *ctx, const char *path, mode_t mode,
 						unsigned int dev) {
-	trace("mknod(%s)\n", path);
+	trace("mknod(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallMknod call = {
@@ -1306,7 +1456,11 @@ static int handle_mknod(Context *ctx, const char *path, mode_t mode,
 
 static int handle_mknodat(Context *ctx, int dirfd, const char *path, mode_t mode,
 						  unsigned int dev) {
-	trace("mknodat(%s)\n", path);
+	trace("mknodat(%s)\n", or_null(path));
+
+	if (!path) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallMknod call = {
@@ -1394,7 +1548,11 @@ int handle_connect(Context *ctx, int fd, void *addr, int addrlen) {
 
 static int handle_fanotify_mark(Context *ctx, int fanotify_fd, unsigned int flags,
 								__u64 mask, int dfd, const char *pathname) {
-	trace("fanotify_mark(%s)\n", pathname);
+	trace("fanotify_mark(%s)\n", or_null(pathname));
+
+	if (!pathname) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallFanotifyMark call = {
@@ -1413,7 +1571,11 @@ static int handle_fanotify_mark(Context *ctx, int fanotify_fd, unsigned int flag
 
 static int handle_inotify_add_watch(Context *ctx, int fd, const char *pathname,
 									__u32 mask) {
-	trace("inotify_add_watch(%s)\n", pathname);
+	trace("inotify_add_watch(%s)\n", or_null(pathname));
+
+	if (!pathname) {
+		return -EFAULT;
+	}
 
 	RetInt ret = { 0 };
 	CallInotifyAddWatch call = {
