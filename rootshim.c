@@ -270,8 +270,13 @@ static ssize_t rootshim_readlink(Context *ctx, const This *this,
 		if (!shim->is_symlink) {
 			_ret->ret = -EINVAL;
 			goto fail;
+		} else if (!call->buf) {
+			_ret->ret = -EFAULT;
+			goto fail;
 		}
 		shim_unlink(shim);
+
+
 
 		memcpy(call->buf, shim->target, len);
 

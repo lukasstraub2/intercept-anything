@@ -515,7 +515,7 @@ static int hardlink_stat(Context *ctx, const This *this,
 		}
 
 		ret = this->next->stat(ctx, this->next->stat_next, &_call);
-		if (ret < 0) {
+		if (ret < 0 || !_call.statbuf) {
 			unlock_read(ctx->tls, this);
 			return ret;
 		}
