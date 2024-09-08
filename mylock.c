@@ -38,14 +38,22 @@ void spinlock_unlock(Spinlock *lock) {
 	__atomic_store_n(lock, 0, __ATOMIC_RELEASE);
 }
 
-static void futex_wait(Mutex *mutex, Mutex expected) {
+static int futex_wait(Mutex *mutex, Mutex expected) {
 	signed long ret;
 	struct timespec timeout = {1, 0};
 
 	ret = sys_futex(mutex, FUTEX_WAIT, expected, &timeout, NULL, 0);
-	if (ret < 0 && ret != -EAGAIN && ret != -ETIMEDOUT) {
-		abort();
+	if (ret < 0) {
+		if (ret == -EAGAIN) {
+			return 0;
+		} else if (ret == -ETIMEDOUT) {
+			return -ETIMEDOUT;
+		} else {
+			abort();
+		}
 	}
+
+	return 0;
 }
 
 static void futex_wake(Mutex *mutex) {
@@ -89,9 +97,9 @@ static void _mutex_unlock(Mutex *mutex) {
 	__mutex_unlock(mutex, 0);
 }
 
-static void _mutex_wait(Mutex *mutex) {
+static int _mutex_wait(Mutex *mutex) {
 	Mutex expected = __atomic_load_n(mutex, __ATOMIC_ACQUIRE);
-	futex_wait(mutex, expected);
+	return futex_wait(mutex, expected);
 }
 
 int mutex_lock(Tls *tls, RobustMutex *mutex) {
@@ -336,7 +344,7 @@ static void _rwlock_unlock_write(Tls *tls, RwLock *lock) {
 }
 
 void rwlock_lock_read(Tls *tls, RwLock *lock) {
-	int defer_once = 1;
+	int defer_twice = 2;
 	while (1) {
 		int ownerdead = mutex_lock(tls, &lock->mutex);
 		if (ownerdead) {
@@ -344,18 +352,18 @@ void rwlock_lock_read(Tls *tls, RwLock *lock) {
 		}
 
 		if (lock->writer || lock->num_readers == holders_alloc ||
-				(lock->writer_waiter && lock->num_readers && defer_once) ) {
+				(lock->writer_waiter && lock->num_readers && defer_twice > 0) ) {
 			int dead = rwlock_cleanup_dead(lock);
 			mutex_unlock(tls, &lock->mutex);
 			if (!dead) {
-				_mutex_wait(&lock->waiters);
-				defer_once = 0;
+				int ret = _mutex_wait(&lock->waiters);
+				if (ret == -ETIMEDOUT) {
+					defer_twice = 0;
+				} else {
+					defer_twice--;
+				}
 			}
 			continue;
-		}
-
-		if (lock->writer_waiter) {
-			WRITE_ONCE(lock->writer_waiter, 0);
 		}
 
 		for (int i = 0; i < holders_alloc; i++) {
