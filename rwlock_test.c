@@ -33,6 +33,8 @@ static int pipefd[2];
 static pid_t tid[num_threads];
 static int sem[2];
 
+static int quit = 0;
+
 __attribute__((noinline))
 static pid_t _thread_new(void (*fn)(), void *stack) {
 	pid_t tid = my_syscall5(__NR_clone,
@@ -215,7 +217,7 @@ static void signal_thread() {
 static void verifier_thread() {
 	uint64_t last = 0;
 
-	while (1) {
+	while (!__atomic_load_n(&quit, __ATOMIC_ACQUIRE)) {
 		uint64_t tmp;
 		int ret = sys_read(pipefd[0], &tmp, sizeof(tmp));
 		if (ret != sizeof(tmp)) {
@@ -225,6 +227,9 @@ static void verifier_thread() {
 		assert(tmp == last + 1);
 		last = tmp;
 	}
+
+	printf("count: %llu\n", last);
+	sys_exit_group(0);
 }
 
 int main(int argc, char **argv) {
@@ -267,6 +272,6 @@ int main(int argc, char **argv) {
 	thread_new(verifier_thread);
 
 	sleep(10);
-	sys_exit_group(0);
+	WRITE_ONCE(quit, 1);
 	return 0;
 }
