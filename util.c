@@ -6,6 +6,49 @@
 #include "tls.h"
 #include "mysys.h"
 
+void randchar6(char *buf) {
+	int ret;
+	const char *table = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789";
+	const unsigned int len = strlen(table);
+	unsigned char rand[6];
+
+	ret = my_syscall3(__NR_getrandom, rand, 6, 0);
+	if (ret < 0) {
+		abort();
+	}
+
+	for (int i = 0; i < 6; i++) {
+		int idx = rand[i] % len;
+		buf[i] = table[idx];
+	}
+}
+
+int mkostemp(char *template, int flags, mode_t mode) {
+	int ret;
+	size_t len = strlen(template);
+	char *xxxxxx = template + len - 6;
+
+	for (int i = 0; i < 6; i++) {
+		if (xxxxxx[i] != 'X') {
+			abort();
+		}
+	}
+
+	while (1) {
+		randchar6(xxxxxx);
+		ret = sys_open(template, flags | O_RDWR | O_CREAT | O_EXCL, mode);
+		if (ret < 0) {
+			if (ret == -EEXIST) {
+				continue;
+			} else {
+				return ret;
+			}
+		}
+
+		return ret;
+	}
+}
+
 int is_tid_dead(pid_t tid) {
 	while (1) {
 		int ret = sys_tkill(tid, 0);

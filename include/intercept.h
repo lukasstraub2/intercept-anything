@@ -660,6 +660,28 @@ struct CallMisc {
 	RetUL *ret;
 };
 
+typedef struct CallMmap CallMmap;
+struct CallMmap {
+		unsigned long addr;
+		unsigned long len;
+		unsigned long prot;
+		unsigned long flags;
+		unsigned long fd;
+		unsigned long off;
+		RetUL *ret;
+};
+
+__attribute__((unused))
+static void callmmap_copy(CallMmap *dst, const CallMmap *call) {
+		dst->addr = call->addr;
+		dst->len = call->len;
+		dst->prot = call->prot;
+		dst->flags = call->flags;
+		dst->fd = call->fd;
+		dst->off = call->off;
+		dst->ret = call->ret;
+}
+
 typedef struct This This;
 typedef struct CallHandler CallHandler;
 struct CallHandler {
@@ -717,6 +739,8 @@ struct CallHandler {
 	const This *close_next;
 	unsigned long (*misc)(Context *ctx, const This *this, const CallMisc *call);
 	const This *misc_next;
+	unsigned long (*mmap)(Context *ctx, const This *this, const CallMmap *call);
+	const This *mmap_next;
 };
 
 extern const char *self_exe;

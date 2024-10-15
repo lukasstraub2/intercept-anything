@@ -148,6 +148,7 @@ static int install_filter() {
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
 		BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
 		BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mmap, 65, 0),
 #ifdef __NR_close_range
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_close_range, 64, 0),
 #else
@@ -1721,6 +1722,28 @@ static unsigned long handle_misc(Context *ctx, SysArgs *args) {
 	return ret.ret;
 }
 
+static unsigned long handle_mmap(Context *ctx, unsigned long addr,
+								 unsigned long len, unsigned long prot,
+								 unsigned long flags, unsigned long fd,
+								 unsigned long off) {
+		trace("mmap()\n");
+
+		RetUL ret = {0};
+		CallMmap call = {
+				.addr = addr,
+				.len = len,
+				.prot = prot,
+				.flags = flags,
+				.fd = fd,
+				.off = off,
+				.ret = &ret,
+		};
+
+		_next->mmap(ctx, _next->mmap_next, &call);
+
+		return ret.ret;
+}
+
 static unsigned long handle_syscall(Context *ctx, SysArgs *args) {
 	ssize_t ret;
 
@@ -2043,6 +2066,10 @@ static unsigned long handle_syscall(Context *ctx, SysArgs *args) {
 			ret = handle_close_range(ctx, args->arg1, args->arg2, args->arg3);
 		break;
 #endif
+
+		case __NR_mmap:
+			ret = handle_mmap(ctx, args->arg1, args->arg2, args->arg3, args->arg4, args->arg5, args->arg6);
+		break;
 
 		default:
 			ret = handle_misc(ctx, args);
@@ -2800,6 +2827,17 @@ static unsigned long bottom_misc(Context *ctx, const This *this, const CallMisc 
 	return call->ret->ret;
 }
 
+static unsigned long bottom_mmap(Context *ctx, const This *this, const CallMmap *call) {
+		unsigned long ret;
+		RetUL *_ret = call->ret;
+
+		signalmanager_sigsys_mask_until_sigreturn(ctx);
+		ret = (unsigned long)sys_mmap((void *)call->addr, call->len, call->prot, call->flags, call->fd, call->off);
+
+		_ret->ret = ret;
+		return ret;
+}
+
 static const CallHandler bottom = {
 	bottom_open,
 	NULL,
@@ -2854,5 +2892,7 @@ static const CallHandler bottom = {
 	bottom_close,
 	NULL,
 	bottom_misc,
+	NULL,
+	bottom_mmap,
 	NULL,
 };
