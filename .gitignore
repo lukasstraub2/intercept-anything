@@ -1,10 +1,6 @@
 a.out
 *.so
 *.o
-loader
-posix_spawnp_helper
-print
-confstr
 /test.sh
 rootlink.*
 !rootlink.h
@@ -12,5 +8,7 @@ rootlink.*
 .qtc_clangd
 tls_test
 mylock_test
-norootlink
 rwlock_test
+rootlink
+norootlink
+emulate_swap
