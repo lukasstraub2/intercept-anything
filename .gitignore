@@ -3,12 +3,10 @@ a.out
 *.o
 /test.sh
 rootlink.*
-!rootlink.h
-!rootlink.c
 .qtc_clangd
 tls_test
 mylock_test
 rwlock_test
-rootlink
+androidislinux
 norootlink
 emulate_swap
