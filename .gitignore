@@ -10,3 +10,4 @@ rwlock_test
 androidislinux
 norootlink
 emulate_swap
+.gdb_history
