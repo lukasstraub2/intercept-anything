@@ -2,24 +2,25 @@ CC=gcc
 
 # x86_64 or aarch64
 ARCH=x86_64
-CFLAGS=-g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-ident -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include"
-LDFLAGS=-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 -Wl,--no-undefined -static -lgcc
+CFLAGS=-g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include"
+LDFLAGS=-nostartfiles -nodefaultlibs -nostdlib -lgcc
+STATIC_ADDRESS=-Wl,-Ttext-segment,0xA0000000 -static
 common_objects=loader.o mylock.o rmap.o tls.o intercept_seccomp.o util.o signalmanager.o workarounds.o
 androidislinux_objects=$(addprefix androidislinux_tool/,noxattrs.o hardlinkshim.o rootlink.o rootshim.o androidislinux.o)
 
 %.o: %.c *.h
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-all: androidislinux norootlink emulate_swap
+all: androidislinux norootlink emulate_swap mylock_test rwlock_test
 
 androidislinux: $(common_objects) $(androidislinux_objects) androidislinux_tool/main.o
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(STATIC_ADDRESS)
 
 norootlink: $(common_objects) $(androidislinux_objects) androidislinux_tool/norootlink.o
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(STATIC_ADDRESS)
 
 emulate_swap: $(common_objects) emulate_swap_tool/emulate_swap.o emulate_swap_tool/emulate_swap_main.o
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(STATIC_ADDRESS)
 
 tls_test: util.o rmap.o tls.o tls_test.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
