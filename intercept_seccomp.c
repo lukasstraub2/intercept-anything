@@ -152,7 +152,7 @@ static int install_filter() {
 #ifdef __NR_close_range
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_close_range, 64, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 64, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_close, 63, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_kill, 62, 0),
@@ -169,19 +169,19 @@ static int install_filter() {
 #ifdef __NR_mknod
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mknod, 51, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 51, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mknodat, 50, 0),
 #ifdef __NR_getdents
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getdents, 49, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 49, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getdents64, 48, 0),
 #ifdef __NR_mkdir
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mkdir, 47, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 47, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mkdirat, 46, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_truncate, 45, 0),
@@ -189,7 +189,7 @@ static int install_filter() {
 #ifdef __NR_chmod
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_chmod, 43, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 43, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchmod, 42, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchmodat, 41, 0),
@@ -200,32 +200,32 @@ static int install_filter() {
 #ifdef __NR_open
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 36, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 36, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 35, 0),
 #ifdef __NR_stat
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 34, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 34, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 33, 0),
 #ifdef __NR_lstat
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 32, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 32, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 31, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 30, 0),
 #ifdef __NR_readlink
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 29, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 29, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 28, 0),
 #ifdef __NR_access
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 27, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 27, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 26, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 25, 0),
@@ -235,19 +235,19 @@ static int install_filter() {
 #ifdef __NR_link
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_link, 21, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 21, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_linkat, 20, 0),
 #ifdef __NR_symlink
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlink, 19, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 19, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlinkat, 18, 0),
 #ifdef __NR_unlink
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlink, 17, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 17, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlinkat, 16, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_setxattr, 15, 0),
@@ -265,7 +265,7 @@ static int install_filter() {
 #ifdef __NR_rename
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rename, 3, 0),
 #else
-		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 3, 0),
+		BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
 #endif
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat, 2, 0),
 		BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat2, 1, 0),
