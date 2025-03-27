@@ -28,10 +28,13 @@ static const CallHandler* _next = NULL;
 
 static char _self_exe[SCRATCH_SIZE];
 const char* self_exe = _self_exe;
+size_t page_size;
 
 static int install_filter();
 static void handler(int sig, siginfo_t* info, void* ucontext);
 static unsigned long handle_syscall(Context* ctx, SysArgs* args);
+static void start_text_init();
+static void page_size_init();
 
 void intercept_init(int recursing, const char* exe) {
     static int initialized = 0;
@@ -49,6 +52,8 @@ void intercept_init(int recursing, const char* exe) {
 
     tls_init();
     mutex_init();
+    page_size_init();
+    start_text_init();
 
     const CallHandler* signalmanager = signalmanager_init(&bottom);
     _next = main_init(signalmanager, recursing);
@@ -134,17 +139,54 @@ handler(int sig, siginfo_t* info, void* ucontext) {
         ;
 }
 
-extern char __start_text;
+static char* start_text;
 extern char __etext;
 
 extern char __start_signal_entry;
 extern char __stop_signal_entry;
 
+static void page_size_init() {
+    size_t sizes[] = {(4 * 1024), (16 * 1024), (64 * 1024)};
+
+    size_t size;
+    for (int i = 0; i < (int)(sizeof(sizes) / sizeof(sizes[0])); i++) {
+        size = sizes[i];
+        unsigned long ret = (unsigned long)sys_mmap(
+            NULL, size, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        if (ret >= -4095UL) {
+            continue;
+        }
+
+        sys_munmap((void*)ret, size);
+        break;
+    }
+
+    page_size = size;
+}
+
+static void start_text_init() {
+    unsigned long addr = (unsigned long)&__etext;
+    addr &= -page_size;  // round down
+
+    while (1) {
+        int ret = sys_access((char*)addr, F_OK);
+        if (ret != -EFAULT) {
+            addr -= page_size;
+            continue;
+        }
+
+        break;
+    }
+
+    addr += page_size;
+    start_text = (char*)addr;
+}
+
 int pc_in_our_code(void* ucontext) {
     char* pc = get_pc(ucontext);
-    int in_text = pc >= &__start_text && pc <= &__etext;
+    int in_text = pc >= start_text && pc < &__etext;
     int in_signal_entry =
-        pc >= &__start_signal_entry && pc <= &__stop_signal_entry;
+        pc >= &__start_signal_entry && pc < &__stop_signal_entry;
     return in_text && !in_signal_entry;
 }
 
@@ -281,11 +323,11 @@ static int install_filter() {
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
         BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
                  (offsetof(struct seccomp_data, instruction_pointer) + 4)),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K,
-                 ((unsigned long)&__start_text) >> 32, 0, 3),
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)start_text) >> 32,
+                 0, 3),
         BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
                  (offsetof(struct seccomp_data, instruction_pointer))),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (unsigned long)&__start_text, 0, 1),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (unsigned long)start_text, 0, 1),
         BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (unsigned long)&__etext, 0, 1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),

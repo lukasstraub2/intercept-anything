@@ -737,6 +737,7 @@ struct CallHandler {
 // clang-format on
 
 extern const char* self_exe;
+extern size_t page_size;
 
 void intercept_init(int recursing, const char* exe);
 const CallHandler* main_init(const CallHandler* bottom, int recursing);

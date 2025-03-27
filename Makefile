@@ -3,14 +3,14 @@ CC=gcc
 # x86_64 or aarch64
 ARCH=x86_64
 CFLAGS=-g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-ident -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include"
-LDFLAGS=-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 '-Wl,--defsym=__start_text=ADDR(.text)' -Wl,--no-undefined -static -lgcc
+LDFLAGS=-nostartfiles -nodefaultlibs -nostdlib -Wl,-Ttext-segment,0xA0000000 -Wl,--no-undefined -static -lgcc
 common_objects=loader.o mylock.o rmap.o tls.o intercept_seccomp.o util.o signalmanager.o workarounds.o
 androidislinux_objects=$(addprefix androidislinux_tool/,noxattrs.o hardlinkshim.o rootlink.o rootshim.o androidislinux.o)
 
 %.o: %.c *.h
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-all: androidislinux norootlink emulate_swap check
+all: androidislinux norootlink emulate_swap
 
 androidislinux: $(common_objects) $(androidislinux_objects) androidislinux_tool/main.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
