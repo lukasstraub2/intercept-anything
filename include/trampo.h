@@ -12,8 +12,8 @@
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -28,7 +28,8 @@
 
 #if defined(__x86_64__)
 #include "trampo-x86_64.h"
-#elif defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
+#elif defined(__i386__) || defined(__i486__) || defined(__i586__) || \
+    defined(__i686__)
 #include "trampo-i386.h"
 #elif defined(__aarch64__)
 #include "trampo-aarch64.h"
@@ -36,4 +37,4 @@
 #error Unsupported Architecture
 #endif
 
-void z_trampo(void (*entry)(void), unsigned long *sp, void (*fini)(void));
+void z_trampo(void (*entry)(void), unsigned long* sp, void (*fini)(void));

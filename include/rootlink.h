@@ -2,4 +2,4 @@
 
 #include "intercept.h"
 
-const CallHandler *rootlink_init(const CallHandler *next);
+const CallHandler* rootlink_init(const CallHandler* next);

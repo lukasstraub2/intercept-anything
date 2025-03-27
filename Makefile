@@ -30,7 +30,10 @@ mylock_test: util.o rmap.o tls.o mylock.o mylock_test.o
 rwlock_test: util.o rmap.o tls.o mylock.o rwlock_test.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
-.PHONY: clean check
+.PHONY: clean check format
+
+format:
+	find . -maxdepth 2 -type f -name '*.c' -print0 -or -name '*.h' -print0 | xargs -0 clang-format -i --style='{BasedOnStyle: Chromium, IndentWidth: 4, SortIncludes: false}'
 
 # skip tls_test
 check: mylock_test rwlock_test

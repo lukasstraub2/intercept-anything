@@ -5,20 +5,20 @@
 #include "mylock.h"
 
 struct RMapEntry {
-	Spinlock id;
-	void *data;
+    Spinlock id;
+    void* data;
 };
 
 struct RMap {
-	Spinlock size;
-	uint32_t alloc;
-	RMapEntry list[];
+    Spinlock size;
+    uint32_t alloc;
+    RMapEntry list[];
 };
 
-RMapEntry *rmap_search_binary(RMap *this, const uint32_t id);
-RMapEntry *rmap_get_noalloc(RMap *this, const uint32_t id);
-RMapEntry *rmap_get(RMap *this, const uint32_t id);
-void _rmap_free(RMap *this, RMapEntry *entry);
-void rmap_free(RMap *this, const uint32_t id);
+RMapEntry* rmap_search_binary(RMap* this, const uint32_t id);
+RMapEntry* rmap_get_noalloc(RMap* this, const uint32_t id);
+RMapEntry* rmap_get(RMap* this, const uint32_t id);
+void _rmap_free(RMap* this, RMapEntry* entry);
+void rmap_free(RMap* this, const uint32_t id);
 
-RMap *rmap_alloc(uint32_t alloc);
+RMap* rmap_alloc(uint32_t alloc);

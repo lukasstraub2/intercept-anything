@@ -39,43 +39,49 @@
 
 #pragma once
 
-#define RLIST_HEAD(name, type) \
-struct name { \
-		struct type *slh_first; \
-}
+#define RLIST_HEAD(name, type)  \
+    struct name {               \
+        struct type* slh_first; \
+    }
 
-#define RLIST_ENTRY(type) \
-struct { \
-		struct type *sle_next; \
-}
+#define RLIST_ENTRY(type)      \
+    struct {                   \
+        struct type* sle_next; \
+    }
 
-#define RLIST_INSERT_HEAD(head, elm, field) do { \
-		__atomic_store_n(&(elm)->field.sle_next, (head)->slh_first, __ATOMIC_RELAXED); \
-		__asm volatile ("" ::: "memory"); \
-		__atomic_store_n(&(head)->slh_first, (elm), __ATOMIC_RELAXED); \
-} while (0)
+#define RLIST_INSERT_HEAD(head, elm, field)                            \
+    do {                                                               \
+        __atomic_store_n(&(elm)->field.sle_next, (head)->slh_first,    \
+                         __ATOMIC_RELAXED);                            \
+        __asm volatile("" ::: "memory");                               \
+        __atomic_store_n(&(head)->slh_first, (elm), __ATOMIC_RELAXED); \
+    } while (0)
 
-#define RLIST_REMOVE_HEAD(head, field) do { \
-		__typeof__((head)->slh_first) elm = (head)->slh_first; \
-		__atomic_store_n(&(head)->slh_first, elm->field.sle_next, __ATOMIC_RELAXED); \
-} while (0)
+#define RLIST_REMOVE_HEAD(head, field)                            \
+    do {                                                          \
+        __typeof__((head)->slh_first) elm = (head)->slh_first;    \
+        __atomic_store_n(&(head)->slh_first, elm->field.sle_next, \
+                         __ATOMIC_RELAXED);                       \
+    } while (0)
 
-#define RLIST_REMOVE(head, elm, field) do { \
-	if ((head)->slh_first == (elm)) { \
-		RLIST_REMOVE_HEAD((head), field); \
-	} else { \
-		__typeof__((head)->slh_first) curelm = (head)->slh_first; \
-		while (curelm->field.sle_next != (elm)) { \
-			curelm = curelm->field.sle_next; \
-		} \
-		__atomic_store_n(&curelm->field.sle_next, curelm->field.sle_next->field.sle_next, __ATOMIC_RELAXED); \
-	} \
-} while (0)
+#define RLIST_REMOVE(head, elm, field)                                \
+    do {                                                              \
+        if ((head)->slh_first == (elm)) {                             \
+            RLIST_REMOVE_HEAD((head), field);                         \
+        } else {                                                      \
+            __typeof__((head)->slh_first) curelm = (head)->slh_first; \
+            while (curelm->field.sle_next != (elm)) {                 \
+                curelm = curelm->field.sle_next;                      \
+            }                                                         \
+            __atomic_store_n(&curelm->field.sle_next,                 \
+                             curelm->field.sle_next->field.sle_next,  \
+                             __ATOMIC_RELAXED);                       \
+        }                                                             \
+    } while (0)
 
 #define RLIST_FOREACH(var, head, field, tvar) \
-		for ((var) = RLIST_FIRST((head)); \
-			(var) && ((tvar) = RLIST_NEXT((var), field), 1); \
-			(var) = (tvar))
+    for ((var) = RLIST_FIRST((head));         \
+         (var) && ((tvar) = RLIST_NEXT((var), field), 1); (var) = (tvar))
 
 #define RLIST_EMPTY(head) ((head)->slh_first == NULL)
 #define RLIST_FIRST(head) ((head)->slh_first)

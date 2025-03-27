@@ -12,8 +12,8 @@
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -31,18 +31,18 @@
 
 typedef struct Elf32_auxv_t Elf32_auxv_t;
 struct Elf32_auxv_t {
-	uint32_t a_type;
-	union {
-		uint32_t a_val;
-	} a_un;
+    uint32_t a_type;
+    union {
+        uint32_t a_val;
+    } a_un;
 };
 
 typedef struct Elf64_auxv_t Elf64_auxv_t;
 struct Elf64_auxv_t {
-	uint64_t a_type;
-	union {
-		uint64_t a_val;
-	} a_un;
+    uint64_t a_type;
+    union {
+        uint64_t a_val;
+    } a_un;
 };
 
 #if defined(__x86_64__) || defined(__aarch64__)
@@ -50,7 +50,8 @@ struct Elf64_auxv_t {
 #define Elf_Phdr Elf64_Phdr
 #define Elf_auxv_t Elf64_auxv_t
 #define ELFCLASS ELFCLASS64
-#elif defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
+#elif defined(__i386__) || defined(__i486__) || defined(__i586__) || \
+    defined(__i686__)
 #define Elf_Ehdr Elf32_Ehdr
 #define Elf_Phdr Elf32_Phdr
 #define Elf_auxv_t Elf32_auxv_t
