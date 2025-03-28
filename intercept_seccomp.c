@@ -472,11 +472,19 @@ static void thread_exit_exec(Tls* tls) {
     tls_free();
 }
 
+static const char* or_null(const char* str) {
+    if (str) {
+        return str;
+    } else {
+        return "NULL";
+    }
+}
+
 __attribute__((unused)) static int handle_open(Context* ctx,
                                                const char* path,
                                                int flags,
                                                mode_t mode) {
-    trace("open(%s)\n", path);
+    trace("open(%s)\n", or_null(path));
 
     RetInt ret = {0};
     CallOpen call = {
@@ -492,7 +500,7 @@ static int handle_openat(Context* ctx,
                          const char* path,
                          int flags,
                          mode_t mode) {
-    trace("openat(%s)\n", path);
+    trace("openat(%s)\n", or_null(path));
 
     RetInt ret = {0};
     CallOpen call = {.at = 1,
@@ -510,14 +518,6 @@ static int handle_openat(Context* ctx,
 int filter_openat(int dirfd, const char* path, int flags, mode_t mode) {
     Context ctx = {tls_get(), NULL, 0};
     return handle_openat(&ctx, dirfd, path, flags, mode);
-}
-
-static const char* or_null(const char* str) {
-    if (str) {
-        return str;
-    } else {
-        return "NULL";
-    }
 }
 
 __attribute__((unused)) static int handle_stat(Context* ctx,
