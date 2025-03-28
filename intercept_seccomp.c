@@ -515,9 +515,9 @@ static int handle_openat(Context* ctx,
     return ret.ret;
 }
 
-int filter_openat(int dirfd, const char* path, int flags, mode_t mode) {
+int loader_open(const char* path, int flags, mode_t mode) {
     Context ctx = {tls_get(), NULL, 0};
-    return handle_openat(&ctx, dirfd, path, flags, mode);
+    return handle_openat(&ctx, AT_FDCWD, path, flags, mode);
 }
 
 __attribute__((unused)) static int handle_stat(Context* ctx,

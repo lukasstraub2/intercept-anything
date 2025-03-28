@@ -5,7 +5,7 @@ ARCH=x86_64
 CFLAGS=-g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-stack-protector -nostdinc -I include -I include/nolibc -I "include/linux-headers/${ARCH}/include"
 LDFLAGS=-nostartfiles -nodefaultlibs -nostdlib -lgcc
 STATIC_ADDRESS=-Wl,-Ttext-segment,0xA0000000 -static
-common_objects=loader.o mylock.o rmap.o tls.o intercept_seccomp.o util.o signalmanager.o workarounds.o
+common_objects=loader.o loader_main.o mylock.o rmap.o tls.o intercept_seccomp.o util.o signalmanager.o workarounds.o
 androidislinux_objects=$(addprefix androidislinux_tool/,noxattrs.o hardlinkshim.o rootlink.o rootshim.o androidislinux.o)
 
 %.o: %.c *.h

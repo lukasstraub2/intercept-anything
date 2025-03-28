@@ -27,10 +27,10 @@
 #include "common.h"
 
 #include "nolibc.h"
+#include "loader.h"
 #include "mprotect.h"
 #include "trampo.h"
 #include "myelf.h"
-#include "intercept.h"
 
 #define DEBUG_ENV "DEBUG_LOADER"
 #include "debug.h"
@@ -124,16 +124,7 @@ err:
     return LOAD_ERR;
 }
 
-#define Z_PROG 0
-#define Z_INTERP 1
-
-struct LoaderInfo {
-    Elf_Ehdr ehdrs[2];
-    unsigned long base[2], entry[2];
-    char* elf_interp;
-};
-
-static int load_file(struct LoaderInfo* info, const char* file) {
+int load_file(struct LoaderInfo* info, const char* file) {
     Elf_Ehdr* ehdr = info->ehdrs;
     unsigned long* base = info->base;
     unsigned long* entry = info->entry;
@@ -144,7 +135,7 @@ static int load_file(struct LoaderInfo* info, const char* file) {
 
     for (i = 0;; i++, ehdr++) {
         /* Open file, read and than check ELF header.*/
-        if ((fd = filter_openat(AT_FDCWD, file, O_RDONLY, 0)) < 0)
+        if ((fd = loader_open(file, O_RDONLY, 0)) < 0)
             exit_error("can't open %s", file);
         if (sys_read(fd, ehdr, sizeof(*ehdr)) != sizeof(*ehdr))
             exit_error("can't read ELF header %s", file);
@@ -194,9 +185,9 @@ static int load_file(struct LoaderInfo* info, const char* file) {
 
 /* Reassign some vectors that are important for
  * the dynamic linker and for lib C. */
-static void* patch_auxv(unsigned long* auxv,
-                        struct LoaderInfo* info,
-                        const char* argv0) {
+void* patch_auxv(unsigned long* auxv,
+                 struct LoaderInfo* info,
+                 const char* argv0) {
     Elf_Ehdr* ehdrs = info->ehdrs;
     unsigned long* base = info->base;
     unsigned long* entry = info->entry;
@@ -220,41 +211,4 @@ static void* patch_auxv(unsigned long* auxv,
 #undef AVSET
 
     return auxv + 2;
-}
-
-int main(int argc, char** argv, char** envp) {
-    unsigned long* sp = (unsigned long*)argv;
-    sp--;
-    void* auxv;
-    void* after_auxv;
-    char** p;
-    struct LoaderInfo info;
-
-    for (p = envp; *p++;)
-        ;
-    auxv = (void*)p;
-
-    if (argc < 2)
-        exit_error("no input file");
-
-    int recursing = !strcmp(argv[0], "loader_recurse");
-    intercept_init(recursing, argv[1]);
-
-    load_file(&info, argv[1]);
-
-    after_auxv = patch_auxv(auxv, &info, argv[1]);
-
-    /* Shift argv, env and av. */
-    memcpy(&argv[0], &argv[1],
-           (unsigned long)after_auxv - (unsigned long)&argv[1]);
-    environ--;
-    _auxv--;
-    /* SP points to argc. */
-    (*sp)--;
-
-    z_trampo((void (*)(void))(info.elf_interp ? info.entry[Z_INTERP]
-                                              : info.entry[Z_PROG]),
-             sp, NULL);
-    /* Should not reach. */
-    exit(0);
 }
