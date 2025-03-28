@@ -194,33 +194,32 @@ static int load_file(struct LoaderInfo* info, const char* file) {
 
 /* Reassign some vectors that are important for
  * the dynamic linker and for lib C. */
-static void* patch_auxv(void* auxv,
+static void* patch_auxv(unsigned long* auxv,
                         struct LoaderInfo* info,
                         const char* argv0) {
-    Elf_auxv_t* av = auxv;
     Elf_Ehdr* ehdrs = info->ehdrs;
     unsigned long* base = info->base;
     unsigned long* entry = info->entry;
     char* elf_interp = info->elf_interp;
 
-#define AVSET(t, v, expr)         \
-    case (t):                     \
-        (v)->a_un.a_val = (expr); \
-        break
-    while (av->a_type != AT_NULL) {
-        switch (av->a_type) {
-            AVSET(AT_PHDR, av, base[Z_PROG] + ehdrs[Z_PROG].e_phoff);
-            AVSET(AT_PHNUM, av, ehdrs[Z_PROG].e_phnum);
-            AVSET(AT_PHENT, av, ehdrs[Z_PROG].e_phentsize);
-            AVSET(AT_ENTRY, av, entry[Z_PROG]);
-            AVSET(AT_EXECFN, av, (unsigned long)argv0);
-            AVSET(AT_BASE, av, elf_interp ? base[Z_INTERP] : av->a_un.a_val);
-        }
-        ++av;
+#define AVSET(t, expr)    \
+    if (auxv[0] == (t)) { \
+        auxv[1] = (expr); \
+    }
+
+    while (auxv[0] != AT_NULL) {
+        AVSET(AT_PHDR, base[Z_PROG] + ehdrs[Z_PROG].e_phoff);
+        AVSET(AT_PHNUM, ehdrs[Z_PROG].e_phnum);
+        AVSET(AT_PHENT, ehdrs[Z_PROG].e_phentsize);
+        AVSET(AT_ENTRY, entry[Z_PROG]);
+        AVSET(AT_EXECFN, (unsigned long)argv0);
+        AVSET(AT_BASE, elf_interp ? base[Z_INTERP] : auxv[1]);
+
+        auxv += 2;
     }
 #undef AVSET
 
-    return av + 1;
+    return auxv + 2;
 }
 
 int main(int argc, char** argv, char** envp) {
