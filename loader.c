@@ -127,28 +127,20 @@ err:
 #define Z_PROG 0
 #define Z_INTERP 1
 
-int main(int argc, char** argv, char** envp) {
-    unsigned long* sp = (unsigned long*)argv;
-    sp--;
-    Elf_Ehdr ehdrs[2], *ehdr = ehdrs;
-    Elf_Phdr *phdr, *iter;
-    Elf_auxv_t* av;
-    char **p, *elf_interp = NULL;
+struct LoaderInfo {
+    Elf_Ehdr ehdrs[2];
     unsigned long base[2], entry[2];
-    const char* file;
+    char* elf_interp;
+};
+
+static int load_file(struct LoaderInfo* info, const char* file) {
+    Elf_Ehdr* ehdr = info->ehdrs;
+    unsigned long* base = info->base;
+    unsigned long* entry = info->entry;
+    info->elf_interp = NULL;
+    Elf_Phdr *phdr, *iter;
     ssize_t sz;
     int fd, i;
-
-    for (p = envp; *p++;)
-        ;
-    av = (void*)p;
-
-    if (argc < 2)
-        exit_error("no input file");
-    file = argv[1];
-
-    int recursing = !strcmp(argv[0], "loader_recurse");
-    intercept_init(recursing, argv[1]);
 
     for (i = 0;; i++, ehdr++) {
         /* Open file, read and than check ELF header.*/
@@ -173,23 +165,23 @@ int main(int argc, char** argv, char** envp) {
         /* Set the entry point, if the file is dynamic than add bias. */
         entry[i] = ehdr->e_entry + (ehdr->e_type == ET_DYN ? base[i] : 0);
         /* The second round, we've loaded ELF interp. */
-        if (file == elf_interp)
+        if (file == info->elf_interp)
             break;
         for (iter = phdr; iter < &phdr[ehdr->e_phnum]; iter++) {
             if (iter->p_type != PT_INTERP)
                 continue;
-            elf_interp = alloca(iter->p_filesz);
+            info->elf_interp = alloca(iter->p_filesz);
             if (sys_lseek(fd, iter->p_offset, SEEK_SET) < 0)
                 exit_error("can't lseek interp segment");
-            if (sys_read(fd, elf_interp, iter->p_filesz) !=
+            if (sys_read(fd, info->elf_interp, iter->p_filesz) !=
                 (ssize_t)iter->p_filesz)
                 exit_error("can't read interp segment");
-            if (elf_interp[iter->p_filesz - 1] != '\0')
+            if (info->elf_interp[iter->p_filesz - 1] != '\0')
                 exit_error("bogus interp path");
-            file = elf_interp;
+            file = info->elf_interp;
         }
         /* Looks like the ELF is static -- leave the loop. */
-        if (elf_interp == NULL)
+        if (info->elf_interp == NULL)
             break;
 
         sys_close(fd);
@@ -197,8 +189,20 @@ int main(int argc, char** argv, char** envp) {
 
     sys_close(fd);
 
-    /* Reassign some vectors that are important for
-     * the dynamic linker and for lib C. */
+    return 0;
+}
+
+/* Reassign some vectors that are important for
+ * the dynamic linker and for lib C. */
+static void* patch_auxv(void* auxv,
+                        struct LoaderInfo* info,
+                        const char* argv0) {
+    Elf_auxv_t* av = auxv;
+    Elf_Ehdr* ehdrs = info->ehdrs;
+    unsigned long* base = info->base;
+    unsigned long* entry = info->entry;
+    char* elf_interp = info->elf_interp;
+
 #define AVSET(t, v, expr)         \
     case (t):                     \
         (v)->a_un.a_val = (expr); \
@@ -209,23 +213,49 @@ int main(int argc, char** argv, char** envp) {
             AVSET(AT_PHNUM, av, ehdrs[Z_PROG].e_phnum);
             AVSET(AT_PHENT, av, ehdrs[Z_PROG].e_phentsize);
             AVSET(AT_ENTRY, av, entry[Z_PROG]);
-            AVSET(AT_EXECFN, av, (unsigned long)argv[1]);
+            AVSET(AT_EXECFN, av, (unsigned long)argv0);
             AVSET(AT_BASE, av, elf_interp ? base[Z_INTERP] : av->a_un.a_val);
         }
         ++av;
     }
 #undef AVSET
-    ++av;
+
+    return av + 1;
+}
+
+int main(int argc, char** argv, char** envp) {
+    unsigned long* sp = (unsigned long*)argv;
+    sp--;
+    void* auxv;
+    void* after_auxv;
+    char** p;
+    struct LoaderInfo info;
+
+    for (p = envp; *p++;)
+        ;
+    auxv = (void*)p;
+
+    if (argc < 2)
+        exit_error("no input file");
+
+    int recursing = !strcmp(argv[0], "loader_recurse");
+    intercept_init(recursing, argv[1]);
+
+    load_file(&info, argv[1]);
+
+    after_auxv = patch_auxv(auxv, &info, argv[1]);
 
     /* Shift argv, env and av. */
-    memcpy(&argv[0], &argv[1], (unsigned long)av - (unsigned long)&argv[1]);
+    memcpy(&argv[0], &argv[1],
+           (unsigned long)after_auxv - (unsigned long)&argv[1]);
     environ--;
     _auxv--;
     /* SP points to argc. */
     (*sp)--;
 
-    z_trampo((void (*)(void))(elf_interp ? entry[Z_INTERP] : entry[Z_PROG]), sp,
-             NULL);
+    z_trampo((void (*)(void))(info.elf_interp ? info.entry[Z_INTERP]
+                                              : info.entry[Z_PROG]),
+             sp, NULL);
     /* Should not reach. */
     exit(0);
 }
