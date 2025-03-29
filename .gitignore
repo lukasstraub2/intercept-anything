@@ -11,3 +11,5 @@ androidislinux
 norootlink
 emulate_swap
 .gdb_history
+execve_here_test
+libexecve_here.so
