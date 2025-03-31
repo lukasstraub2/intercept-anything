@@ -23,6 +23,8 @@
 #include <linux/filter.h>
 #include <linux/seccomp.h>
 
+static int initialized = 0;
+
 static const CallHandler bottom;
 static const CallHandler* _next = NULL;
 
@@ -36,8 +38,12 @@ static unsigned long handle_syscall(Context* ctx, SysArgs* args);
 static void start_text_init();
 static void page_size_init();
 
+__attribute__((weak)) const CallHandler* main_init(const CallHandler* bottom,
+                                                   int recursing) {
+    return bottom;
+}
+
 void intercept_init(int recursing, const char* exe) {
-    static int initialized = 0;
     size_t exe_len = strlen(exe) + 1;
 
     if (initialized) {
@@ -516,6 +522,10 @@ static int handle_openat(Context* ctx,
 }
 
 int loader_open(const char* path, int flags, mode_t mode) {
+    if (!initialized) {
+        return sys_open(path, flags, mode);
+    }
+
     Context ctx = {tls_get(), NULL, 0};
     return handle_openat(&ctx, AT_FDCWD, path, flags, mode);
 }

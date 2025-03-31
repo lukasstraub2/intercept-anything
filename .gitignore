@@ -1,15 +1,4 @@
-a.out
-*.so
-*.o
-/test.sh
 rootlink.*
 .qtc_clangd
-tls_test
-mylock_test
-rwlock_test
-androidislinux
-norootlink
-emulate_swap
 .gdb_history
-execve_here_test
-libexecve_here.so
+build
