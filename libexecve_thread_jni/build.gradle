@@ -1,0 +1,70 @@
+plugins {
+    alias(libs.plugins.android.library)
+}
+
+android {
+    namespace 'me.lukasstraub2.android.libexecve_thread'
+    compileSdk 35
+
+    defaultConfig {
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                targets 'execve_thread_jni'
+                arguments '-DANDROID_STL=none'
+            }
+        }
+
+        ndk {
+            abiFilters 'x86_64', 'arm64-v8a'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    externalNativeBuild {
+        cmake {
+            path '../CMakeLists.txt'
+        }
+    }
+}
+
+dependencies {
+    testImplementation libs.junit
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.ax.runner
+    androidTestImplementation libs.ax.rules
+}
+
+def outDir = new File(rootProject.projectDir, "out")
+task buildNative(type: Exec) {
+    workingDir rootProject.projectDir
+    commandLine "/usr/bin/env", "make"
+}
+
+project.afterEvaluate {
+    if (org.gradle.internal.os.OperatingSystem.current().isLinux()) {
+        testDebugUnitTest {
+            dependsOn buildNative
+            systemProperty "java.library.path", outDir.absolutePath + ":" + System.getProperty("java.library.path")
+        }
+        testReleaseUnitTest {
+            dependsOn buildNative
+            systemProperty "java.library.path", outDir.absolutePath + ":" + System.getProperty("java.library.path")
+        }
+    }
+}

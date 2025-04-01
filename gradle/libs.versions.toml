@@ -1,0 +1,16 @@
+[versions]
+agp = "8.8.0"
+junit = "4.13.2"
+junitVersion = "1.2.1"
+axRunner = "1.6.2"
+axRules = "1.6.2"
+
+[libraries]
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+ax-runner = { group = "androidx.test", name = "runner", version.ref = "axRunner" }
+ax-rules = { group = "androidx.test", name = "runner", version.ref = "axRules" }
+
+[plugins]
+android-library = { id = "com.android.library", version.ref = "agp" }
+

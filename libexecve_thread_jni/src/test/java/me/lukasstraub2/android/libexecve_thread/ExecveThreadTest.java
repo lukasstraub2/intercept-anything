@@ -1,12 +1,10 @@
 package me.lukasstraub2.android.libexecve_thread;
 
-import static org.junit.jupiter.api.Assertions.*;
-
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.Arrays;
 
-class ExecveThreadTest {
+public class ExecveThreadTest {
 
     @Test
     public void testExecve() {
