@@ -1,70 +1,140 @@
+
+import org.gradle.internal.os.OperatingSystem
+
 plugins {
-    alias(libs.plugins.android.library)
+    alias(libs.plugins.android.library) apply false
 }
 
-android {
-    namespace 'me.lukasstraub2.android.libexecve_thread'
-    compileSdk 35
-
-    defaultConfig {
-        minSdk 24
-        targetSdk 35
-        versionCode 1
-        versionName "1.0"
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-
-        externalNativeBuild {
-            cmake {
-                targets 'execve_thread_jni'
-                arguments '-DANDROID_STL=none'
+def findAndroidSdkPath(rootDir) {
+    def localPropsFile = new File(rootDir, "local.properties")
+    def sdkPath = null
+    if (localPropsFile.exists()) {
+        def properties = new Properties()
+        try {
+            localPropsFile.withInputStream { stream ->
+                properties.load(stream)
             }
+            sdkPath = properties.getProperty('sdk.dir')
+        } catch (Exception e) {
+            logger.warn("Warning: Could not read local.properties: ${e.message}")
         }
+    }
 
-        ndk {
-            abiFilters 'x86_64', 'arm64-v8a'
+    if (sdkPath == null || sdkPath.trim().isEmpty()) {
+        sdkPath = System.getenv("ANDROID_SDK_ROOT")
+    }
+    if (sdkPath == null || sdkPath.trim().isEmpty()) {
+        sdkPath = System.getenv("ANDROID_HOME")
+    }
+
+    if (sdkPath != null && !sdkPath.trim().isEmpty()) {
+        def sdkDir = new File(sdkPath.trim())
+
+        def platformTools = new File(sdkDir, "platform-tools")
+        if (sdkDir.isDirectory() && platformTools.isDirectory()) {
+            logger.info("Android SDK found at: ${sdkDir.absolutePath}")
+            return sdkDir.absolutePath
+        } else {
+            logger.warn("Android SDK path found ('${sdkPath}') but it doesn't appear to be a valid SDK directory (checked existence and platform-tools).")
+            return null
         }
     }
 
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
-    }
-    externalNativeBuild {
-        cmake {
-            path '../CMakeLists.txt'
-        }
-    }
+    logger.warn("Android SDK not found via local.properties or environment variables (ANDROID_SDK_ROOT, ANDROID_HOME).")
+    return null
 }
 
-dependencies {
-    testImplementation libs.junit
-    androidTestImplementation libs.ext.junit
-    androidTestImplementation libs.ax.runner
-    androidTestImplementation libs.ax.rules
+def detectedSdkPath = findAndroidSdkPath(rootProject.projectDir)
+boolean useAndroidPlugin = (detectedSdkPath != null)
+boolean isLinux = OperatingSystem.current().isLinux()
+
+if (useAndroidPlugin) {
+    logger.lifecycle("Configuring build using 'com.android.library' plugin (Android SDK detected).")
+    apply plugin: 'com.android.library'
+} else {
+    logger.lifecycle("Configuring build using 'java-library' plugin (Android SDK not detected).")
+    apply plugin: 'java-library'
 }
 
 def outDir = new File(rootProject.projectDir, "out")
+
 task buildNative(type: Exec) {
     workingDir rootProject.projectDir
     commandLine "/usr/bin/env", "make"
 }
 
-project.afterEvaluate {
-    if (org.gradle.internal.os.OperatingSystem.current().isLinux()) {
-        testDebugUnitTest {
-            dependsOn buildNative
-            systemProperty "java.library.path", outDir.absolutePath + ":" + System.getProperty("java.library.path")
+dependencies {
+    testImplementation libs.junit
+}
+
+if (!useAndroidPlugin) {
+    java {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    tasks.named('test') {
+        dependsOn buildNative
+        systemProperty "java.library.path", outDir.absolutePath + ":" + System.getProperty("java.library.path")
+    }
+} else {
+    android {
+        namespace 'me.lukasstraub2.android.libexecve_thread'
+        compileSdk 35
+
+        defaultConfig {
+            minSdk 24
+            targetSdk 35
+            versionCode 1
+            versionName "1.0"
+
+            testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+            externalNativeBuild {
+                cmake {
+                    targets 'execve_thread_jni'
+                    arguments '-DANDROID_STL=none'
+                }
+            }
+
+            ndk {
+                abiFilters 'x86_64', 'arm64-v8a'
+            }
         }
-        testReleaseUnitTest {
-            dependsOn buildNative
-            systemProperty "java.library.path", outDir.absolutePath + ":" + System.getProperty("java.library.path")
+
+        buildTypes {
+            release {
+                minifyEnabled false
+                proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            }
+        }
+        compileOptions {
+            sourceCompatibility JavaVersion.VERSION_11
+            targetCompatibility JavaVersion.VERSION_11
+        }
+        externalNativeBuild {
+            cmake {
+                path '../CMakeLists.txt'
+            }
+        }
+    }
+
+    dependencies {
+        androidTestImplementation libs.ext.junit
+        androidTestImplementation libs.ax.runner
+        androidTestImplementation libs.ax.rules
+    }
+
+    project.afterEvaluate {
+        if (isLinux) {
+            testDebugUnitTest {
+                dependsOn buildNative
+                systemProperty "java.library.path", outDir.absolutePath + ":" + System.getProperty("java.library.path")
+            }
+            testReleaseUnitTest {
+                dependsOn buildNative
+                systemProperty "java.library.path", outDir.absolutePath + ":" + System.getProperty("java.library.path")
+            }
         }
     }
 }
