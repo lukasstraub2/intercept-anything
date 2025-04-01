@@ -1,21 +1,22 @@
 CMAKE=cmake
 CTEST=ctest
+DIR=out
 
 .PHONY: clean check format
 
 all: compile
 
-build:
-	$(CMAKE) -B build
+$(DIR):
+	$(CMAKE) -B $(DIR)
 
-compile: build
-	$(MAKE) -C build
+compile: $(DIR)
+	$(MAKE) -C $(DIR)
 
 clean:
-	rm -rf build
+	rm -rf $(DIR)
 
-check: build
-	cd build && $(CTEST) -j4
+check: compile
+	cd $(DIR) && $(CTEST) -j4
 
 format:
 	find . -maxdepth 2 -type f -name '*.c' -print0 -or -name '*.h' -print0 | xargs -0 clang-format -i --style=file

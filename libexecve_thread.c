@@ -1,5 +1,5 @@
 
-#include "execve-thread.h"
+#include "execve_thread.h"
 #include <pthread.h>
 #include <semaphore.h>
 #include <assert.h>

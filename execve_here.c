@@ -2,7 +2,7 @@
 #include "common.h"
 
 #include "nolibc.h"
-#include "execve-thread.h"
+#include "execve_thread.h"
 #include "loader.h"
 #include "util.h"
 #include "trampo.h"

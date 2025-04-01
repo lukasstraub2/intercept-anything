@@ -38,11 +38,6 @@ static unsigned long handle_syscall(Context* ctx, SysArgs* args);
 static void start_text_init();
 static void page_size_init();
 
-__attribute__((weak)) const CallHandler* main_init(const CallHandler* bottom,
-                                                   int recursing) {
-    return bottom;
-}
-
 void intercept_init(int recursing, const char* exe) {
     size_t exe_len = strlen(exe) + 1;
 

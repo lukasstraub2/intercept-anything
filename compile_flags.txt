@@ -1,5 +1,0 @@
--nostdinc
--Iinclude
--Iinclude/nolibc
--Iinclude/linux-headers/x86_64/include
-

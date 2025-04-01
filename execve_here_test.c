@@ -2,7 +2,7 @@
 #include "common.h"
 
 #include "nolibc.h"
-#include "execve-thread.h"
+#include "execve_thread.h"
 
 int main(int argc, char** argv) {
     char* args[] = {"ls", NULL};

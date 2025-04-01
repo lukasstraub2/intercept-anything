@@ -1,7 +1,7 @@
 
 #include <stddef.h>
 #include <unistd.h>
-#include "execve-thread.h"
+#include "execve_thread.h"
 
 extern char** environ;
 

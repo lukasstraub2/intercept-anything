@@ -2,3 +2,7 @@ rootlink.*
 .qtc_clangd
 .gdb_history
 build
+.cache
+.cxx
+.gradle
+out
