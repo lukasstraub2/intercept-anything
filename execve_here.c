@@ -27,7 +27,7 @@ __attribute__((visibility("default"))) void _execve_here(const char* pathname,
     }
     argv_size += sizeof(char**);
 
-    for (char** p = envp; *p; p++) {
+    for (char** p = envp; envp && *p; p++) {
         envp_size += sizeof(char**);
         envp_strings += strlen(*p) + 1;
     }
@@ -75,7 +75,7 @@ __attribute__((visibility("default"))) void _execve_here(const char* pathname,
 
     assert(argv_ptr == envp_ptr);
 
-    for (char** p = envp; *p; p++) {
+    for (char** p = envp; envp && *p; p++) {
         size_t len = strlen(*p) + 1;
 
         char* string = string_ptr;
