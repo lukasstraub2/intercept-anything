@@ -1,7 +1,7 @@
-#include "common.h"
 
-#include "nolibc.h"
-#include "intercept.h"
+void abort();
+
+typedef struct CallHandler CallHandler;
 
 __attribute__((weak)) char __etext;
 __attribute__((weak)) char __start_signal_entry;

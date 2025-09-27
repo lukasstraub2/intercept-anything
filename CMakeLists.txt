@@ -52,56 +52,60 @@ set(FREESTANDING_CFLAGS -nostdinc)
 set(FREESTANDING_LDFLAGS -nostartfiles -nodefaultlibs -nostdlib ${LIBGCC})
 set(FREESTANDING_INCLUDE include/nolibc "include/linux-headers/${ARCH}/include")
 
-add_library(freestanding STATIC
-    loader.c mylock.c rmap.c tls.c intercept_seccomp.c util.c signalmanager.c workarounds.c execve_here.c stubs.c)
+add_library(freestanding OBJECT
+    loader.c mylock.c rmap.c tls.c intercept_seccomp.c util.c signalmanager.c workarounds.c execve_here.c)
 target_compile_options(freestanding PRIVATE ${FREESTANDING_CFLAGS})
 target_include_directories(freestanding PRIVATE ${FREESTANDING_INCLUDE})
 
+set(TOOLS_OBJS tools freestanding)
 add_library(tools INTERFACE)
 target_compile_options(tools INTERFACE ${FREESTANDING_CFLAGS})
 target_include_directories(tools INTERFACE ${FREESTANDING_INCLUDE})
 target_link_libraries(tools INTERFACE ${FREESTANDING_LDFLAGS})
-target_link_libraries(tools INTERFACE freestanding)
 
-add_library(static_tools STATIC loader_main.c)
-target_link_libraries(static_tools PUBLIC -Wl,--no-relax -Wl,-Ttext-segment,0xA0000000 -static)
-target_link_libraries(static_tools PUBLIC tools)
+add_library(loader_main OBJECT loader_main.c)
+target_link_libraries(loader_main PRIVATE tools)
 
-add_library(androidislinux_tools STATIC
+set(STATIC_TOOLS_OBJS static_tools ${TOOLS_OBJS} loader_main)
+add_library(static_tools INTERFACE)
+target_link_libraries(static_tools INTERFACE -Wl,--no-relax -Wl,-Ttext-segment,0xA0000000 -static)
+target_link_libraries(static_tools INTERFACE tools)
+
+add_library(androidislinux_tool OBJECT
     androidislinux_tool/androidislinux.c
     androidislinux_tool/noxattrs.c
     androidislinux_tool/rootshim.c
     androidislinux_tool/hardlinkshim.c
     androidislinux_tool/rootlink.c)
-target_link_libraries(androidislinux_tools PUBLIC static_tools)
+target_link_libraries(androidislinux_tool PRIVATE tools)
 
 add_executable(androidislinux androidislinux_tool/main.c)
-target_link_libraries(androidislinux PUBLIC androidislinux_tools)
+target_link_libraries(androidislinux PUBLIC androidislinux_tool ${STATIC_TOOLS_OBJS})
 
 add_executable(norootlink androidislinux_tool/norootlink.c)
-target_link_libraries(norootlink PUBLIC androidislinux_tools)
+target_link_libraries(norootlink PUBLIC androidislinux_tool ${STATIC_TOOLS_OBJS})
 
 add_executable(emulate_swap
     emulate_swap_tool/emulate_swap.c
     emulate_swap_tool/emulate_swap_main.c)
-target_link_libraries(emulate_swap PUBLIC static_tools)
+target_link_libraries(emulate_swap PUBLIC ${STATIC_TOOLS_OBJS})
 
-add_library(execve_thread SHARED libexecve_thread.c)
+add_library(execve_thread SHARED libexecve_thread.c stubs.c)
 target_link_libraries(execve_thread PRIVATE freestanding Threads)
 
 if(TARGET JNI)
-    add_library(execve_thread_jni SHARED libexecve_thread.c libexecve_thread_jni.c)
+    add_library(execve_thread_jni SHARED libexecve_thread.c libexecve_thread_jni.c stubs.c)
     target_link_libraries(execve_thread_jni PRIVATE freestanding Threads JNI)
 endif()
 
-add_executable(mylock_test mylock_test.c)
-target_link_libraries(mylock_test PRIVATE tools)
+add_executable(mylock_test mylock_test.c stubs.c)
+target_link_libraries(mylock_test PRIVATE ${TOOLS_OBJS})
 
-add_executable(rwlock_test rwlock_test.c)
-target_link_libraries(rwlock_test PRIVATE tools)
+add_executable(rwlock_test rwlock_test.c stubs.c)
+target_link_libraries(rwlock_test PRIVATE ${TOOLS_OBJS})
 
-add_executable(execve_here_test execve_here_test.c)
-target_link_libraries(execve_here_test PRIVATE tools)
+add_executable(execve_here_test execve_here_test.c stubs.c)
+target_link_libraries(execve_here_test PRIVATE ${TOOLS_OBJS})
 
 add_executable(execve_thread_test execve_thread_test.c)
 target_link_libraries(execve_thread_test PRIVATE execve_thread)
