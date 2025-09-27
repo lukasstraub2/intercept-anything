@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.13)
 
 project("intercept-anything"
     VERSION 1.0
-    LANGUAGES C ASM
+    LANGUAGES CXX
     HOMEPAGE_URL "https://github.com/lukasstraub2/intercept-anything")
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Android")
@@ -24,7 +24,7 @@ else()
     endif()
 endif()
 
-include(CheckCCompilerFlag)
+include(CheckCXXCompilerFlag)
 
 if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "^aarch64.*|^armv8.*")
     set(ARCH "aarch64")
@@ -34,36 +34,37 @@ else()
     message(FATAL_ERROR "Architecture not supported: ${CMAKE_SYSTEM_PROCESSOR}")
 endif()
 
-check_c_compiler_flag(-lgcc USE_LIBGCC)
+check_cxx_compiler_flag(-lgcc USE_LIBGCC)
 if(${USE_LIBGCC})
     set(LIBGCC -lgcc)
 else()
     set(LIBGCC -lcompiler_rt)
 endif()
 
-add_compile_options(-g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-stack-protector)
+add_compile_options(-g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-stack-protector -fpermissive)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 include_directories(include)
 set_property(GLOBAL PROPERTY C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set_property(DIRECTORY PROPERTY LANGUAGE CXX)
 
 set(FREESTANDING_CFLAGS -nostdinc)
 set(FREESTANDING_LDFLAGS -nostartfiles -nodefaultlibs -nostdlib ${LIBGCC})
 set(FREESTANDING_INCLUDE include/nolibc "include/linux-headers/${ARCH}/include")
 
 add_library(freestanding OBJECT
-    loader.c mylock.c rmap.c tls.c intercept_seccomp.c util.c signalmanager.c workarounds.c execve_here.c)
+    loader.cpp mylock.cpp rmap.cpp tls.cpp intercept_seccomp.cpp util.cpp signalmanager.cpp workarounds.cpp execve_here.cpp)
 target_compile_options(freestanding PRIVATE ${FREESTANDING_CFLAGS})
-target_include_directories(freestanding PRIVATE ${FREESTANDING_INCLUDE})
+target_include_directories(freestanding SYSTEM PRIVATE ${FREESTANDING_INCLUDE})
 
 set(TOOLS_OBJS tools freestanding)
 add_library(tools INTERFACE)
 target_compile_options(tools INTERFACE ${FREESTANDING_CFLAGS})
-target_include_directories(tools INTERFACE ${FREESTANDING_INCLUDE})
+target_include_directories(tools SYSTEM INTERFACE ${FREESTANDING_INCLUDE})
 target_link_libraries(tools INTERFACE ${FREESTANDING_LDFLAGS})
 
-add_library(loader_main OBJECT loader_main.c)
+add_library(loader_main OBJECT loader_main.cpp)
 target_link_libraries(loader_main PRIVATE tools)
 
 set(STATIC_TOOLS_OBJS static_tools ${TOOLS_OBJS} loader_main)
@@ -72,42 +73,42 @@ target_link_libraries(static_tools INTERFACE -Wl,--no-relax -Wl,-Ttext-segment,0
 target_link_libraries(static_tools INTERFACE tools)
 
 add_library(androidislinux_tool OBJECT
-    androidislinux_tool/androidislinux.c
-    androidislinux_tool/noxattrs.c
-    androidislinux_tool/rootshim.c
-    androidislinux_tool/hardlinkshim.c
-    androidislinux_tool/rootlink.c)
+    androidislinux_tool/androidislinux.cpp
+    androidislinux_tool/noxattrs.cpp
+    androidislinux_tool/rootshim.cpp
+    androidislinux_tool/hardlinkshim.cpp
+    androidislinux_tool/rootlink.cpp)
 target_link_libraries(androidislinux_tool PRIVATE tools)
 
-add_executable(androidislinux androidislinux_tool/main.c)
+add_executable(androidislinux androidislinux_tool/main.cpp)
 target_link_libraries(androidislinux PUBLIC androidislinux_tool ${STATIC_TOOLS_OBJS})
 
-add_executable(norootlink androidislinux_tool/norootlink.c)
+add_executable(norootlink androidislinux_tool/norootlink.cpp)
 target_link_libraries(norootlink PUBLIC androidislinux_tool ${STATIC_TOOLS_OBJS})
 
 add_executable(emulate_swap
-    emulate_swap_tool/emulate_swap.c
-    emulate_swap_tool/emulate_swap_main.c)
+    emulate_swap_tool/emulate_swap.cpp
+    emulate_swap_tool/emulate_swap_main.cpp)
 target_link_libraries(emulate_swap PUBLIC ${STATIC_TOOLS_OBJS})
 
-add_library(execve_thread SHARED libexecve_thread.c stubs.c)
+add_library(execve_thread SHARED libexecve_thread.cpp stubs.cpp)
 target_link_libraries(execve_thread PRIVATE freestanding Threads)
 
 if(TARGET JNI)
-    add_library(execve_thread_jni SHARED libexecve_thread.c libexecve_thread_jni.c stubs.c)
+    add_library(execve_thread_jni SHARED libexecve_thread.cpp libexecve_thread_jni.cpp stubs.cpp)
     target_link_libraries(execve_thread_jni PRIVATE freestanding Threads JNI)
 endif()
 
-add_executable(mylock_test mylock_test.c stubs.c)
+add_executable(mylock_test mylock_test.cpp stubs.cpp)
 target_link_libraries(mylock_test PRIVATE ${TOOLS_OBJS})
 
-add_executable(rwlock_test rwlock_test.c stubs.c)
+add_executable(rwlock_test rwlock_test.cpp stubs.cpp)
 target_link_libraries(rwlock_test PRIVATE ${TOOLS_OBJS})
 
-add_executable(execve_here_test execve_here_test.c stubs.c)
+add_executable(execve_here_test execve_here_test.cpp stubs.cpp)
 target_link_libraries(execve_here_test PRIVATE ${TOOLS_OBJS})
 
-add_executable(execve_thread_test execve_thread_test.c)
+add_executable(execve_thread_test execve_thread_test.cpp)
 target_link_libraries(execve_thread_test PRIVATE execve_thread)
 
 enable_testing()
