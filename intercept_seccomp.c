@@ -1512,7 +1512,7 @@ static int handle_accept4(Context* ctx,
     return ret.ret;
 }
 
-int handle_bind(Context* ctx, int fd, void* addr, int addrlen) {
+static int handle_bind(Context* ctx, int fd, void* addr, int addrlen) {
     trace("bind()\n");
 
     RetInt ret = {0};
@@ -1524,7 +1524,7 @@ int handle_bind(Context* ctx, int fd, void* addr, int addrlen) {
     return ret.ret;
 }
 
-int handle_connect(Context* ctx, int fd, void* addr, int addrlen) {
+static int handle_connect(Context* ctx, int fd, void* addr, int addrlen) {
     trace("connect()\n");
 
     RetInt ret = {0};
@@ -1580,7 +1580,7 @@ static int handle_inotify_add_watch(Context* ctx,
     return ret.ret;
 }
 
-int handle_getrlimit(Context* ctx, unsigned int resource, void* old_rlim) {
+static int handle_getrlimit(Context* ctx, unsigned int resource, void* old_rlim) {
     trace("getrlimit()\n");
 
     RetInt ret = {0};
@@ -1594,7 +1594,7 @@ int handle_getrlimit(Context* ctx, unsigned int resource, void* old_rlim) {
     return ret.ret;
 }
 
-int handle_setrlimit(Context* ctx,
+static int handle_setrlimit(Context* ctx,
                      unsigned int resource,
                      const void* new_rlim) {
     trace("setrlimit()\n");
@@ -1610,7 +1610,7 @@ int handle_setrlimit(Context* ctx,
     return ret.ret;
 }
 
-int handle_prlimit64(Context* ctx,
+static int handle_prlimit64(Context* ctx,
                      pid_t pid,
                      unsigned int resource,
                      const void* new_rlim,
@@ -1649,7 +1649,7 @@ static long handle_ptrace(Context* ctx,
     return ret.ret;
 }
 
-int handle_kill(Context* ctx, pid_t pid, int sig) {
+static int handle_kill(Context* ctx, pid_t pid, int sig) {
     trace("kill()\n");
 
     RetInt ret = {0};
