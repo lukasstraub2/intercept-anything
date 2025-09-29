@@ -83,6 +83,6 @@
     for ((var) = RLIST_FIRST((head));         \
          (var) && ((tvar) = RLIST_NEXT((var), field), 1); (var) = (tvar))
 
-#define RLIST_EMPTY(head) ((head)->slh_first == NULL)
+#define RLIST_EMPTY(head) ((head)->slh_first == nullptr)
 #define RLIST_FIRST(head) ((head)->slh_first)
 #define RLIST_NEXT(elm, field) ((elm)->field.sle_next)

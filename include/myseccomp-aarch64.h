@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "mynolibc.h"
 #include "myseccomp.h"
 
 #include <asm/sigcontext.h>

@@ -12,7 +12,6 @@ void signalmanager_sigsys_mask_until_sigreturn(Context* ctx);
 void signalmanager_sigsys_unmask(void* ucontext);
 const CallHandler* signalmanager_init(const CallHandler* next);
 
-typedef enum DefaultAction DefaultAction;
 enum DefaultAction {
     ACTION_CONT,
     ACTION_IGNORE,
@@ -21,6 +20,7 @@ enum DefaultAction {
     ACTION_CORE,
     ACTION_STOP_KILL
 };
+typedef enum DefaultAction DefaultAction;
 
 __attribute__((unused)) static DefaultAction default_action(int signum) {
     switch (signum) {

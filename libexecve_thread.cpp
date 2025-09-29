@@ -36,7 +36,7 @@ __attribute__((visibility("default"))) void execve_thread(const char* pathname,
     ret = sem_init(&data.sem, 0, 0);
     assert(ret == 0);
 
-    ret = pthread_create(&thread, NULL, start, &data);
+    ret = pthread_create(&thread, nullptr, start, &data);
     assert(ret == 0);
 
     sem_wait(&data.sem);

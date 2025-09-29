@@ -1,7 +1,6 @@
 
-#include "common.h"
+#include "mynolibc.h"
 
-#include "nolibc.h"
 #include "tls.h"
 
 int main(int argc, char** argv) {

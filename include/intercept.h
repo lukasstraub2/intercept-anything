@@ -1,23 +1,22 @@
 #pragma once
 
-#include "types.h"
+#include "mynolibc.h"
 #include "tls.h"
 #include "config.h"
 #include "myseccomp.h"
 
-typedef struct Context Context;
 struct Context {
     Tls* tls;
     void* ucontext;
     int signalmanager_masked;
 };
+typedef struct Context Context;
 
-typedef struct RetInt RetInt;
 struct RetInt {
     int ret;
 };
+typedef struct RetInt RetInt;
 
-typedef struct CallOpen CallOpen;
 struct CallOpen {
     int at;
     int dirfd;
@@ -26,6 +25,7 @@ struct CallOpen {
     mode_t mode;
     RetInt* ret;
 };
+typedef struct CallOpen CallOpen;
 
 __attribute__((unused)) static void callopen_copy(CallOpen* dst,
                                                   const CallOpen* call) {
@@ -41,7 +41,6 @@ __attribute__((unused)) static void callopen_copy(CallOpen* dst,
     dst->ret = call->ret;
 }
 
-typedef enum StatType StatType;
 enum StatType {
     STATTYPE_PLAIN = 0,
     STATTYPE_F,
@@ -49,11 +48,11 @@ enum StatType {
     STATTYPE_AT,
     STATTYPE_X
 };
+typedef enum StatType StatType;
 __attribute__((unused)) static int stattype_is_at(StatType type) {
     return type >= STATTYPE_AT;
 }
 
-typedef struct CallStat CallStat;
 struct CallStat {
     StatType type;
     int dirfd;
@@ -63,6 +62,7 @@ struct CallStat {
     void* statbuf;
     RetInt* ret;
 };
+typedef struct CallStat CallStat;
 
 __attribute__((unused)) static void callstat_copy(CallStat* dst,
                                                   const CallStat* call) {
@@ -87,12 +87,11 @@ __attribute__((unused)) static void callstat_copy(CallStat* dst,
     dst->ret = call->ret;
 }
 
-typedef struct RetSSize RetSSize;
 struct RetSSize {
     ssize_t ret;
 };
+typedef struct RetSSize RetSSize;
 
-typedef struct CallReadlink CallReadlink;
 struct CallReadlink {
     int at;
     int dirfd;
@@ -101,6 +100,7 @@ struct CallReadlink {
     size_t bufsiz;
     RetSSize* ret;
 };
+typedef struct CallReadlink CallReadlink;
 
 __attribute__((unused)) static void callreadlink_copy(
     CallReadlink* dst,
@@ -117,7 +117,6 @@ __attribute__((unused)) static void callreadlink_copy(
     dst->ret = call->ret;
 }
 
-typedef struct CallAccess CallAccess;
 struct CallAccess {
     int at;
     int dirfd;
@@ -125,6 +124,7 @@ struct CallAccess {
     int mode;
     RetInt* ret;
 };
+typedef struct CallAccess CallAccess;
 
 __attribute__((unused)) static void callaccess_copy(CallAccess* dst,
                                                     const CallAccess* call) {
@@ -139,7 +139,6 @@ __attribute__((unused)) static void callaccess_copy(CallAccess* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallExec CallExec;
 struct CallExec {
     int at;
     int final;
@@ -150,6 +149,7 @@ struct CallExec {
     int flags;
     RetInt* ret;
 };
+typedef struct CallExec CallExec;
 
 __attribute__((unused)) static void callexec_copy(CallExec* dst,
                                                   const CallExec* call) {
@@ -167,7 +167,6 @@ __attribute__((unused)) static void callexec_copy(CallExec* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallLink CallLink;
 struct CallLink {
     int at;
     int olddirfd;
@@ -177,6 +176,7 @@ struct CallLink {
     int flags;
     RetInt* ret;
 };
+typedef struct CallLink CallLink;
 
 __attribute__((unused)) static void calllink_copy(CallLink* dst,
                                                   const CallLink* call) {
@@ -193,7 +193,6 @@ __attribute__((unused)) static void calllink_copy(CallLink* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallUnlink CallUnlink;
 struct CallUnlink {
     int at;
     int dirfd;
@@ -201,6 +200,7 @@ struct CallUnlink {
     int flags;
     RetInt* ret;
 };
+typedef struct CallUnlink CallUnlink;
 
 __attribute__((unused)) static void callunlink_copy(CallUnlink* dst,
                                                     const CallUnlink* call) {
@@ -215,18 +215,17 @@ __attribute__((unused)) static void callunlink_copy(CallUnlink* dst,
     dst->ret = call->ret;
 }
 
-typedef enum XattrType XattrType;
 enum XattrType {
     XATTRTYPE_SET,
     XATTRTYPE_GET,
     XATTRTYPE_LIST,
     XATTRTYPE_REMOVE
 };
+typedef enum XattrType XattrType;
 
-typedef enum XattrType2 XattrType2;
 enum XattrType2 { XATTRTYPE_PLAIN, XATTRTYPE_L, XATTRTYPE_F };
+typedef enum XattrType2 XattrType2;
 
-typedef struct CallXattr CallXattr;
 struct CallXattr {
     XattrType type;
     XattrType2 type2;
@@ -245,6 +244,7 @@ struct CallXattr {
     int flags;
     RetSSize* ret;
 };
+typedef struct CallXattr CallXattr;
 
 __attribute__((unused)) static void callxattr_copy(CallXattr* dst,
                                                    const CallXattr* call) {
@@ -280,13 +280,13 @@ __attribute__((unused)) static void callxattr_copy(CallXattr* dst,
     dst->ret = call->ret;
 }
 
-typedef enum RenameType RenameType;
 enum RenameType { RENAMETYPE_PLAIN, RENAMETYPE_AT, RENAMETYPE_AT2 };
+typedef enum RenameType RenameType;
+
 __attribute__((unused)) static int renametype_is_at(RenameType type) {
     return type >= RENAMETYPE_AT;
 }
 
-typedef struct CallRename CallRename;
 struct CallRename {
     RenameType type;
     int olddirfd;
@@ -296,6 +296,7 @@ struct CallRename {
     unsigned int flags;
     RetInt* ret;
 };
+typedef struct CallRename CallRename;
 
 __attribute__((unused)) static void callrename_copy(CallRename* dst,
                                                     const CallRename* call) {
@@ -316,13 +317,13 @@ __attribute__((unused)) static void callrename_copy(CallRename* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallChdir CallChdir;
 struct CallChdir {
     int f;
     int fd;
     const char* path;
     RetInt* ret;
 };
+typedef struct CallChdir CallChdir;
 
 __attribute__((unused)) static void callchdir_copy(CallChdir* dst,
                                                    const CallChdir* call) {
@@ -335,18 +336,18 @@ __attribute__((unused)) static void callchdir_copy(CallChdir* dst,
     dst->ret = call->ret;
 }
 
-typedef enum ChmodType ChmodType;
 enum ChmodType {
     CHMODTYPE_PLAIN,
     CHMODTYPE_F,
     CHMODTYPE_AT,
 };
+typedef enum ChmodType ChmodType;
+
 __attribute__((unused)) static int chmodtype_is_at(ChmodType type) {
     return type == CHMODTYPE_AT;
 }
 
 // New structure for chmod calls
-typedef struct CallChmod CallChmod;
 struct CallChmod {
     ChmodType type;
     int fd;
@@ -355,6 +356,7 @@ struct CallChmod {
     mode_t mode;
     RetInt* ret;
 };
+typedef struct CallChmod CallChmod;
 
 __attribute__((unused)) static void callchmod_copy(CallChmod* dst,
                                                    const CallChmod* call) {
@@ -369,7 +371,6 @@ __attribute__((unused)) static void callchmod_copy(CallChmod* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallTruncate CallTruncate;
 struct CallTruncate {
     int f;
     int fd;
@@ -377,6 +378,7 @@ struct CallTruncate {
     off_t length;
     RetInt* ret;
 };
+typedef struct CallTruncate CallTruncate;
 
 __attribute__((unused)) static void calltruncate_copy(
     CallTruncate* dst,
@@ -391,7 +393,6 @@ __attribute__((unused)) static void calltruncate_copy(
     dst->ret = call->ret;
 }
 
-typedef struct CallMkdir CallMkdir;
 struct CallMkdir {
     int at;
     int dirfd;
@@ -399,6 +400,7 @@ struct CallMkdir {
     mode_t mode;
     RetInt* ret;
 };
+typedef struct CallMkdir CallMkdir;
 
 __attribute__((unused)) static void callmkdir_copy(CallMkdir* dst,
                                                    const CallMkdir* call) {
@@ -411,7 +413,6 @@ __attribute__((unused)) static void callmkdir_copy(CallMkdir* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallGetdents CallGetdents;
 struct CallGetdents {
     int is64;
     int fd;
@@ -419,6 +420,7 @@ struct CallGetdents {
     size_t count;
     RetSSize* ret;
 };
+typedef struct CallGetdents CallGetdents;
 
 __attribute__((unused)) static void callgetdents_copy(
     CallGetdents* dst,
@@ -430,7 +432,6 @@ __attribute__((unused)) static void callgetdents_copy(
     dst->ret = call->ret;
 }
 
-typedef struct CallMknod CallMknod;
 struct CallMknod {
     int at;     // Indicates if dirfd is used (1) or not (0)
     int dirfd;  // File descriptor of the directory (if at == 1)
@@ -439,6 +440,7 @@ struct CallMknod {
     unsigned int dev;  // Device number
     RetInt* ret;
 };
+typedef struct CallMknod CallMknod;
 
 __attribute__((unused)) static void callmknod_copy(CallMknod* dst,
                                                    const CallMknod* call) {
@@ -452,7 +454,6 @@ __attribute__((unused)) static void callmknod_copy(CallMknod* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallAccept CallAccept;
 struct CallAccept {
     int is4;
     int fd;
@@ -461,6 +462,7 @@ struct CallAccept {
     int flags;
     RetInt* ret;
 };
+typedef struct CallAccept CallAccept;
 
 __attribute__((unused)) static void callaccept_copy(CallAccept* dst,
                                                     const CallAccept* call) {
@@ -474,7 +476,6 @@ __attribute__((unused)) static void callaccept_copy(CallAccept* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallConnect CallConnect;
 struct CallConnect {
     int is_bind;
     int fd;
@@ -482,6 +483,7 @@ struct CallConnect {
     int addrlen;
     RetInt* ret;
 };
+typedef struct CallConnect CallConnect;
 
 __attribute__((unused)) static void callconnect_copy(CallConnect* dst,
                                                      const CallConnect* call) {
@@ -492,7 +494,6 @@ __attribute__((unused)) static void callconnect_copy(CallConnect* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallFanotifyMark CallFanotifyMark;
 struct CallFanotifyMark {
     int fd;
     unsigned int flags;
@@ -501,6 +502,7 @@ struct CallFanotifyMark {
     const char* path;
     RetInt* ret;
 };
+typedef struct CallFanotifyMark CallFanotifyMark;
 
 __attribute__((unused)) static void callfanotify_mark_copy(
     CallFanotifyMark* dst,
@@ -513,13 +515,13 @@ __attribute__((unused)) static void callfanotify_mark_copy(
     dst->ret = call->ret;
 }
 
-typedef struct CallInotifyAddWatch CallInotifyAddWatch;
 struct CallInotifyAddWatch {
     int fd;
     const char* path;
     __u32 mask;
     RetInt* ret;
 };
+typedef struct CallInotifyAddWatch CallInotifyAddWatch;
 
 __attribute__((unused)) static void callinotify_add_watch_copy(
     CallInotifyAddWatch* dst,
@@ -530,10 +532,9 @@ __attribute__((unused)) static void callinotify_add_watch_copy(
     dst->ret = call->ret;
 }
 
-typedef enum RlimitType RlimitType;
 enum RlimitType { RLIMITTYPE_GET, RLIMITTYPE_SET, RLIMITTYPE_PR };
+typedef enum RlimitType RlimitType;
 
-typedef struct CallRlimit CallRlimit;
 struct CallRlimit {
     RlimitType type;
     pid_t pid;
@@ -542,6 +543,7 @@ struct CallRlimit {
     void* old_rlim;
     RetInt* ret;
 };
+typedef struct CallRlimit CallRlimit;
 
 __attribute__((unused)) static void callrlimit_copy(CallRlimit* dst,
                                                     const CallRlimit* call) {
@@ -564,7 +566,6 @@ __attribute__((unused)) static void callrlimit_copy(CallRlimit* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallSigprocmask CallSigprocmask;
 struct CallSigprocmask {
     int how;
     const sigset_t* set;
@@ -572,8 +573,8 @@ struct CallSigprocmask {
     size_t sigsetsize;
     RetInt* ret;
 };
+typedef struct CallSigprocmask CallSigprocmask;
 
-typedef struct CallSigaction CallSigaction;
 struct CallSigaction {
     int signum;
     const struct sigaction* act;
@@ -581,13 +582,13 @@ struct CallSigaction {
     size_t sigsetsize;
     RetInt* ret;
 };
+typedef struct CallSigaction CallSigaction;
 
-typedef struct RetLong RetLong;
 struct RetLong {
     long ret;
 };
+typedef struct RetLong RetLong;
 
-typedef struct CallPtrace CallPtrace;
 struct CallPtrace {
     long request;
     long pid;
@@ -595,6 +596,7 @@ struct CallPtrace {
     void* data;
     RetLong* ret;
 };
+typedef struct CallPtrace CallPtrace;
 
 __attribute__((unused)) static void callptrace_copy(CallPtrace* dst,
                                                     const CallPtrace* call) {
@@ -605,12 +607,12 @@ __attribute__((unused)) static void callptrace_copy(CallPtrace* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallKill CallKill;
 struct CallKill {
     pid_t pid;
     int sig;
     RetInt* ret;
 };
+typedef struct CallKill CallKill;
 
 __attribute__((unused)) static void callkill_copy(CallKill* dst,
                                                   const CallKill* call) {
@@ -619,7 +621,6 @@ __attribute__((unused)) static void callkill_copy(CallKill* dst,
     dst->ret = call->ret;
 }
 
-typedef struct CallClose CallClose;
 struct CallClose {
     int is_range;
     unsigned int fd;
@@ -627,6 +628,7 @@ struct CallClose {
     unsigned int flags;   // Only used for close_range
     RetInt* ret;
 };
+typedef struct CallClose CallClose;
 
 __attribute__((unused)) static void callclose_copy(CallClose* dst,
                                                    const CallClose* call) {
@@ -639,18 +641,17 @@ __attribute__((unused)) static void callclose_copy(CallClose* dst,
     dst->ret = call->ret;
 }
 
-typedef struct RetUL RetUL;
 struct RetUL {
     unsigned long ret;
 };
+typedef struct RetUL RetUL;
 
-typedef struct CallMisc CallMisc;
 struct CallMisc {
     SysArgs args;
     RetUL* ret;
 };
+typedef struct CallMisc CallMisc;
 
-typedef struct CallMmap CallMmap;
 struct CallMmap {
     unsigned long addr;
     unsigned long len;
@@ -660,6 +661,7 @@ struct CallMmap {
     unsigned long off;
     RetUL* ret;
 };
+typedef struct CallMmap CallMmap;
 
 __attribute__((unused)) static void callmmap_copy(CallMmap* dst,
                                                   const CallMmap* call) {
@@ -673,68 +675,69 @@ __attribute__((unused)) static void callmmap_copy(CallMmap* dst,
 }
 
 typedef struct This This;
-typedef struct CallHandler CallHandler;
 
 // clang-format off
 struct CallHandler {
-	int (*open)(Context *ctx, const This *this, const CallOpen *call);
+	int (*open)(Context *ctx, const This *data, const CallOpen *call);
 	const This *open_next;
-	int (*stat)(Context *ctx, const This *this, const CallStat *call);
+	int (*stat)(Context *ctx, const This *data, const CallStat *call);
 	const This *stat_next;
-	ssize_t (*readlink)(Context *ctx, const This *this, const CallReadlink *call);
+	ssize_t (*readlink)(Context *ctx, const This *data, const CallReadlink *call);
 	const This *readlink_next;
-	int (*access)(Context *ctx, const This *this, const CallAccess *call);
+	int (*access)(Context *ctx, const This *data, const CallAccess *call);
 	const This *access_next;
-	int (*exec)(Context *ctx, const This *this, const CallExec *call);
+	int (*exec)(Context *ctx, const This *data, const CallExec *call);
 	const This *exec_next;
-	int (*link)(Context *ctx, const This *this, const CallLink *call);
+	int (*link)(Context *ctx, const This *data, const CallLink *call);
 	const This *link_next;
-	int (*symlink)(Context *ctx, const This *this, const CallLink *call);
+	int (*symlink)(Context *ctx, const This *data, const CallLink *call);
 	const This *symlink_next;
-	int (*unlink)(Context *ctx, const This *this, const CallUnlink *call);
+	int (*unlink)(Context *ctx, const This *data, const CallUnlink *call);
 	const This *unlink_next;
-	ssize_t (*xattr)(Context *ctx, const This *this, const CallXattr *call);
+	ssize_t (*xattr)(Context *ctx, const This *data, const CallXattr *call);
 	const This *xattr_next;
-	int (*rename)(Context *ctx, const This *this, const CallRename *call);
+	int (*rename)(Context *ctx, const This *data, const CallRename *call);
 	const This *rename_next;
-	int (*chdir)(Context *ctx, const This *this, const CallChdir *call);
+	int (*chdir)(Context *ctx, const This *data, const CallChdir *call);
 	const This *chdir_next;
-	int (*chmod)(Context *ctx, const This *this, const CallChmod *call);
+	int (*chmod)(Context *ctx, const This *data, const CallChmod *call);
 	const This *chmod_next;
-	int (*truncate)(Context *ctx, const This *this, const CallTruncate *call);
+	int (*truncate)(Context *ctx, const This *data, const CallTruncate *call);
 	const This *truncate_next;
-	int (*mkdir)(Context *ctx, const This *this, const CallMkdir *call);
+	int (*mkdir)(Context *ctx, const This *data, const CallMkdir *call);
 	const This *mkdir_next;
-	ssize_t (*getdents)(Context *ctx, const This *this, const CallGetdents *call);
+	ssize_t (*getdents)(Context *ctx, const This *data, const CallGetdents *call);
 	const This *getdents_next;
-	int (*mknod)(Context *ctx, const This *this, const CallMknod *call);
+	int (*mknod)(Context *ctx, const This *data, const CallMknod *call);
 	const This *mknod_next;
-	int (*accept)(Context *ctx, const This *this, const CallAccept *call);
+	int (*accept)(Context *ctx, const This *data, const CallAccept *call);
 	const This *accept_next;
-	int (*connect)(Context *ctx, const This *this, const CallConnect *call);
+	int (*connect)(Context *ctx, const This *data, const CallConnect *call);
 	const This *connect_next;
-	int (*fanotify_mark)(Context *ctx, const This *this, const CallFanotifyMark *call);
+	int (*fanotify_mark)(Context *ctx, const This *data, const CallFanotifyMark *call);
 	const This *fanotify_mark_next;
-	int (*inotify_add_watch)(Context *ctx, const This *this, const CallInotifyAddWatch *call);
+	int (*inotify_add_watch)(Context *ctx, const This *data, const CallInotifyAddWatch *call);
 	const This *inotify_add_watch_next;
-	int (*rlimit)(Context *ctx, const This *this, const CallRlimit *call);
+	int (*rlimit)(Context *ctx, const This *data, const CallRlimit *call);
 	const This *rlimit_next;
-	int (*sigprocmask)(Context *ctx, const This *this, const CallSigprocmask *call);
+	int (*sigprocmask)(Context *ctx, const This *data, const CallSigprocmask *call);
 	const This *sigprocmask_next;
-	int (*sigaction)(Context *ctx, const This *this, const CallSigaction *call);
+	int (*sigaction)(Context *ctx, const This *data, const CallSigaction *call);
 	const This *sigaction_next;
-	long (*ptrace)(Context *ctx, const This *this, const CallPtrace *call);
+	long (*ptrace)(Context *ctx, const This *data, const CallPtrace *call);
 	const This *ptrace_next;
-	int (*kill)(Context *ctx, const This *this, const CallKill *call);
+	int (*kill)(Context *ctx, const This *data, const CallKill *call);
 	const This *kill_next;
-	int (*close)(Context *ctx, const This *this, const CallClose *call);
+	int (*close)(Context *ctx, const This *data, const CallClose *call);
 	const This *close_next;
-	unsigned long (*misc)(Context *ctx, const This *this, const CallMisc *call);
+	unsigned long (*misc)(Context *ctx, const This *data, const CallMisc *call);
 	const This *misc_next;
-	unsigned long (*mmap)(Context *ctx, const This *this, const CallMmap *call);
+	unsigned long (*mmap)(Context *ctx, const This *data, const CallMmap *call);
 	const This *mmap_next;
 };
 // clang-format on
+
+typedef struct CallHandler CallHandler;
 
 extern const char* self_exe;
 extern size_t page_size;

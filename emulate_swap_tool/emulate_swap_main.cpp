@@ -1,6 +1,4 @@
 
-#include "common.h"
-
 #include "intercept.h"
 #include "emulate_swap.h"
 

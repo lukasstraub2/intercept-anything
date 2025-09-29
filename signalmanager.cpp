@@ -1,6 +1,5 @@
 
-#include "common.h"
-#include "nolibc.h"
+#include "mynolibc.h"
 
 #include "intercept.h"
 #include "util.h"
@@ -16,8 +15,8 @@
 #define DEBUG_ENV "DEBUG_SIGNAL"
 #include "debug.h"
 
-_Static_assert(sizeof(sigset_t) == 8, "sigset_t");
-_Static_assert(sizeof(sigset_t) == sizeof(long), "sigset_t");
+static_assert(sizeof(sigset_t) == 8, "sigset_t");
+static_assert(sizeof(sigset_t) == sizeof(long), "sigset_t");
 
 typedef union mysigset_t mysigset_t;
 union mysigset_t {
@@ -41,7 +40,7 @@ struct MySignal {
 };
 
 static RMap* map;
-static RobustMutex* mutex = NULL;
+static RobustMutex* mutex = nullptr;
 
 static void _signalmanager_clean_dead(Tls* tls) {
     assert(mutex_locked(tls, mutex));
@@ -51,7 +50,7 @@ static void _signalmanager_clean_dead(Tls* tls) {
         if (entry->id && is_pid_dead(entry->id)) {
             void* data = entry->data;
             if (data) {
-                WRITE_ONCE(entry->data, NULL);
+                WRITE_ONCE(entry->data, nullptr);
                 __asm volatile("" ::: "memory");
                 free(data);
             }
@@ -158,7 +157,7 @@ void signalmanager_please_callback(Tls* tls) {
 
 static void raise_unmasked(int signum) {
     int ret;
-    struct sigaction act = {0};
+    struct sigaction act = {};
     act.sa_handler = SIG_DFL;
     struct sigaction oldact;
     const mysigset_t empty = {.cast = 0};
@@ -177,12 +176,12 @@ static void raise_unmasked(int signum) {
 
     raise(signum);
 
-    ret = sys_rt_sigprocmask(SIG_SETMASK, &oldset, NULL, sizeof(sigset_t));
+    ret = sys_rt_sigprocmask(SIG_SETMASK, &oldset, nullptr, sizeof(sigset_t));
     if (ret < 0) {
         exit_error("rt_sigprocmask(oldset): %d", ret);
     }
 
-    ret = sys_rt_sigaction(signum, &oldact, NULL, sizeof(sigset_t));
+    ret = sys_rt_sigaction(signum, &oldact, nullptr, sizeof(sigset_t));
     if (ret < 0) {
         exit_error("rt_sigaction(%d): %d", signum, ret);
     }
@@ -248,7 +247,7 @@ generic_handler(int signum, siginfo_t* info, void* ucontext) {
         set.cast |= sa_mask.cast;
         set.cast &= full_mask.cast;
 
-        int ret = sys_rt_sigprocmask(SIG_SETMASK, &set.sigset, NULL,
+        int ret = sys_rt_sigprocmask(SIG_SETMASK, &set.sigset, nullptr,
                                      sizeof(sigset_t));
         if (ret < 0) {
             exit_error("rt_sigprocmask(uctx_set): %d", ret);
@@ -281,11 +280,11 @@ generic_handler(int signum, siginfo_t* info, void* ucontext) {
     if (pc_in_our_code(ucontext) && *_jumpbuf) {
         MyJumpbuf* jumpbuf = *_jumpbuf;
         __asm volatile("" ::: "memory");
-        WRITE_ONCE(*_jumpbuf, NULL);
+        WRITE_ONCE(*_jumpbuf, nullptr);
         __asm volatile("" ::: "memory");
 
-        int ret =
-            sys_rt_sigprocmask(SIG_SETMASK, uctx_set, NULL, sizeof(sigset_t));
+        int ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, nullptr,
+                                     sizeof(sigset_t));
         if (ret < 0) {
             exit_error("rt_sigprocmask(uctx_set): %d", ret);
         }
@@ -320,25 +319,25 @@ void signalmanager_sigsys_unmask(void* ucontext) {
     struct ucontext* uctx = (struct ucontext*)ucontext;
     sigset_t* uctx_set = &uctx->uc_sigmask;
 
-    ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, NULL, sizeof(sigset_t));
+    ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, nullptr, sizeof(sigset_t));
     if (ret < 0) {
         exit_error("rt_sigprocmask(uctx_set): %d", ret);
     }
 }
 
 static int signalmanager_sigprocmask(Context* ctx,
-                                     const This* this,
+                                     const This* sigmgmt,
                                      const CallSigprocmask* call) {
     RetInt* _ret = call->ret;
+    struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
+    sigset_t* _uctx_set = &uctx->uc_sigmask;
+    mysigset_t uctx_set = {.sigset = *_uctx_set};
+    mysigset_t set = {};
 
     if (call->sigsetsize != sizeof(sigset_t)) {
         _ret->ret = -EINVAL;
         goto out;
     }
-
-    struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
-    sigset_t* _uctx_set = &uctx->uc_sigmask;
-    mysigset_t uctx_set = {.sigset = *_uctx_set};
 
     if (!call->set) {
         _ret->ret = sys_rt_sigprocmask(call->how, call->set, call->oldset,
@@ -346,7 +345,7 @@ static int signalmanager_sigprocmask(Context* ctx,
         goto out;
     }
 
-    mysigset_t set = {.sigset = *call->set};
+    set = {.sigset = *call->set};
     set.cast &= full_mask.cast;
 
     signalmanager_sigsys_mask_until_sigreturn(ctx);
@@ -382,9 +381,11 @@ out:
 }
 
 static int signalmanager_sigaction(Context* ctx,
-                                   const This* this,
+                                   const This* sigmgmt,
                                    const CallSigaction* call) {
     RetInt* _ret = call->ret;
+    MySignal* mysignal = nullptr;
+    struct sigaction* mysig = nullptr;
 
     if (call->signum <= 0 || call->sigsetsize != sizeof(sigset_t)) {
         _ret->ret = -EINVAL;
@@ -393,8 +394,8 @@ static int signalmanager_sigaction(Context* ctx,
 
     mutex_lock(ctx->tls, mutex);
     signalmanager_sigsys_mask_until_sigreturn(ctx);
-    MySignal* mysignal = _get_mysignal(ctx->tls);
-    struct sigaction* mysig = get_mysignal(mysignal, call->signum);
+    mysignal = _get_mysignal(ctx->tls);
+    mysig = get_mysignal(mysignal, call->signum);
 
     if (call->oldact) {
         memcpy(call->oldact, mysig, sizeof(struct sigaction));
@@ -422,12 +423,12 @@ out:
 
 void signalmanager_install_sigsys(myhandler_t handler) {
     int ret;
-    struct sigaction sig = {0};
+    struct sigaction sig = {};
     sig.sa_handler = (void*)handler;
     sig.sa_mask = full_mask.sigset;
     sig.sa_flags = SA_NODEFER | SA_SIGINFO;
 
-    ret = sigaction(SIGSYS, &sig, NULL);
+    ret = sigaction(SIGSYS, &sig, nullptr);
     if (ret < 0) {
         exit_error("sigaction(): %d", -ret);
     }
@@ -474,23 +475,23 @@ static int install_generic_handler(int signum, const struct sigaction* act) {
         copy.sa_restorer = __restore_rt;
     }
 
-    return sys_rt_sigaction(signum, &copy, NULL, sizeof(sigset_t));
+    return sys_rt_sigaction(signum, &copy, nullptr, sizeof(sigset_t));
 }
 
 const CallHandler* signalmanager_init(const CallHandler* next) {
     static int initialized = 0;
-    static CallHandler this;
+    static CallHandler sigmgmt;
 
     if (initialized) {
-        return NULL;
+        return nullptr;
     }
     initialized = 1;
 
-    this = *next;
-    this.sigprocmask = signalmanager_sigprocmask;
-    this.sigprocmask_next = NULL;
-    this.sigaction = signalmanager_sigaction;
-    this.sigaction_next = NULL;
+    sigmgmt = *next;
+    sigmgmt.sigprocmask = signalmanager_sigprocmask;
+    sigmgmt.sigprocmask_next = nullptr;
+    sigmgmt.sigaction = signalmanager_sigaction;
+    sigmgmt.sigaction_next = nullptr;
 
     mutex = mutex_alloc();
     map = rmap_alloc(64);
@@ -501,7 +502,7 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
 
     for (int signum = 1; signum <= mysignal_size; signum++) {
         struct sigaction act;
-        long ret = sys_rt_sigaction(signum, NULL, &act, sizeof(sigset_t));
+        long ret = sys_rt_sigaction(signum, nullptr, &act, sizeof(sigset_t));
         if (ret < 0) {
             exit_error("rt_sigaction(): %ld", -ret);
         }
@@ -510,7 +511,7 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
 
     mysigset_t unblock = {.cast = full_mask.cast};
     unblock.cast = ~unblock.cast;
-    int ret = sys_rt_sigprocmask(SIG_UNBLOCK, &unblock.sigset, NULL,
+    int ret = sys_rt_sigprocmask(SIG_UNBLOCK, &unblock.sigset, nullptr,
                                  sizeof(sigset_t));
     if (ret < 0) {
         exit_error("rt_sigprocmask(): %d", -ret);
@@ -529,5 +530,5 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
     }
     mutex_unlock(tls, mutex);
 
-    return &this;
+    return &sigmgmt;
 }

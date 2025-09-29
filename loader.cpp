@@ -24,9 +24,8 @@
  * SOFTWARE.
  */
 
-#include "common.h"
+#include "mynolibc.h"
 
-#include "nolibc.h"
 #include "loader.h"
 #include "mprotect.h"
 #include "trampo.h"
@@ -80,7 +79,7 @@ static unsigned long loadelf_anon(int fd, Elf_Ehdr* ehdr, Elf_Phdr* phdr) {
     maxva = ROUND_PG(maxva);
 
     /* For dynamic ELF let the kernel chose the address. */
-    hint = dyn ? NULL : (void*)minva;
+    hint = dyn ? nullptr : (void*)minva;
 
     /* Check that we can hold the whole image. */
     base = sys_mmap(hint, maxva - minva, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS,
@@ -128,7 +127,7 @@ int load_file(struct LoaderInfo* info, const char* file) {
     Elf_Ehdr* ehdr = info->ehdrs;
     unsigned long* base = info->base;
     unsigned long* entry = info->entry;
-    info->elf_interp = NULL;
+    info->elf_interp = nullptr;
     Elf_Phdr *phdr, *iter;
     ssize_t sz;
     int fd, i;
@@ -172,7 +171,7 @@ int load_file(struct LoaderInfo* info, const char* file) {
             file = info->elf_interp;
         }
         /* Looks like the ELF is static -- leave the loop. */
-        if (info->elf_interp == NULL)
+        if (info->elf_interp == nullptr)
             break;
 
         sys_close(fd);

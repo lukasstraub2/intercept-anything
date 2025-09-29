@@ -1,8 +1,7 @@
 
-#include "common.h"
+#include "mynolibc.h"
 
 #include "util.h"
-#include "nolibc.h"
 #include "tls.h"
 #include "mysys.h"
 
@@ -24,10 +23,10 @@ void randchar6(char* buf) {
     }
 }
 
-int mkostemp(char* template, int flags, mode_t mode) {
+int mkostemp(char* templ, int flags, mode_t mode) {
     int ret;
-    size_t len = strlen(template);
-    char* xxxxxx = template + len - 6;
+    size_t len = strlen(templ);
+    char* xxxxxx = templ + len - 6;
 
     for (int i = 0; i < 6; i++) {
         if (xxxxxx[i] != 'X') {
@@ -37,7 +36,7 @@ int mkostemp(char* template, int flags, mode_t mode) {
 
     while (1) {
         randchar6(xxxxxx);
-        ret = sys_open(template, flags | O_RDWR | O_CREAT | O_EXCL, mode);
+        ret = sys_open(templ, flags | O_RDWR | O_CREAT | O_EXCL, mode);
         if (ret < 0) {
             if (ret == -EEXIST) {
                 continue;
@@ -318,9 +317,9 @@ ssize_t concatat(Cache* cache,
 
     if (!out) {
         if (dirfd == AT_FDCWD) {
-            ret = getcwd_cache(cache, NULL, 0);
+            ret = getcwd_cache(cache, nullptr, 0);
         } else {
-            ret = readlink_cache(cache, NULL, 0, AT_FDCWD, fd_path);
+            ret = readlink_cache(cache, nullptr, 0, AT_FDCWD, fd_path);
         }
         if (ret < 0) {
             if (ret == -ENOENT) {

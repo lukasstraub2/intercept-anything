@@ -1,6 +1,5 @@
 
-#include "common.h"
-#include "nolibc.h"
+#include "mynolibc.h"
 
 #include "tls.h"
 #include "mylock.h"
@@ -8,9 +7,9 @@
 #include "rmap.h"
 #include "mysys.h"
 
-_Static_assert(sizeof(Spinlock) >= sizeof(pid_t), "pid_t > Spinlock");
+static_assert(sizeof(Spinlock) >= sizeof(pid_t), "pid_t > Spinlock");
 
-RMap* map = NULL;
+RMap* map = nullptr;
 
 RMapEntry* tls_search_binary(const uint32_t tid) {
     return rmap_search_binary(map, tid);
@@ -22,7 +21,7 @@ void tls_clean_dead() {
         if (entry->id && is_tid_dead(entry->id)) {
             void* data = entry->data;
             if (data) {
-                WRITE_ONCE(entry->data, NULL);
+                WRITE_ONCE(entry->data, nullptr);
                 __asm volatile("" ::: "memory");
                 free(data);
             }
@@ -69,7 +68,7 @@ Tls* _tls_get_noalloc(const uint32_t tid) {
         return tls_alloc(tls, tid);
     }
 
-    return NULL;
+    return nullptr;
 }
 
 Tls* _tls_get(const uint32_t tid) {
@@ -86,7 +85,7 @@ Tls* _tls_get(const uint32_t tid) {
     }
 
     abort();
-    return NULL;
+    return nullptr;
 }
 
 void _tls_free(const uint32_t tid) {

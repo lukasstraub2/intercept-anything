@@ -1,7 +1,6 @@
 
-#include "common.h"
+#include "mynolibc.h"
 
-#include "nolibc.h"
 #include "mysignal.h"
 #include "myseccomp.h"
 #include "mysys.h"
@@ -13,20 +12,19 @@
 #include "tls.h"
 #include "util.h"
 
-#include <asm/siginfo.h>
+#include "asm/siginfo.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
 
-#include <linux/audit.h>
-#include <linux/bpf.h>
-#include <linux/filter.h>
-#include <linux/seccomp.h>
+#include "linux/audit.h"
+#include "linux/bpf.h"
+#include "linux/filter.h"
+#include "linux/seccomp.h"
 
 static int initialized = 0;
 
-static const CallHandler bottom;
-static const CallHandler* _next = NULL;
+static const CallHandler* _next = nullptr;
 
 static char _self_exe[SCRATCH_SIZE];
 const char* self_exe = _self_exe;
@@ -37,34 +35,6 @@ static void handler(int sig, siginfo_t* info, void* ucontext);
 static unsigned long handle_syscall(Context* ctx, SysArgs* args);
 static void start_text_init();
 static void page_size_init();
-
-void intercept_init(int recursing, const char* exe) {
-    size_t exe_len = strlen(exe) + 1;
-
-    if (initialized) {
-        return;
-    }
-    initialized = 1;
-
-    if (exe_len > SCRATCH_SIZE) {
-        abort();
-    }
-    memcpy(_self_exe, exe, exe_len);
-
-    tls_init();
-    mutex_init();
-    page_size_init();
-    start_text_init();
-
-    const CallHandler* signalmanager = signalmanager_init(&bottom);
-    _next = main_init(signalmanager, recursing);
-
-    signalmanager_install_sigsys(handler);
-
-    if (!recursing) {
-        install_filter();
-    }
-}
 
 __attribute__((noinline)) static void __handler(Tls* tls,
                                                 int sig,
@@ -87,7 +57,7 @@ __attribute__((noinline, section("signal_entry"))) static int _handler(
     int sig,
     siginfo_t* info,
     void* ucontext) {
-    MyJumpbuf jumpbuf = {JUMPBUF_MAGIC, {0}};
+    MyJumpbuf jumpbuf = {JUMPBUF_MAGIC, {}};
 
     if (__builtin_setjmp(jumpbuf.jumpbuf)) {
         return 1;
@@ -99,7 +69,7 @@ __attribute__((noinline, section("signal_entry"))) static int _handler(
     __handler(tls, sig, info, ucontext);
 
     __asm volatile("" ::: "memory");
-    WRITE_ONCE(*_jumpbuf, NULL);
+    WRITE_ONCE(*_jumpbuf, nullptr);
     __asm volatile("" ::: "memory");
 
     return 0;
@@ -153,7 +123,7 @@ static void page_size_init() {
     for (int i = 0; i < (int)(sizeof(sizes) / sizeof(sizes[0])); i++) {
         size = sizes[i];
         unsigned long ret = (unsigned long)sys_mmap(
-            NULL, size, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+            nullptr, size, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
         if (ret >= -4095UL) {
             continue;
         }
@@ -424,7 +394,7 @@ static void debug_exec(const char* pathname,
                        char* const envp[]) {
     int64_t i;
 
-    trace(": recurse execve(%s, [ ", pathname ? pathname : "NULL");
+    trace(": recurse execve(%s, [ ", pathname ? pathname : "nullptr");
 
     for (i = 0; argv[i]; i++) {
         trace("%s, ", argv[i]);
@@ -477,7 +447,7 @@ static const char* or_null(const char* str) {
     if (str) {
         return str;
     } else {
-        return "NULL";
+        return "nullptr";
     }
 }
 
@@ -521,7 +491,7 @@ int loader_open(const char* path, int flags, mode_t mode) {
         return sys_open(path, flags, mode);
     }
 
-    Context ctx = {tls_get(), NULL, 0};
+    Context ctx = {tls_get(), nullptr, 0};
     return handle_openat(&ctx, AT_FDCWD, path, flags, mode);
 }
 
@@ -588,8 +558,8 @@ static int handle_newfstatat(Context* ctx,
     CallStat call = {.type = STATTYPE_AT,
                      .dirfd = dirfd,
                      .path = path,
-                     .statbuf = statbuf,
                      .flags = flags,
+                     .statbuf = statbuf,
                      .ret = &ret};
 
     _next->stat(ctx, _next->stat_next, &call);
@@ -635,7 +605,7 @@ __attribute__((unused)) static ssize_t handle_readlink(Context* ctx,
         return -EFAULT;
     }
     // Not a symlink: -EINVAL
-    // buf NULL: -EFAULT
+    // buf nullptr: -EFAULT
 
     RetSSize ret = {0};
     CallReadlink call = {
@@ -1580,7 +1550,9 @@ static int handle_inotify_add_watch(Context* ctx,
     return ret.ret;
 }
 
-static int handle_getrlimit(Context* ctx, unsigned int resource, void* old_rlim) {
+static int handle_getrlimit(Context* ctx,
+                            unsigned int resource,
+                            void* old_rlim) {
     trace("getrlimit()\n");
 
     RetInt ret = {0};
@@ -1595,8 +1567,8 @@ static int handle_getrlimit(Context* ctx, unsigned int resource, void* old_rlim)
 }
 
 static int handle_setrlimit(Context* ctx,
-                     unsigned int resource,
-                     const void* new_rlim) {
+                            unsigned int resource,
+                            const void* new_rlim) {
     trace("setrlimit()\n");
 
     RetInt ret = {0};
@@ -1611,10 +1583,10 @@ static int handle_setrlimit(Context* ctx,
 }
 
 static int handle_prlimit64(Context* ctx,
-                     pid_t pid,
-                     unsigned int resource,
-                     const void* new_rlim,
-                     void* old_rlim) {
+                            pid_t pid,
+                            unsigned int resource,
+                            const void* new_rlim,
+                            void* old_rlim) {
     trace("prlimit64()\n");
 
     RetInt ret = {0};
@@ -2080,7 +2052,7 @@ static unsigned long handle_syscall(Context* ctx, SysArgs* args) {
     return ret;
 }
 
-static int bottom_open(Context* ctx, const This* this, const CallOpen* call) {
+static int bottom_open(Context* ctx, const This* data, const CallOpen* call) {
     int ret;
     RetInt* _ret = call->ret;
 
@@ -2095,7 +2067,7 @@ static int bottom_open(Context* ctx, const This* this, const CallOpen* call) {
     return ret;
 }
 
-static int bottom_stat(Context* ctx, const This* this, const CallStat* call) {
+static int bottom_stat(Context* ctx, const This* data, const CallStat* call) {
     int ret;
     RetInt* _ret = call->ret;
 
@@ -2133,7 +2105,7 @@ static int bottom_stat(Context* ctx, const This* this, const CallStat* call) {
 }
 
 static ssize_t bottom_readlink(Context* ctx,
-                               const This* this,
+                               const This* data,
                                const CallReadlink* call) {
     ssize_t ret;
     RetSSize* _ret = call->ret;
@@ -2150,7 +2122,7 @@ static ssize_t bottom_readlink(Context* ctx,
 }
 
 static int bottom_access(Context* ctx,
-                         const This* this,
+                         const This* data,
                          const CallAccess* call) {
     int ret;
     RetInt* _ret = call->ret;
@@ -2166,7 +2138,7 @@ static int bottom_access(Context* ctx,
     return ret;
 }
 
-static int _bottom_exec(Context* ctx, const This* this, CallExec* call) {
+static int _bottom_exec(Context* ctx, const This* data, CallExec* call) {
     ssize_t ret;
     int64_t argc;
     int dirfd = (call->at ? call->dirfd : AT_FDCWD);
@@ -2176,7 +2148,7 @@ static int _bottom_exec(Context* ctx, const This* this, CallExec* call) {
         return -E2BIG;
     }
 
-    ret = concatat(&ctx->tls->cache, NULL, 0, dirfd, call->path);
+    ret = concatat(&ctx->tls->cache, nullptr, 0, dirfd, call->path);
     if (ret < 0) {
         return ret;
     }
@@ -2200,14 +2172,14 @@ static int _bottom_exec(Context* ctx, const This* this, CallExec* call) {
     if (argc > 1) {
         array_copy(new_argv + 2, call->argv + 1, argc);
     } else {
-        new_argv[2] = NULL;
+        new_argv[2] = nullptr;
     }
     call->path = "/proc/self/exe";
     call->argv = new_argv;
 
     // TODO: What if execve fails?
     thread_exit_exec(ctx->tls);
-    ctx->tls = NULL;
+    ctx->tls = nullptr;
 
     ret = sys_execve(call->path, call->argv, call->envp);
 
@@ -2275,7 +2247,7 @@ static int open_fullpath_execveat(Context* ctx, const CallExec* call) {
     int flags = 0;
     int dirfd = (call->at ? call->dirfd : AT_FDCWD);
 
-    ret = concatat(&ctx->tls->cache, NULL, 0, dirfd, call->path);
+    ret = concatat(&ctx->tls->cache, nullptr, 0, dirfd, call->path);
     if (ret < 0) {
         return ret;
     }
@@ -2309,7 +2281,7 @@ static int open_fullpath_execveat(Context* ctx, const CallExec* call) {
     return ret;
 }
 
-static int bottom_exec(Context* ctx, const This* this, const CallExec* call) {
+static int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
     int fd;
     ssize_t ret, size;
     RetInt* _ret = call->ret;
@@ -2323,7 +2295,7 @@ static int bottom_exec(Context* ctx, const This* this, const CallExec* call) {
     }
 
     if (call->final) {
-        return _bottom_exec(ctx, this, &_call);
+        return _bottom_exec(ctx, data, &_call);
     }
 
     exec_argc = array_len(call->argv);
@@ -2339,7 +2311,7 @@ static int bottom_exec(Context* ctx, const This* this, const CallExec* call) {
     }
     fd = ret;
 
-    ret = read_header(NULL, 0, fd);
+    ret = read_header(nullptr, 0, fd);
     if (ret < 0) {
         _ret->ret = ret;
         sys_close(fd);
@@ -2369,7 +2341,7 @@ static int bottom_exec(Context* ctx, const This* this, const CallExec* call) {
         cmdline_extract(header, size, argv);
         array_copy(argv + sh_argc, call->argv, exec_argc);
         argv[sh_argc] = (char*)call->path;
-        argv[argc] = NULL;
+        argv[argc] = nullptr;
         const char* pathname = argv[0];
 
         debug_exec(pathname, argv, call->envp);
@@ -2391,7 +2363,7 @@ static int bottom_exec(Context* ctx, const This* this, const CallExec* call) {
     return _ret->ret;
 }
 
-static int bottom_link(Context* ctx, const This* this, const CallLink* call) {
+static int bottom_link(Context* ctx, const This* data, const CallLink* call) {
     int ret;
     RetInt* _ret = call->ret;
 
@@ -2408,7 +2380,7 @@ static int bottom_link(Context* ctx, const This* this, const CallLink* call) {
 }
 
 static int bottom_symlink(Context* ctx,
-                          const This* this,
+                          const This* data,
                           const CallLink* call) {
     int ret;
 
@@ -2424,7 +2396,7 @@ static int bottom_symlink(Context* ctx,
 }
 
 static int bottom_unlink(Context* ctx,
-                         const This* this,
+                         const This* data,
                          const CallUnlink* call) {
     int ret;
 
@@ -2440,7 +2412,7 @@ static int bottom_unlink(Context* ctx,
 }
 
 static int bottom_setxattr(Context* ctx,
-                           const This* this,
+                           const This* data,
                            const CallXattr* call) {
     int ret;
 
@@ -2470,7 +2442,7 @@ static int bottom_setxattr(Context* ctx,
 }
 
 static ssize_t bottom_getxattr(Context* ctx,
-                               const This* this,
+                               const This* data,
                                const CallXattr* call) {
     ssize_t ret;
 
@@ -2498,7 +2470,7 @@ static ssize_t bottom_getxattr(Context* ctx,
 }
 
 static ssize_t bottom_listxattr(Context* ctx,
-                                const This* this,
+                                const This* data,
                                 const CallXattr* call) {
     ssize_t ret;
 
@@ -2525,7 +2497,7 @@ static ssize_t bottom_listxattr(Context* ctx,
 }
 
 static int bottom_removexattr(Context* ctx,
-                              const This* this,
+                              const This* data,
                               const CallXattr* call) {
     int ret;
 
@@ -2552,24 +2524,24 @@ static int bottom_removexattr(Context* ctx,
 }
 
 static ssize_t bottom_xattr(Context* ctx,
-                            const This* this,
+                            const This* data,
                             const CallXattr* call) {
     signalmanager_sigsys_mask_until_sigreturn(ctx);
     switch (call->type) {
         case XATTRTYPE_SET:
-            return bottom_setxattr(ctx, this, call);
+            return bottom_setxattr(ctx, data, call);
             break;
 
         case XATTRTYPE_GET:
-            return bottom_getxattr(ctx, this, call);
+            return bottom_getxattr(ctx, data, call);
             break;
 
         case XATTRTYPE_LIST:
-            return bottom_listxattr(ctx, this, call);
+            return bottom_listxattr(ctx, data, call);
             break;
 
         case XATTRTYPE_REMOVE:
-            return bottom_removexattr(ctx, this, call);
+            return bottom_removexattr(ctx, data, call);
             break;
 
         default:
@@ -2579,7 +2551,7 @@ static ssize_t bottom_xattr(Context* ctx,
 }
 
 static int bottom_rename(Context* ctx,
-                         const This* this,
+                         const This* data,
                          const CallRename* call) {
     int ret;
 
@@ -2608,7 +2580,7 @@ static int bottom_rename(Context* ctx,
     return ret;
 }
 
-static int bottom_chdir(Context* ctx, const This* this, const CallChdir* call) {
+static int bottom_chdir(Context* ctx, const This* data, const CallChdir* call) {
     int ret;
     RetInt* _ret = call->ret;
 
@@ -2623,7 +2595,7 @@ static int bottom_chdir(Context* ctx, const This* this, const CallChdir* call) {
     return ret;
 }
 
-static int bottom_chmod(Context* ctx, const This* this, const CallChmod* call) {
+static int bottom_chmod(Context* ctx, const This* data, const CallChmod* call) {
     int ret;
     RetInt* _ret = call->ret;
 
@@ -2651,7 +2623,7 @@ static int bottom_chmod(Context* ctx, const This* this, const CallChmod* call) {
 }
 
 static int bottom_truncate(Context* ctx,
-                           const This* this,
+                           const This* data,
                            const CallTruncate* call) {
     int ret;
     RetInt* _ret = call->ret;
@@ -2667,7 +2639,7 @@ static int bottom_truncate(Context* ctx,
     return ret;
 }
 
-static int bottom_mkdir(Context* ctx, const This* this, const CallMkdir* call) {
+static int bottom_mkdir(Context* ctx, const This* data, const CallMkdir* call) {
     int ret;
     RetInt* _ret = call->ret;
 
@@ -2683,7 +2655,7 @@ static int bottom_mkdir(Context* ctx, const This* this, const CallMkdir* call) {
 }
 
 static ssize_t bottom_getdents(Context* ctx,
-                               const This* this,
+                               const This* data,
                                const CallGetdents* call) {
     ssize_t ret;
     RetSSize* _ret = call->ret;
@@ -2699,7 +2671,7 @@ static ssize_t bottom_getdents(Context* ctx,
     return ret;
 }
 
-static int bottom_mknod(Context* ctx, const This* this, const CallMknod* call) {
+static int bottom_mknod(Context* ctx, const This* data, const CallMknod* call) {
     int ret;
     RetInt* _ret = call->ret;
 
@@ -2715,7 +2687,7 @@ static int bottom_mknod(Context* ctx, const This* this, const CallMknod* call) {
 }
 
 static int bottom_accept(Context* ctx,
-                         const This* this,
+                         const This* data,
                          const CallAccept* call) {
     int ret;
     RetInt* _ret = call->ret;
@@ -2732,7 +2704,7 @@ static int bottom_accept(Context* ctx,
 }
 
 static int bottom_connect(Context* ctx,
-                          const This* this,
+                          const This* data,
                           const CallConnect* call) {
     int ret;
     RetInt* _ret = call->ret;
@@ -2749,7 +2721,7 @@ static int bottom_connect(Context* ctx,
 }
 
 static int bottom_fanotify_mark(Context* ctx,
-                                const This* this,
+                                const This* data,
                                 const CallFanotifyMark* call) {
     int ret;
     RetInt* _ret = call->ret;
@@ -2763,7 +2735,7 @@ static int bottom_fanotify_mark(Context* ctx,
 }
 
 static int bottom_inotify_add_watch(Context* ctx,
-                                    const This* this,
+                                    const This* data,
                                     const CallInotifyAddWatch* call) {
     int ret;
     RetInt* _ret = call->ret;
@@ -2776,7 +2748,7 @@ static int bottom_inotify_add_watch(Context* ctx,
 }
 
 static int bottom_rlimit(Context* ctx,
-                         const This* this,
+                         const This* data,
                          const CallRlimit* call) {
     int ret;
     RetInt* _ret = call->ret;
@@ -2806,7 +2778,7 @@ static int bottom_rlimit(Context* ctx,
 }
 
 static long bottom_ptrace(Context* ctx,
-                          const This* this,
+                          const This* data,
                           const CallPtrace* call) {
     long ret;
     RetLong* _ret = call->ret;
@@ -2818,7 +2790,7 @@ static long bottom_ptrace(Context* ctx,
     return ret;
 }
 
-static int bottom_kill(Context* ctx, const This* this, const CallKill* call) {
+static int bottom_kill(Context* ctx, const This* data, const CallKill* call) {
     int ret;
     RetInt* _ret = call->ret;
 
@@ -2829,7 +2801,7 @@ static int bottom_kill(Context* ctx, const This* this, const CallKill* call) {
     return ret;
 }
 
-static int bottom_close(Context* ctx, const This* this, const CallClose* call) {
+static int bottom_close(Context* ctx, const This* data, const CallClose* call) {
     int ret;
 
     signalmanager_sigsys_mask_until_sigreturn(ctx);
@@ -2844,7 +2816,7 @@ static int bottom_close(Context* ctx, const This* this, const CallClose* call) {
 }
 
 static unsigned long bottom_misc(Context* ctx,
-                                 const This* this,
+                                 const This* data,
                                  const CallMisc* call) {
     debug("Unhandled syscall no. %lu\n", call->args.num);
 
@@ -2853,7 +2825,7 @@ static unsigned long bottom_misc(Context* ctx,
 }
 
 static unsigned long bottom_mmap(Context* ctx,
-                                 const This* this,
+                                 const This* data,
                                  const CallMmap* call) {
     unsigned long ret;
     RetUL* _ret = call->ret;
@@ -2868,59 +2840,87 @@ static unsigned long bottom_mmap(Context* ctx,
 
 static const CallHandler bottom = {
     bottom_open,
-    NULL,
+    nullptr,
     bottom_stat,
-    NULL,
+    nullptr,
     bottom_readlink,
-    NULL,
+    nullptr,
     bottom_access,
-    NULL,
+    nullptr,
     bottom_exec,
-    NULL,
+    nullptr,
     bottom_link,
-    NULL,
+    nullptr,
     bottom_symlink,
-    NULL,
+    nullptr,
     bottom_unlink,
-    NULL,
+    nullptr,
     bottom_xattr,
-    NULL,
+    nullptr,
     bottom_rename,
-    NULL,
+    nullptr,
     bottom_chdir,
-    NULL,
+    nullptr,
     bottom_chmod,
-    NULL,
+    nullptr,
     bottom_truncate,
-    NULL,
+    nullptr,
     bottom_mkdir,
-    NULL,
+    nullptr,
     bottom_getdents,
-    NULL,
+    nullptr,
     bottom_mknod,
-    NULL,
+    nullptr,
     bottom_accept,
-    NULL,
+    nullptr,
     bottom_connect,
-    NULL,
+    nullptr,
     bottom_fanotify_mark,
-    NULL,
+    nullptr,
     bottom_inotify_add_watch,
-    NULL,
+    nullptr,
     bottom_rlimit,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
     bottom_ptrace,
-    NULL,
+    nullptr,
     bottom_kill,
-    NULL,
+    nullptr,
     bottom_close,
-    NULL,
+    nullptr,
     bottom_misc,
-    NULL,
+    nullptr,
     bottom_mmap,
-    NULL,
+    nullptr,
 };
+
+void intercept_init(int recursing, const char* exe) {
+    size_t exe_len = strlen(exe) + 1;
+
+    if (initialized) {
+        return;
+    }
+    initialized = 1;
+
+    if (exe_len > SCRATCH_SIZE) {
+        abort();
+    }
+    memcpy(_self_exe, exe, exe_len);
+
+    tls_init();
+    mutex_init();
+    page_size_init();
+    start_text_init();
+
+    const CallHandler* signalmanager = signalmanager_init(&bottom);
+    _next = main_init(signalmanager, recursing);
+
+    signalmanager_install_sigsys(handler);
+
+    if (!recursing) {
+        install_filter();
+    }
+}

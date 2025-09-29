@@ -1,7 +1,6 @@
 
-#include "common.h"
+#include "mynolibc.h"
 
-#include "nolibc.h"
 #include "emulate_swap.h"
 #include "intercept.h"
 #include "signalmanager.h"
@@ -33,7 +32,7 @@ static int mktemp(unsigned long size) {
 }
 
 static unsigned long emulate_swap_mmap(Context* ctx,
-                                       const This* this,
+                                       const This* swap,
                                        const CallMmap* call) {
     unsigned long ret;
     RetUL* _ret = call->ret;
@@ -65,16 +64,16 @@ static unsigned long emulate_swap_mmap(Context* ctx,
 
 const CallHandler* emulate_swap_init(const CallHandler* next) {
     static int initialized = 0;
-    static CallHandler this;
+    static CallHandler swap;
 
     if (initialized) {
-        return NULL;
+        return nullptr;
     }
     initialized = 1;
 
-    this = *next;
-    this.mmap = emulate_swap_mmap;
-    this.mmap_next = (This*)&this;
+    swap = *next;
+    swap.mmap = emulate_swap_mmap;
+    swap.mmap_next = (This*)&swap;
 
-    return &this;
+    return &swap;
 }

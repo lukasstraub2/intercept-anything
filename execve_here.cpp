@@ -1,7 +1,6 @@
 
-#include "common.h"
+#include "mynolibc.h"
 
-#include "nolibc.h"
 #include "execve_thread.h"
 #include "loader.h"
 #include "util.h"
@@ -101,7 +100,7 @@ __attribute__((visibility("default"))) void _execve_here(const char* pathname,
 
     z_trampo((void (*)(void))(info.elf_interp ? info.entry[Z_INTERP]
                                               : info.entry[Z_PROG]),
-             (unsigned long*)frame, NULL);
+             (unsigned long*)frame, nullptr);
 
     abort();
 }

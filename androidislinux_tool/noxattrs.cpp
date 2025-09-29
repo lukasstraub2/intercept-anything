@@ -1,11 +1,9 @@
 
-#include "common.h"
-
 #include "noxattrs.h"
 #include "intercept.h"
 
 static ssize_t noxattrs_xattr(Context* ctx,
-                              const This* this,
+                              const This* noxattrs,
                               const CallXattr* call) {
     call->ret->ret = -EOPNOTSUPP;
     return -EOPNOTSUPP;
@@ -13,16 +11,16 @@ static ssize_t noxattrs_xattr(Context* ctx,
 
 const CallHandler* noxattrs_init(const CallHandler* next) {
     static int initialized = 0;
-    static CallHandler this;
+    static CallHandler noxattrs;
 
     if (initialized) {
-        return NULL;
+        return nullptr;
     }
     initialized = 1;
 
-    this = *next;
-    this.xattr = noxattrs_xattr;
-    this.xattr_next = (This*)&this;
+    noxattrs = *next;
+    noxattrs.xattr = noxattrs_xattr;
+    noxattrs.xattr_next = (This*)&noxattrs;
 
-    return &this;
+    return &noxattrs;
 }

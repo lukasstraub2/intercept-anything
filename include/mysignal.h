@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "nolibc.h"
+#include "mynolibc.h"
 
 typedef void (*sighandler_t)(int sig);
 
@@ -40,7 +40,7 @@ static __attribute__((unused)) int sigaction(int signum,
 
     /*
      * On Linux x86-64, libc's sigaction() always sets the
-     * @act->sa_restorer when the caller passes a NULL.
+     * @act->sa_restorer when the caller passes a nullptr.
      *
      * @act->sa_restorer is an arch-specific function used
      * as a "signal trampoline".

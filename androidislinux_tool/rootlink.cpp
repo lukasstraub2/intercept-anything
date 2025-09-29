@@ -1,20 +1,17 @@
 
-#include "common.h"
+#include "mynolibc.h"
 
 #include "rootlink.h"
 #include "config.h"
 #include "intercept.h"
 #include "util.h"
 
-#include <string.h>
-#include <unistd.h>
-
 #include "linux/socket.h"
 #include "linux/un.h"
 #include "mysocket.h"
 
 struct This {
-    CallHandler this;
+    CallHandler rootlink;
     const CallHandler* next;
 };
 
@@ -66,7 +63,7 @@ static ssize_t mangle_path(char* out, size_t out_len, const char* path) {
 }
 
 #define _MANGLE_PATH(__path, errret, prefix)                       \
-    ssize_t prefix##len = mangle_path(NULL, 0, (__path));          \
+    ssize_t prefix##len = mangle_path(nullptr, 0, (__path));       \
     if (prefix##len < 0) {                                         \
         call->ret->ret = prefix##len;                              \
         return prefix##len;                                        \
@@ -79,72 +76,81 @@ static ssize_t mangle_path(char* out, size_t out_len, const char* path) {
 
 #define MANGLE_PATH(__path, errret) _MANGLE_PATH(__path, errret, )
 
-static int rootlink_open(Context* ctx, const This* this, const CallOpen* call) {
+static int rootlink_open(Context* ctx,
+                         const This* rootlink,
+                         const CallOpen* call) {
     CallOpen _call;
     callopen_copy(&_call, call);
 
     if (call->at && call->path[0] != '/') {
-        return this->next->open(ctx, this->next->open_next, call);
+        return rootlink->next->open(ctx, rootlink->next->open_next, call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->open(ctx, this->next->open_next, &_call);
+    return rootlink->next->open(ctx, rootlink->next->open_next, &_call);
 }
 
-static int rootlink_stat(Context* ctx, const This* this, const CallStat* call) {
+static int rootlink_stat(Context* ctx,
+                         const This* rootlink,
+                         const CallStat* call) {
     CallStat _call;
     callstat_copy(&_call, call);
 
     if ((stattype_is_at(call->type) && call->path[0] != '/') ||
         call->type == STATTYPE_F) {
-        return this->next->stat(ctx, this->next->stat_next, call);
+        return rootlink->next->stat(ctx, rootlink->next->stat_next, call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->stat(ctx, this->next->stat_next, &_call);
+    return rootlink->next->stat(ctx, rootlink->next->stat_next, &_call);
 }
 
 static ssize_t rootlink_readlink(Context* ctx,
-                                 const This* this,
+                                 const This* rootlink,
                                  const CallReadlink* call) {
     CallReadlink _call;
     callreadlink_copy(&_call, call);
 
     if (call->at && call->path[0] != '/') {
-        return this->next->readlink(ctx, this->next->readlink_next, call);
+        return rootlink->next->readlink(ctx, rootlink->next->readlink_next,
+                                        call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->readlink(ctx, this->next->readlink_next, &_call);
+    return rootlink->next->readlink(ctx, rootlink->next->readlink_next, &_call);
 }
 
 static int rootlink_access(Context* ctx,
-                           const This* this,
+                           const This* rootlink,
                            const CallAccess* call) {
     CallAccess _call;
     callaccess_copy(&_call, call);
 
     if (call->at && call->path[0] != '/') {
-        return this->next->access(ctx, this->next->access_next, call);
+        return rootlink->next->access(ctx, rootlink->next->access_next, call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->access(ctx, this->next->access_next, &_call);
+    return rootlink->next->access(ctx, rootlink->next->access_next, &_call);
 }
 
-static int rootlink_exec(Context* ctx, const This* this, const CallExec* call) {
+static int rootlink_exec(Context* ctx,
+                         const This* rootlink,
+                         const CallExec* call) {
     CallExec _call;
     callexec_copy(&_call, call);
 
     if (call->at && call->path[0] != '/') {
-        return this->next->exec(ctx, this->next->exec_next, call);
+        return rootlink->next->exec(ctx, rootlink->next->exec_next, call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->exec(ctx, this->next->exec_next, &_call);
+    return rootlink->next->exec(ctx, rootlink->next->exec_next, &_call);
 }
 
-static int rootlink_link(Context* ctx, const This* this, const CallLink* call) {
+static int rootlink_link(Context* ctx,
+                         const This* rootlink,
+                         const CallLink* call) {
     CallLink _call;
     calllink_copy(&_call, call);
 
@@ -159,11 +165,11 @@ static int rootlink_link(Context* ctx, const This* this, const CallLink* call) {
         _call.newpath = call->newpath;
     }
 
-    return this->next->link(ctx, this->next->link_next, &_call);
+    return rootlink->next->link(ctx, rootlink->next->link_next, &_call);
 }
 
 static int rootlink_symlink(Context* ctx,
-                            const This* this,
+                            const This* rootlink,
                             const CallLink* call) {
     CallLink _call;
     calllink_copy(&_call, call);
@@ -179,39 +185,39 @@ static int rootlink_symlink(Context* ctx,
         _call.newpath = call->newpath;
     }
 
-    return this->next->symlink(ctx, this->next->symlink_next, &_call);
+    return rootlink->next->symlink(ctx, rootlink->next->symlink_next, &_call);
 }
 
 static int rootlink_unlink(Context* ctx,
-                           const This* this,
+                           const This* rootlink,
                            const CallUnlink* call) {
     CallUnlink _call;
     callunlink_copy(&_call, call);
 
     if (call->at && call->path[0] != '/') {
-        return this->next->unlink(ctx, this->next->unlink_next, call);
+        return rootlink->next->unlink(ctx, rootlink->next->unlink_next, call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->unlink(ctx, this->next->unlink_next, &_call);
+    return rootlink->next->unlink(ctx, rootlink->next->unlink_next, &_call);
 }
 
 static ssize_t rootlink_xattr(Context* ctx,
-                              const This* this,
+                              const This* rootlink,
                               const CallXattr* call) {
     CallXattr _call;
     callxattr_copy(&_call, call);
 
     if (call->type2 == XATTRTYPE_F) {
-        return this->next->xattr(ctx, this->next->xattr_next, call);
+        return rootlink->next->xattr(ctx, rootlink->next->xattr_next, call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->xattr(ctx, this->next->xattr_next, &_call);
+    return rootlink->next->xattr(ctx, rootlink->next->xattr_next, &_call);
 }
 
 static int rootlink_rename(Context* ctx,
-                           const This* this,
+                           const This* rootlink,
                            const CallRename* call) {
     CallRename _call;
     callrename_copy(&_call, call);
@@ -227,78 +233,79 @@ static int rootlink_rename(Context* ctx,
         _call.newpath = call->newpath;
     }
 
-    return this->next->rename(ctx, this->next->rename_next, &_call);
+    return rootlink->next->rename(ctx, rootlink->next->rename_next, &_call);
 }
 
 static int rootlink_chdir(Context* ctx,
-                          const This* this,
+                          const This* rootlink,
                           const CallChdir* call) {
     CallChdir _call;
     callchdir_copy(&_call, call);
 
     if (call->f) {
-        return this->next->chdir(ctx, this->next->chdir_next, call);
+        return rootlink->next->chdir(ctx, rootlink->next->chdir_next, call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->chdir(ctx, this->next->chdir_next, &_call);
+    return rootlink->next->chdir(ctx, rootlink->next->chdir_next, &_call);
 }
 
 static int rootlink_chmod(Context* ctx,
-                          const This* this,
+                          const This* rootlink,
                           const CallChmod* call) {
     CallChmod _call;
     callchmod_copy(&_call, call);
 
     if ((chmodtype_is_at(call->type) && call->path[0] != '/') ||
         call->type == CHMODTYPE_F) {
-        return this->next->chmod(ctx, this->next->chmod_next, call);
+        return rootlink->next->chmod(ctx, rootlink->next->chmod_next, call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->chmod(ctx, this->next->chmod_next, &_call);
+    return rootlink->next->chmod(ctx, rootlink->next->chmod_next, &_call);
 }
 
 static int rootlink_truncate(Context* ctx,
-                             const This* this,
+                             const This* rootlink,
                              const CallTruncate* call) {
     CallTruncate _call;
     calltruncate_copy(&_call, call);
 
     if (call->f) {
-        return this->next->truncate(ctx, this->next->truncate_next, call);
+        return rootlink->next->truncate(ctx, rootlink->next->truncate_next,
+                                        call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->truncate(ctx, this->next->truncate_next, &_call);
+    return rootlink->next->truncate(ctx, rootlink->next->truncate_next, &_call);
 }
 
 static int rootlink_mkdir(Context* ctx,
-                          const This* this,
+                          const This* rootlink,
                           const CallMkdir* call) {
     CallMkdir _call;
     callmkdir_copy(&_call, call);
 
     if (call->at && call->path[0] != '/') {
-        return this->next->mkdir(ctx, this->next->mkdir_next, call);
+        return rootlink->next->mkdir(ctx, rootlink->next->mkdir_next, call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->mkdir(ctx, this->next->mkdir_next, &_call);
+    return rootlink->next->mkdir(ctx, rootlink->next->mkdir_next, &_call);
 }
 
 static int rootlink_mknod(Context* ctx,
-                          const This* this,
+                          const This* rootlink,
                           const CallMknod* call) {
     CallMknod _call;
     callmknod_copy(&_call, call);
 
     if (call->at && call->path[0] != '/') {
-        return this->next->mknod(ctx, this->next->mknod_next, call);
+        return rootlink->next->mknod(ctx, rootlink->next->mknod_next, call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->mknod(ctx, this->next->mknod_next, &_call);
+    return rootlink->next->mknod(ctx, rootlink->next->mknod_next, &_call);
 }
 
 static int fill_addr_un(struct sockaddr_un* addr, char* sun_path) {
@@ -315,7 +322,7 @@ static int fill_addr_un(struct sockaddr_un* addr, char* sun_path) {
 }
 
 static int rootlink_connect(Context* ctx,
-                            const This* this,
+                            const This* rootlink,
                             const CallConnect* call) {
     RetInt* _ret = call->ret;
     CallConnect _call;
@@ -326,7 +333,7 @@ static int rootlink_connect(Context* ctx,
         struct sockaddr_un* addr = call->addr;
         if (addr->sun_path[0] != '\0') {
             // Not an abstract socket
-            ssize_t len = mangle_path(NULL, 0, addr->sun_path);
+            ssize_t len = mangle_path(nullptr, 0, addr->sun_path);
             if (len < 0) {
                 _ret->ret = len;
                 return len;
@@ -371,8 +378,8 @@ static int rootlink_connect(Context* ctx,
 
                 _call.addr = &new_addr;
                 _call.addrlen = sizeof(new_addr);
-                ret =
-                    this->next->connect(ctx, this->next->connect_next, &_call);
+                ret = rootlink->next->connect(ctx, rootlink->next->connect_next,
+                                              &_call);
                 sys_close(dirfd);
 
                 return ret;
@@ -386,90 +393,90 @@ static int rootlink_connect(Context* ctx,
 
                 _call.addr = &new_addr;
                 _call.addrlen = sizeof(new_addr);
-                return this->next->connect(ctx, this->next->connect_next,
-                                           &_call);
+                return rootlink->next->connect(
+                    ctx, rootlink->next->connect_next, &_call);
             }
         }
     }
 
-    return this->next->connect(ctx, this->next->connect_next, call);
+    return rootlink->next->connect(ctx, rootlink->next->connect_next, call);
 }
 
 static int rootlink_fanotify_mark(Context* ctx,
-                                  const This* this,
+                                  const This* rootlink,
                                   const CallFanotifyMark* call) {
     CallFanotifyMark _call;
     callfanotify_mark_copy(&_call, call);
 
     if (call->path[0] != '/') {
-        return this->next->fanotify_mark(ctx, this->next->fanotify_mark_next,
-                                         call);
+        return rootlink->next->fanotify_mark(
+            ctx, rootlink->next->fanotify_mark_next, call);
     }
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->fanotify_mark(ctx, this->next->fanotify_mark_next,
-                                     &_call);
+    return rootlink->next->fanotify_mark(
+        ctx, rootlink->next->fanotify_mark_next, &_call);
 }
 
 static int rootlink_inotify_add_watch(Context* ctx,
-                                      const This* this,
+                                      const This* rootlink,
                                       const CallInotifyAddWatch* call) {
     CallInotifyAddWatch _call;
     callinotify_add_watch_copy(&_call, call);
 
     MANGLE_PATH(_call.path, -1);
-    return this->next->inotify_add_watch(
-        ctx, this->next->inotify_add_watch_next, &_call);
+    return rootlink->next->inotify_add_watch(
+        ctx, rootlink->next->inotify_add_watch_next, &_call);
 }
 
 const CallHandler* rootlink_init(const CallHandler* next) {
     static int initialized = 0;
-    static This this;
+    static This rootlink;
 
     if (initialized) {
-        return NULL;
+        return nullptr;
     }
     initialized = 1;
 
-    this.next = next;
-    this.this = *next;
+    rootlink.next = next;
+    rootlink.rootlink = *next;
 
-    this.this.open = rootlink_open;
-    this.this.open_next = &this;
-    this.this.stat = rootlink_stat;
-    this.this.stat_next = &this;
-    this.this.readlink = rootlink_readlink;
-    this.this.readlink_next = &this;
-    this.this.access = rootlink_access;
-    this.this.access_next = &this;
-    this.this.exec = rootlink_exec;
-    this.this.exec_next = &this;
-    this.this.link = rootlink_link;
-    this.this.link_next = &this;
-    this.this.symlink = rootlink_symlink;
-    this.this.symlink_next = &this;
-    this.this.unlink = rootlink_unlink;
-    this.this.unlink_next = &this;
-    this.this.xattr = rootlink_xattr;
-    this.this.xattr_next = &this;
-    this.this.rename = rootlink_rename;
-    this.this.rename_next = &this;
-    this.this.chdir = rootlink_chdir;
-    this.this.chdir_next = &this;
-    this.this.chmod = rootlink_chmod;
-    this.this.chmod_next = &this;
-    this.this.truncate = rootlink_truncate;
-    this.this.truncate_next = &this;
-    this.this.mkdir = rootlink_mkdir;
-    this.this.mkdir_next = &this;
-    this.this.mknod = rootlink_mknod;
-    this.this.mknod_next = &this;
-    this.this.connect = rootlink_connect;
-    this.this.connect_next = &this;
-    this.this.fanotify_mark = rootlink_fanotify_mark;
-    this.this.fanotify_mark_next = &this;
-    this.this.inotify_add_watch = rootlink_inotify_add_watch;
-    this.this.inotify_add_watch_next = &this;
+    rootlink.rootlink.open = rootlink_open;
+    rootlink.rootlink.open_next = &rootlink;
+    rootlink.rootlink.stat = rootlink_stat;
+    rootlink.rootlink.stat_next = &rootlink;
+    rootlink.rootlink.readlink = rootlink_readlink;
+    rootlink.rootlink.readlink_next = &rootlink;
+    rootlink.rootlink.access = rootlink_access;
+    rootlink.rootlink.access_next = &rootlink;
+    rootlink.rootlink.exec = rootlink_exec;
+    rootlink.rootlink.exec_next = &rootlink;
+    rootlink.rootlink.link = rootlink_link;
+    rootlink.rootlink.link_next = &rootlink;
+    rootlink.rootlink.symlink = rootlink_symlink;
+    rootlink.rootlink.symlink_next = &rootlink;
+    rootlink.rootlink.unlink = rootlink_unlink;
+    rootlink.rootlink.unlink_next = &rootlink;
+    rootlink.rootlink.xattr = rootlink_xattr;
+    rootlink.rootlink.xattr_next = &rootlink;
+    rootlink.rootlink.rename = rootlink_rename;
+    rootlink.rootlink.rename_next = &rootlink;
+    rootlink.rootlink.chdir = rootlink_chdir;
+    rootlink.rootlink.chdir_next = &rootlink;
+    rootlink.rootlink.chmod = rootlink_chmod;
+    rootlink.rootlink.chmod_next = &rootlink;
+    rootlink.rootlink.truncate = rootlink_truncate;
+    rootlink.rootlink.truncate_next = &rootlink;
+    rootlink.rootlink.mkdir = rootlink_mkdir;
+    rootlink.rootlink.mkdir_next = &rootlink;
+    rootlink.rootlink.mknod = rootlink_mknod;
+    rootlink.rootlink.mknod_next = &rootlink;
+    rootlink.rootlink.connect = rootlink_connect;
+    rootlink.rootlink.connect_next = &rootlink;
+    rootlink.rootlink.fanotify_mark = rootlink_fanotify_mark;
+    rootlink.rootlink.fanotify_mark_next = &rootlink;
+    rootlink.rootlink.inotify_add_watch = rootlink_inotify_add_watch;
+    rootlink.rootlink.inotify_add_watch_next = &rootlink;
 
-    return &this.this;
+    return &rootlink.rootlink;
 }

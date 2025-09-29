@@ -1,6 +1,5 @@
 
-#include "common.h"
-#include "nolibc.h"
+#include "mynolibc.h"
 
 #include "mysys.h"
 #include "workarounds.h"
@@ -8,7 +7,7 @@
 #include "linux/ptrace.h"
 
 struct This {
-    CallHandler this;
+    CallHandler waround;
     const CallHandler* next;
 };
 
@@ -43,19 +42,19 @@ int workarounds_rethrow_signal(Tls* tls, int signum) {
 }
 
 static int workarounds_exec(Context* ctx,
-                            const This* this,
+                            const This* waround,
                             const CallExec* call) {
     if (call->final) {
         maybe_recitfy_traceme(ctx->tls);
     }
 
-    return this->next->exec(ctx, this->next->exec_next, call);
+    return waround->next->exec(ctx, waround->next->exec_next, call);
 }
 
 // Workaround for gdb when using vfork:
 // Delay PTRACE_TRACEME until just before the exec()
 static long workarounds_ptrace(Context* ctx,
-                               const This* this,
+                               const This* waround,
                                const CallPtrace* call) {
     const char* basename = strrchr(self_exe, '/') + 1;
 
@@ -65,35 +64,35 @@ static long workarounds_ptrace(Context* ctx,
         return 0;
     }
 
-    return this->next->ptrace(ctx, this->next->ptrace_next, call);
+    return waround->next->ptrace(ctx, waround->next->ptrace_next, call);
 }
 
 static int workarounds_kill(Context* ctx,
-                            const This* this,
+                            const This* waround,
                             const CallKill* call) {
     maybe_recitfy_traceme(ctx->tls);
 
-    return this->next->kill(ctx, this->next->kill_next, call);
+    return waround->next->kill(ctx, waround->next->kill_next, call);
 }
 
 const CallHandler* workarounds_init(const CallHandler* next) {
     static int initialized = 0;
-    static This this;
+    static This waround;
 
     if (initialized) {
-        return NULL;
+        return nullptr;
     }
     initialized = 1;
 
-    this.next = next;
-    this.this = *next;
+    waround.next = next;
+    waround.waround = *next;
 
-    this.this.exec = workarounds_exec;
-    this.this.exec_next = &this;
-    this.this.ptrace = workarounds_ptrace;
-    this.this.ptrace_next = &this;
-    this.this.kill = workarounds_kill;
-    this.this.kill_next = &this;
+    waround.waround.exec = workarounds_exec;
+    waround.waround.exec_next = &waround;
+    waround.waround.ptrace = workarounds_ptrace;
+    waround.waround.ptrace_next = &waround;
+    waround.waround.kill = workarounds_kill;
+    waround.waround.kill_next = &waround;
 
-    return &this.this;
+    return &waround.waround;
 }

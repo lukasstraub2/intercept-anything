@@ -24,9 +24,8 @@
  * SOFTWARE.
  */
 
-#include "common.h"
+#include "mynolibc.h"
 
-#include "nolibc.h"
 #include "loader.h"
 #include "trampo.h"
 #include "intercept.h"
@@ -66,7 +65,7 @@ int main(int argc, char** argv, char** envp) {
 
     z_trampo((void (*)(void))(info.elf_interp ? info.entry[Z_INTERP]
                                               : info.entry[Z_PROG]),
-             sp, NULL);
+             sp, nullptr);
     /* Should not reach. */
     exit(0);
 }

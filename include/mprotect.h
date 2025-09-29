@@ -1,7 +1,7 @@
 #ifndef _MPROTECT_H
 #define _MPROTECT_H
 
-#include "nolibc.h"
+#include "mynolibc.h"
 
 static __attribute__((unused)) int sys_mprotect(void* addr,
                                                 size_t length,

@@ -12,7 +12,7 @@ struct LocalMutexes {
     RobustMutex data[];
 };
 
-static LocalMutexes* local_mutexes = NULL;
+static LocalMutexes* local_mutexes = nullptr;
 
 void spinlock_lock(Spinlock* lock) {
     Spinlock expected = 0;
@@ -42,7 +42,7 @@ static int futex_wait(Mutex* mutex, Mutex expected) {
     signed long ret;
     struct timespec timeout = {1, 0};
 
-    ret = sys_futex(mutex, FUTEX_WAIT, expected, &timeout, NULL, 0);
+    ret = sys_futex(mutex, FUTEX_WAIT, expected, &timeout, nullptr, 0);
     if (ret < 0) {
         if (ret == -EAGAIN) {
             return 0;
@@ -57,7 +57,7 @@ static int futex_wait(Mutex* mutex, Mutex expected) {
 }
 
 static void futex_wake(Mutex* mutex) {
-    signed long ret = sys_futex(mutex, FUTEX_WAKE, 1, NULL, NULL, 0);
+    signed long ret = sys_futex(mutex, FUTEX_WAKE, 1, nullptr, nullptr, 0);
     if (ret < 0) {
         abort();
     }
@@ -113,7 +113,7 @@ int mutex_lock(Tls* tls, RobustMutex* mutex) {
     __asm volatile("" ::: "memory");
     RLIST_INSERT_HEAD(&list->head, mutex, next);
     __asm volatile("" ::: "memory");
-    WRITE_ONCE(list->pending, NULL);
+    WRITE_ONCE(list->pending, nullptr);
     __asm volatile("" ::: "memory");
 
     return ownerdead;
@@ -130,7 +130,7 @@ void mutex_unlock(Tls* tls, RobustMutex* mutex) {
     __asm volatile("" ::: "memory");
     _mutex_unlock(&mutex->mutex);
     __asm volatile("" ::: "memory");
-    WRITE_ONCE(list->pending, NULL);
+    WRITE_ONCE(list->pending, nullptr);
     __asm volatile("" ::: "memory");
 }
 
@@ -167,7 +167,7 @@ static void mutex_recover_pending(Tls* tls) {
         __mutex_unlock(&mutex->mutex, FUTEX_TID_MASK);
     }
     __asm volatile("" ::: "memory");
-    WRITE_ONCE(list->pending, NULL);
+    WRITE_ONCE(list->pending, nullptr);
     __asm volatile("" ::: "memory");
 }
 
@@ -184,7 +184,7 @@ static void mutex_recover_one(Tls* tls, RobustMutex* mutex) {
     __asm volatile("" ::: "memory");
     __mutex_unlock(&mutex->mutex, FUTEX_TID_MASK);
     __asm volatile("" ::: "memory");
-    WRITE_ONCE(list->pending, NULL);
+    WRITE_ONCE(list->pending, nullptr);
     __asm volatile("" ::: "memory");
 }
 
@@ -214,7 +214,7 @@ void mutex_init() {
     }
 
     // map shared, so we don't deadlock after fork()
-    void* alloc = sys_mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+    void* alloc = sys_mmap(nullptr, 4096, PROT_READ | PROT_WRITE,
                            MAP_ANONYMOUS | MAP_SHARED, -1, 0);
     if ((unsigned long)alloc >= -4095UL) {
         abort();
@@ -230,7 +230,7 @@ RobustMutex* mutex_alloc() {
     uint32_t idx =
         __atomic_fetch_add(&local_mutexes->size, 1, __ATOMIC_ACQUIRE);
     if (idx >= local_mutexes->alloc) {
-        return NULL;
+        return nullptr;
     }
 
     return local_mutexes->data + idx;
@@ -295,7 +295,7 @@ static void __rwlock_lock(Tls* tls,
     __asm volatile("" ::: "memory");
     RLIST_INSERT_HEAD(&list->head, entry, next);
     __asm volatile("" ::: "memory");
-    WRITE_ONCE(list->pending, NULL);
+    WRITE_ONCE(list->pending, nullptr);
 }
 
 static void __rwlock_unlock(Tls* tls,
@@ -314,7 +314,7 @@ static void __rwlock_unlock(Tls* tls,
     __asm volatile("" ::: "memory");
     WRITE_ONCE(*thelock, 0);
     __asm volatile("" ::: "memory");
-    WRITE_ONCE(list->pending, NULL);
+    WRITE_ONCE(list->pending, nullptr);
 }
 
 static void _rwlock_lock_read(Tls* tls, RwLock* lock, int i) {
@@ -472,8 +472,8 @@ static void rwlock_recover_pending(Tls* tls) {
         _rwlock_recover(lock);
     }
 
-    uint32_t* thelock = NULL;
-    RwLockHolder* entry = NULL;
+    uint32_t* thelock = nullptr;
+    RwLockHolder* entry = nullptr;
     if (lock->writer == (uint32_t)tls->tid) {
         thelock = &lock->writer;
         entry = &lock->writer_entry;
@@ -503,7 +503,7 @@ static void rwlock_recover_pending(Tls* tls) {
         WRITE_ONCE(*thelock, FUTEX_TID_MASK);
     }
     __asm volatile("" ::: "memory");
-    WRITE_ONCE(list->pending, NULL);
+    WRITE_ONCE(list->pending, nullptr);
     __asm volatile("" ::: "memory");
 
     mutex_unlock(tls, &lock->mutex);
@@ -519,8 +519,8 @@ static void rwlock_recover_one(Tls* tls, RwLock* lock) {
         _rwlock_recover(lock);
     }
 
-    uint32_t* thelock = NULL;
-    RwLockHolder* entry = NULL;
+    uint32_t* thelock = nullptr;
+    RwLockHolder* entry = nullptr;
     if (lock->writer == (uint32_t)tls->tid) {
         thelock = &lock->writer;
         entry = &lock->writer_entry;
@@ -539,7 +539,7 @@ static void rwlock_recover_one(Tls* tls, RwLock* lock) {
     __asm volatile("" ::: "memory");
     WRITE_ONCE(*thelock, FUTEX_TID_MASK);
     __asm volatile("" ::: "memory");
-    WRITE_ONCE(list->pending, NULL);
+    WRITE_ONCE(list->pending, nullptr);
 
     mutex_unlock(tls, &lock->mutex);
 }

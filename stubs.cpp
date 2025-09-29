@@ -1,5 +1,13 @@
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void abort();
+
+#ifdef __cplusplus
+}
+#endif
 
 typedef struct CallHandler CallHandler;
 

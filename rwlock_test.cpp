@@ -1,7 +1,6 @@
 
-#include "common.h"
+#include "mynolibc.h"
 
-#include "nolibc.h"
 #include "mysys.h"
 #include "mylock.h"
 #include "linux/sched.h"
@@ -22,8 +21,8 @@
 #error Unsupported Architecture
 #endif
 
-static RwLock rwlocka = {0};
-static RwLock rwlockb = {0};
+static RwLock rwlocka = {};
+static RwLock rwlockb = {};
 static int stage[2];
 static uint64_t stage_counter = 0;
 
@@ -50,10 +49,10 @@ __attribute__((noinline)) static pid_t _thread_new(void (*fn)(), void* stack) {
 }
 
 static pid_t thread_new(void (*fn)()) {
-    sys_mmap(NULL, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    void* stack = sys_mmap(NULL, stack_size, PROT_READ | PROT_WRITE,
+    sys_mmap(nullptr, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void* stack = sys_mmap(nullptr, stack_size, PROT_READ | PROT_WRITE,
                            MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
-    sys_mmap(NULL, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    sys_mmap(nullptr, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #ifdef stack_grows_down
     stack += stack_size;
 #endif
@@ -64,15 +63,15 @@ static pid_t thread_new(void (*fn)()) {
 
 static void handler(int sig, siginfo_t* info, void* ucontext);
 static void install_sighandler() {
-    struct sigaction sig = {0};
+    struct sigaction sig = {};
     sig.sa_handler = (void*)handler;
     // sigemptyset(&sig.sa_mask);
     sig.sa_flags = SA_NODEFER | SA_SIGINFO;
 
     unsigned long unblock = (1u << (SIGSYS - 1));
-    sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, NULL, sizeof(unblock));
+    sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, nullptr, sizeof(unblock));
 
-    sigaction(SIGSYS, &sig, NULL);
+    sigaction(SIGSYS, &sig, nullptr);
 }
 
 static void rwrite(int fd, uint64_t val) {
@@ -87,7 +86,7 @@ static void rwrite(int fd, uint64_t val) {
 static void rsplice(int from, int to) {
     ssize_t ret;
 
-    ret = sys_splice(from, NULL, to, NULL, sizeof(uint64_t), 0);
+    ret = sys_splice(from, nullptr, to, nullptr, sizeof(uint64_t), 0);
     if (ret != sizeof(uint64_t)) {
         abort();
     }

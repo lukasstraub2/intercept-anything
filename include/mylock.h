@@ -1,12 +1,12 @@
 #pragma once
 
-#include "types.h"
+#include "mynolibc.h"
 #include "mylist.h"
 #include "base_types.h"
 
 typedef uint32_t Spinlock __attribute__((aligned(8)));
 typedef Spinlock Mutex;
-_Static_assert(__atomic_always_lock_free(sizeof(Spinlock), 0), "Spinlock");
+static_assert(__atomic_always_lock_free(sizeof(Spinlock), 0), "Spinlock");
 
 struct RobustMutex {
     Mutex mutex;

@@ -19,4 +19,4 @@ check: compile
 	cd $(DIR) && $(CTEST) -j4
 
 format:
-	find . -maxdepth 2 -type f -name '*.c' -print0 -or -name '*.h' -print0 | xargs -0 clang-format -i --style=file
+	find . -maxdepth 2 -type f -name '*.c' -print0 -or -name '*.cpp' -print0 -or -name '*.h' -print0 | xargs -0 clang-format -i --style=file

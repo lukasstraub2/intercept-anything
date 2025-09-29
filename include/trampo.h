@@ -37,4 +37,12 @@
 #error Unsupported Architecture
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void z_trampo(void (*entry)(void), unsigned long* sp, void (*fini)(void));
+
+#ifdef __cplusplus
+}
+#endif

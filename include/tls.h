@@ -1,7 +1,7 @@
 #pragma once
 
 #include "base_types.h"
-#include "types.h"
+#include "mynolibc.h"
 #include "config.h"
 #include "mylock.h"
 
@@ -12,16 +12,15 @@ __getauxval(unsigned long type) {
 }
 
 typedef volatile uint32_t TlsAtomic32 __attribute__((aligned(8)));
-_Static_assert(__atomic_always_lock_free(sizeof(TlsAtomic32), 0),
-               "TlsAtomic32");
+static_assert(__atomic_always_lock_free(sizeof(TlsAtomic32), 0), "TlsAtomic32");
 
 #define TLS_READ(var) __atomic_load_n(&(var), __ATOMIC_RELAXED)
 #define TLS_WRITE(var, x) __atomic_store_n(&(var), (x), __ATOMIC_RELAXED)
 #define TLS_INC_FETCH(var) __atomic_add_fetch(&(var), 1, __ATOMIC_RELAXED)
 #define TLS_BARRIER() __asm volatile("" ::: "memory")
 
-typedef enum CacheType CacheType;
 enum CacheType { CACHETYPE_READLINK, CACHETYPE_GETCWD };
+typedef enum CacheType CacheType;
 
 struct Cache {
     TlsAtomic32 reentrant_cnt;

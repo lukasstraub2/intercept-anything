@@ -25,7 +25,7 @@
 #define alloca __builtin_alloca
 
 void randchar6(char* buf);
-int mkostemp(char* template, int flags, mode_t mode);
+int mkostemp(char* templ, int flags, mode_t mode);
 
 int is_tid_dead(pid_t tid);
 int is_pid_dead(pid_t pid);

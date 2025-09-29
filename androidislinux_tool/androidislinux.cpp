@@ -1,16 +1,14 @@
 
-#include "common.h"
-
 #include "androidislinux.h"
 #include "intercept.h"
 
 struct This {
-    CallHandler this;
+    CallHandler androidislin;
     const CallHandler* next;
 };
 
 static int androidislinux_accept(Context* ctx,
-                                 const This* this,
+                                 const This* androidislin,
                                  const CallAccept* call) {
     CallAccept _call;
     callaccept_copy(&_call, call);
@@ -20,23 +18,24 @@ static int androidislinux_accept(Context* ctx,
         _call.flags = 0;
     }
 
-    return this->next->accept(ctx, this->next->accept_next, &_call);
+    return androidislin->next->accept(ctx, androidislin->next->accept_next,
+                                      &_call);
 }
 
 const CallHandler* androidislinux_init(const CallHandler* next) {
     static int initialized = 0;
-    static This this;
+    static This androidislin;
 
     if (initialized) {
-        return NULL;
+        return nullptr;
     }
     initialized = 1;
 
-    this.next = next;
-    this.this = *next;
+    androidislin.next = next;
+    androidislin.androidislin = *next;
 
-    this.this.accept = androidislinux_accept;
-    this.this.accept_next = &this;
+    androidislin.androidislin.accept = androidislinux_accept;
+    androidislin.androidislin.accept_next = &androidislin;
 
-    return &this.this;
+    return &androidislin.androidislin;
 }
