@@ -32,7 +32,7 @@ struct Cache {
 };
 
 #define JUMPBUF_MAGIC \
-    "jumpbuf magic .o0o._.o0o._.o0o._.o0o._.o0o._.o0o._.o0o._.o0o._.o"
+    "jumpbuf magic .o0o._.o0o._.o0o._.o0o._.o0o._.o0o._.o0o._.o0o._."
 #define JUMPBUF_MAGIC_LEN (64)
 typedef struct MyJumpbuf MyJumpbuf;
 struct MyJumpbuf {

@@ -8,24 +8,25 @@
 struct Data {
     sem_t sem;
     const char* pathname;
-    char** argv;
-    char** envp;
+    const char* const* argv;
+    const char* const* envp;
 };
 
 static void post(void* data) {
-    sem_t* sem = data;
+    sem_t* sem = (sem_t*)data;
     sem_post(sem);
 }
 
 static void* start(void* _data) {
-    struct Data* data = _data;
+    struct Data* data = (Data*)_data;
     execve_here(data->pathname, data->argv, data->envp, post, &data->sem);
     abort();
 }
 
-__attribute__((visibility("default"))) void execve_thread(const char* pathname,
-                                                          char** argv,
-                                                          char** envp) {
+__attribute__((visibility("default"))) void execve_thread(
+    const char* pathname,
+    const char* const* argv,
+    const char* const* envp) {
     int ret;
     pthread_t thread;
     struct Data data;

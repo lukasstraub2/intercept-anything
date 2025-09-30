@@ -6,9 +6,11 @@
 #include "util.h"
 #include "trampo.h"
 
+typedef const char* const* constchar;
+
 __attribute__((visibility("default"))) void _execve_here(const char* pathname,
-                                                         char** argv,
-                                                         char** envp,
+                                                         constchar argv,
+                                                         constchar envp,
                                                          unsigned long* auxv,
                                                          void (*cb)(void*),
                                                          void* data) {
@@ -19,14 +21,14 @@ __attribute__((visibility("default"))) void _execve_here(const char* pathname,
     size_t argv_strings = 0, envp_strings = 0;
     unsigned long argc = 0;
 
-    for (char** p = argv; *p; p++) {
+    for (constchar p = argv; *p; p++) {
         argc += 1;
         argv_size += sizeof(char**);
         argv_strings += strlen(*p) + 1;
     }
     argv_size += sizeof(char**);
 
-    for (char** p = envp; envp && *p; p++) {
+    for (constchar p = envp; envp && *p; p++) {
         envp_size += sizeof(char**);
         envp_strings += strlen(*p) + 1;
     }
@@ -48,17 +50,17 @@ __attribute__((visibility("default"))) void _execve_here(const char* pathname,
     frame += 15;
     frame &= -16UL;
 
-    unsigned long* argc_ptr = (void*)frame;
-    char** argv_ptr = (void*)frame + sizeof(argc);
-    char** envp_ptr = (void*)frame + sizeof(argc) + argv_size;
+    unsigned long* argc_ptr = (unsigned long*)frame;
+    char** argv_ptr = (char**)(frame + sizeof(argc));
+    char** envp_ptr = (char**)(frame + sizeof(argc) + argv_size);
     unsigned long* auxv_ptr =
-        (void*)frame + sizeof(argc) + argv_size + envp_size;
+        (unsigned long*)(frame + sizeof(argc) + argv_size + envp_size);
     char* string_ptr =
-        (void*)frame + sizeof(argc) + argv_size + envp_size + auxv_size;
+        (char*)(frame + sizeof(argc) + argv_size + envp_size + auxv_size);
 
     memcpy(argc_ptr, &argc, sizeof(argc));
 
-    for (char** p = argv; *p; p++) {
+    for (constchar p = argv; *p; p++) {
         size_t len = strlen(*p) + 1;
 
         char* string = string_ptr;
@@ -74,7 +76,7 @@ __attribute__((visibility("default"))) void _execve_here(const char* pathname,
 
     assert(argv_ptr == envp_ptr);
 
-    for (char** p = envp; envp && *p; p++) {
+    for (constchar p = envp; envp && *p; p++) {
         size_t len = strlen(*p) + 1;
 
         char* string = string_ptr;
@@ -106,8 +108,8 @@ __attribute__((visibility("default"))) void _execve_here(const char* pathname,
 }
 
 __attribute__((visibility("default"))) void execve_here(const char* pathname,
-                                                        char** argv,
-                                                        char** envp,
+                                                        const char* const* argv,
+                                                        const char* const* envp,
                                                         void (*cb)(void*),
                                                         void* data) {
     char auxv_buf[4096];
@@ -116,5 +118,5 @@ __attribute__((visibility("default"))) void execve_here(const char* pathname,
     assert(ret >= 0);
     sys_close(fd);
 
-    _execve_here(pathname, argv, envp, (void*)auxv_buf, cb, data);
+    _execve_here(pathname, argv, envp, (unsigned long*)auxv_buf, cb, data);
 }

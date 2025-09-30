@@ -86,7 +86,7 @@ handler(int sig, siginfo_t* info, void* ucontext) {
         exit_error("Invalid arch, terminating");
     }
 
-    MyJumpbuf* sp = get_sp(ucontext);
+    MyJumpbuf* sp = (MyJumpbuf*)get_sp(ucontext);
     MyJumpbuf** jumpbuf;
     for (int i = 0; i < jumpbuf_alloc; i++) {
         jumpbuf = tls->jumpbuf + i;
@@ -154,7 +154,7 @@ static void start_text_init() {
 }
 
 int pc_in_our_code(void* ucontext) {
-    char* pc = get_pc(ucontext);
+    char* pc = (char*)get_pc(ucontext);
     int in_text = pc >= start_text && pc < &__etext;
     int in_signal_entry =
         pc >= &__start_signal_entry && pc < &__stop_signal_entry;
@@ -294,12 +294,12 @@ static int install_filter() {
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
         BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
                  (offsetof(struct seccomp_data, instruction_pointer) + 4)),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, ((unsigned long)start_text) >> 32,
-                 0, 3),
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K,
+                 (__u32)(((unsigned long)start_text) >> 32), 0, 3),
         BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
                  (offsetof(struct seccomp_data, instruction_pointer))),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (unsigned long)start_text, 0, 1),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (unsigned long)&__etext, 0, 1),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (__u32)start_text, 0, 1),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (__u32)&__etext, 0, 1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
     };
@@ -2092,7 +2092,7 @@ static int bottom_stat(Context* ctx, const This* data, const CallStat* call) {
 
         case STATTYPE_X:
             ret = sys_statx(call->dirfd, call->path, call->flags, call->mask,
-                            call->statbuf);
+                            (struct statx*)call->statbuf);
             break;
 
         default:
@@ -2662,7 +2662,8 @@ static ssize_t bottom_getdents(Context* ctx,
 
     signalmanager_sigsys_mask_until_sigreturn(ctx);
     if (call->is64) {
-        ret = sys_getdents64(call->fd, call->dirp, call->count);
+        ret =
+            sys_getdents64(call->fd, (linux_dirent64*)call->dirp, call->count);
     } else {
         ret = sys_getdents(call->fd, call->dirp, call->count);
     }
@@ -2764,8 +2765,9 @@ static int bottom_rlimit(Context* ctx,
             break;
 
         case RLIMITTYPE_PR:
-            ret = sys_prlimit64(call->pid, call->resource, call->new_rlim,
-                                call->old_rlim);
+            ret = sys_prlimit64(call->pid, call->resource,
+                                (const rlimit64*)call->new_rlim,
+                                (rlimit64*)call->old_rlim);
             break;
 
         default:

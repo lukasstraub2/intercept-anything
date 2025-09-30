@@ -50,8 +50,9 @@ __attribute__((noinline)) static pid_t _thread_new(void (*fn)(), void* stack) {
 
 static pid_t thread_new(void (*fn)()) {
     sys_mmap(nullptr, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    void* stack = sys_mmap(nullptr, stack_size, PROT_READ | PROT_WRITE,
-                           MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    char* stack =
+        (char*)sys_mmap(nullptr, stack_size, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
     sys_mmap(nullptr, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #ifdef stack_grows_down
     stack += stack_size;
@@ -64,7 +65,7 @@ static pid_t thread_new(void (*fn)()) {
 static void handler(int sig, siginfo_t* info, void* ucontext);
 static void install_sighandler() {
     struct sigaction sig = {};
-    sig.sa_handler = (void*)handler;
+    sig.sa_handler = (decltype(sig.sa_handler))handler;
     // sigemptyset(&sig.sa_mask);
     sig.sa_flags = SA_NODEFER | SA_SIGINFO;
 

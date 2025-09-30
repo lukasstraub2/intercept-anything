@@ -36,14 +36,14 @@
 int main(int argc, char** argv, char** envp) {
     unsigned long* sp = (unsigned long*)argv;
     sp--;
-    void* auxv;
+    unsigned long* auxv;
     void* after_auxv;
     char** p;
     struct LoaderInfo info;
 
     for (p = envp; *p++;)
         ;
-    auxv = (void*)p;
+    auxv = (unsigned long*)p;
 
     if (argc < 2)
         exit_error("no input file");

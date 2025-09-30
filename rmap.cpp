@@ -203,7 +203,7 @@ void rmap_free(RMap* rmap, const uint32_t id) {
 RMap* rmap_alloc(uint32_t alloc) {
     size_t size = sizeof(RMap) + alloc * sizeof(RMapEntry);
 
-    RMap* rmap = malloc(size);
+    RMap* rmap = (RMap*)malloc(size);
     rmap->alloc = alloc;
 
     return rmap;

@@ -540,12 +540,12 @@ static int hardlink_stat(Context* ctx,
             case STATTYPE_PLAIN:
             case STATTYPE_L:
             case STATTYPE_AT:
-                statbuf_plain = _call.statbuf;
+                statbuf_plain = (struct wonky_stat*)_call.statbuf;
                 statbuf_plain->st_nlink = cnt;
                 break;
 
             case STATTYPE_X:
-                statbuf_x = _call.statbuf;
+                statbuf_x = (struct statx*)_call.statbuf;
                 statbuf_x->stx_nlink = cnt;
                 break;
 
@@ -1001,7 +1001,7 @@ static ssize_t hardlink_getdents(Context* ctx,
     hardlinkshim->next->getdents(ctx, hardlinkshim->next->getdents_next, call);
 
     if (_ret->ret >= 0) {
-        char* buf = call->dirp;
+        char* buf = (char*)call->dirp;
         ssize_t size = _ret->ret;
         if (call->is64) {
             for (ssize_t pos = 0; pos < size;) {
@@ -1092,7 +1092,7 @@ const CallHandler* hardlinkshim_init(const CallHandler* next,
     if ((unsigned long)ptr >= -4095UL) {
         abort();
     }
-    hardlinkshim.mapped_rwlock = ptr;
+    hardlinkshim.mapped_rwlock = (RwLock*)ptr;
 
     sys_close(fd);
 

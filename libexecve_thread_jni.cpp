@@ -13,22 +13,22 @@ Java_me_lukasstraub2_android_libexecve_1thread_ExecveThread_execveThread(
     jbyteArray _pathname,
     jobjectArray _argv) {
     jsize argv_len = env->GetArrayLength(_argv);
-    void* pathname = env->GetByteArrayElements(_pathname, nullptr);
-    char** argv = alloca((argv_len + 1) * sizeof(char**));
+    jbyte* pathname = env->GetByteArrayElements(_pathname, nullptr);
+    char** argv = (char**)alloca((argv_len + 1) * sizeof(char**));
 
     for (int i = 0; i < argv_len; i++) {
         jbyteArray _str = (jbyteArray)env->GetObjectArrayElement(_argv, i);
-        void* str = env->GetByteArrayElements(_str, nullptr);
+        jbyte* str = env->GetByteArrayElements(_str, nullptr);
 
-        argv[i] = str;
+        argv[i] = (char*)str;
     }
     argv[argv_len] = nullptr;
 
-    execve_thread(pathname, argv, environ);
+    execve_thread((char*)pathname, argv, environ);
 
     env->ReleaseByteArrayElements(_pathname, pathname, 0);
     for (int i = 0; i < argv_len; i++) {
         jbyteArray _str = (jbyteArray)env->GetObjectArrayElement(_argv, i);
-        env->ReleaseByteArrayElements(_str, (void*)argv[i], 0);
+        env->ReleaseByteArrayElements(_str, (jbyte*)argv[i], 0);
     }
 }

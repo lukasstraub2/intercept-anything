@@ -84,17 +84,17 @@ static MySignal* _get_mysignal(Tls* tls) {
     assert(entry->id == (uint32_t)tls->pid);
 
     if (entry->data) {
-        recover_mysignal(entry->data);
-        return entry->data;
+        recover_mysignal((MySignal*)entry->data);
+        return (MySignal*)entry->data;
     }
 
-    MySignal* alloc = malloc(sizeof(*alloc));
+    MySignal* alloc = (MySignal*)malloc(sizeof(*alloc));
 
     for (int i = 0; i < (int)map->size; i++) {
         const RMapEntry* _parent_parent = map->list + i;
         if (_parent_parent->id && _parent_parent->id < (uint32_t)tls->pid &&
             _parent_parent->data) {
-            MySignal* parent_parent = _parent_parent->data;
+            MySignal* parent_parent = (MySignal*)_parent_parent->data;
             recover_mysignal(parent_parent);
             memcpy(alloc->mysignal, parent_parent->mysignal,
                    sizeof(parent_parent->mysignal));
@@ -103,7 +103,7 @@ static MySignal* _get_mysignal(Tls* tls) {
 
     const RMapEntry* _parent = rmap_get_noalloc(map, getppid());
     if (_parent && _parent->data) {
-        MySignal* parent = _parent->data;
+        MySignal* parent = (MySignal*)_parent->data;
         recover_mysignal(parent);
         memcpy(alloc->mysignal, parent->mysignal, sizeof(parent->mysignal));
     }
@@ -229,7 +229,7 @@ generic_handler(int signum, siginfo_t* info, void* ucontext) {
     mutex_unlock(tls, mutex);
 
     const __sighandler_t handler = copy.sa_handler;
-    const myhandler_t _handler = (void*)handler;
+    const myhandler_t _handler = (myhandler_t)handler;
 
     if (handler == SIG_DFL) {
         trace_plus("signal %d: SIG_DFL\n", signum);
@@ -260,7 +260,7 @@ generic_handler(int signum, siginfo_t* info, void* ucontext) {
         }
     }
 
-    MyJumpbuf* sp = get_sp(ucontext);
+    MyJumpbuf* sp = (MyJumpbuf*)get_sp(ucontext);
     MyJumpbuf** _jumpbuf;
     for (int i = jumpbuf_alloc - 1; i >= 0; i--) {
         _jumpbuf = tls->jumpbuf + i;
@@ -424,7 +424,7 @@ out:
 void signalmanager_install_sigsys(myhandler_t handler) {
     int ret;
     struct sigaction sig = {};
-    sig.sa_handler = (void*)handler;
+    sig.sa_handler = (decltype(sig.sa_handler))handler;
     sig.sa_mask = full_mask.sigset;
     sig.sa_flags = SA_NODEFER | SA_SIGINFO;
 
@@ -450,7 +450,7 @@ static int install_generic_handler(int signum, const struct sigaction* act) {
             case ACTION_STOP:
             case ACTION_TERM:
             case ACTION_CORE:
-                copy.sa_handler = (void*)generic_handler;
+                copy.sa_handler = (decltype(copy.sa_handler))generic_handler;
                 copy.sa_mask = full_mask.sigset;
                 copy.sa_flags &= ~(SA_RESETHAND);
                 // TODO: enforce SA_NODEFER for unmasked signals
@@ -462,7 +462,7 @@ static int install_generic_handler(int signum, const struct sigaction* act) {
     } else if (act->sa_handler == SIG_IGN) {
         // noop
     } else {
-        copy.sa_handler = (void*)generic_handler;
+        copy.sa_handler = (decltype(copy.sa_handler))generic_handler;
         copy.sa_mask = full_mask.sigset;
         copy.sa_flags &= ~(SA_RESETHAND);
         // TODO: enforce SA_NODEFER for unmasked signals

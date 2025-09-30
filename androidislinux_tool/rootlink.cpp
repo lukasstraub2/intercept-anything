@@ -328,9 +328,9 @@ static int rootlink_connect(Context* ctx,
     CallConnect _call;
     callconnect_copy(&_call, call);
 
-    struct __kernel_sockaddr_storage* generic = call->addr;
+    struct __kernel_sockaddr_storage* generic = (decltype(generic))call->addr;
     if (generic->ss_family == AF_UNIX) {
-        struct sockaddr_un* addr = call->addr;
+        struct sockaddr_un* addr = (decltype(addr))call->addr;
         if (addr->sun_path[0] != '\0') {
             // Not an abstract socket
             ssize_t len = mangle_path(nullptr, 0, addr->sun_path);

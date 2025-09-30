@@ -136,7 +136,7 @@ static ssize_t handle_path(Context* ctx,
         return prefix##shim_ret;                                         \
     }                                                                    \
                                                                          \
-    Shim* prefix##shim = alloca(prefix##shim_ret);                       \
+    Shim* prefix##shim = (Shim*)alloca(prefix##shim_ret);                \
     prefix##shim_ret =                                                   \
         handle_path((ctx), prefix##shim, prefix##shim_ret, (__path));    \
     if (prefix##shim_ret < 0) {                                          \

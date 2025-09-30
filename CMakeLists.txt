@@ -41,7 +41,7 @@ else()
     set(LIBGCC -lcompiler_rt)
 endif()
 
-add_compile_options(-g -O1 -pipe -Wall -Wextra -Wno-unused-parameter -fno-stack-protector -fpermissive)
+add_compile_options(-g -O1 -pipe -Wall -Wextra -Wno-cast-function-type -Wno-unused-parameter -Wno-missing-field-initializers -fno-stack-protector -fno-exceptions -fpermissive -Wno-error=incompatible-pointer-types)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 include_directories(include)

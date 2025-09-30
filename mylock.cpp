@@ -219,7 +219,7 @@ void mutex_init() {
     if ((unsigned long)alloc >= -4095UL) {
         abort();
     }
-    local_mutexes = alloc;
+    local_mutexes = (LocalMutexes*)alloc;
 
     local_mutexes->alloc = (4096 - sizeof(LocalMutexes)) / sizeof(RobustMutex);
     assert(sizeof(LocalMutexes) + local_mutexes->alloc * sizeof(RobustMutex) <=

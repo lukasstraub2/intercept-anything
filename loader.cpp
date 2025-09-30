@@ -79,11 +79,11 @@ static unsigned long loadelf_anon(int fd, Elf_Ehdr* ehdr, Elf_Phdr* phdr) {
     maxva = ROUND_PG(maxva);
 
     /* For dynamic ELF let the kernel chose the address. */
-    hint = dyn ? nullptr : (void*)minva;
+    hint = dyn ? nullptr : (unsigned char*)minva;
 
     /* Check that we can hold the whole image. */
-    base = sys_mmap(hint, maxva - minva, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS,
-                    -1, 0);
+    base = (unsigned char*)sys_mmap(hint, maxva - minva, PROT_NONE,
+                                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if ((unsigned long)base >= -4095UL) {
         return LOAD_ERR;
     }
@@ -106,8 +106,9 @@ static unsigned long loadelf_anon(int fd, Elf_Ehdr* ehdr, Elf_Phdr* phdr) {
         start += TRUNC_PG(iter->p_vaddr);
         sz = ROUND_PG(iter->p_memsz + off);
 
-        p = sys_mmap((void*)start, sz, PROT_WRITE,
-                     MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        p = (unsigned char*)sys_mmap((void*)start, sz, PROT_WRITE,
+                                     MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE,
+                                     -1, 0);
         if ((unsigned long)p >= -4095UL)
             goto err;
         if (sys_lseek(fd, iter->p_offset, SEEK_SET) < 0)
@@ -143,7 +144,7 @@ int load_file(struct LoaderInfo* info, const char* file) {
 
         /* Read the program header. */
         sz = ehdr->e_phnum * sizeof(Elf_Phdr);
-        phdr = alloca(sz);
+        phdr = (Elf_Phdr*)alloca(sz);
         if (sys_lseek(fd, ehdr->e_phoff, SEEK_SET) < 0)
             exit_error("can't lseek to program header %s", file);
         if (sys_read(fd, phdr, sz) != sz)
@@ -160,7 +161,7 @@ int load_file(struct LoaderInfo* info, const char* file) {
         for (iter = phdr; iter < &phdr[ehdr->e_phnum]; iter++) {
             if (iter->p_type != PT_INTERP)
                 continue;
-            info->elf_interp = alloca(iter->p_filesz);
+            info->elf_interp = (char*)alloca(iter->p_filesz);
             if (sys_lseek(fd, iter->p_offset, SEEK_SET) < 0)
                 exit_error("can't lseek interp segment");
             if (sys_read(fd, info->elf_interp, iter->p_filesz) !=

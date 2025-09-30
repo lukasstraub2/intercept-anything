@@ -35,9 +35,9 @@ void tls_clean_dead() {
 // TODO: This is not reentrant at all
 static Tls* tls_alloc(RMapEntry* entry, const uint32_t tid) {
     if (entry->data) {
-        Tls* tls = entry->data;
+        Tls* tls = (Tls*)entry->data;
         assert((uint32_t)tls->tid == tid);
-        return entry->data;
+        return (Tls*)entry->data;
     }
 
     tls_clean_dead();
@@ -45,7 +45,7 @@ static Tls* tls_alloc(RMapEntry* entry, const uint32_t tid) {
     Tls* tls;
     pid_t pid = getpid();
 
-    tls = malloc(sizeof(Tls));
+    tls = (Tls*)malloc(sizeof(Tls));
     if (!tls) {
         abort();
     }

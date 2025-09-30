@@ -6,7 +6,7 @@
 extern char** environ;
 
 __attribute__((visibility("default"))) int main(int argc, char** argv) {
-    char* args[] = {"ls", nullptr};
+    const char* args[] = {"ls", nullptr};
     execve_thread("/bin/ls", args, environ);
     sleep(1);
 }
