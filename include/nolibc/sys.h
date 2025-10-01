@@ -105,7 +105,7 @@ static __attribute__((unused))
 void *sbrk(intptr_t inc)
 {
 	/* first call to find current end */
-	void *ret = sys_brk(0);
+	char *ret = (char *)sys_brk(0);
 
 	if (ret && sys_brk(ret + inc) == ret + inc)
 		return ret + inc;
@@ -234,21 +234,21 @@ int dup(int fd)
  */
 
 static __attribute__((unused))
-int sys_dup2(int old, int new)
+int sys_dup2(int from, int to)
 {
 #ifdef __NR_dup3
-	return my_syscall3(__NR_dup3, old, new, 0);
+	return my_syscall3(__NR_dup3, from, to, 0);
 #elif defined(__NR_dup2)
-	return my_syscall2(__NR_dup2, old, new);
+	return my_syscall2(__NR_dup2, from, to);
 #else
-	return __nolibc_enosys(__func__, old, new);
+	return __nolibc_enosys(__func__, from, to);
 #endif
 }
 
 static __attribute__((unused))
-int dup2(int old, int new)
+int dup2(int from, int to)
 {
-	return __sysret(sys_dup2(old, new));
+	return __sysret(sys_dup2(from, to));
 }
 
 
@@ -258,15 +258,15 @@ int dup2(int old, int new)
 
 #ifdef __NR_dup3
 static __attribute__((unused))
-int sys_dup3(int old, int new, int flags)
+int sys_dup3(int from, int to, int flags)
 {
-	return my_syscall3(__NR_dup3, old, new, flags);
+	return my_syscall3(__NR_dup3, from, to, flags);
 }
 
 static __attribute__((unused))
-int dup3(int old, int new, int flags)
+int dup3(int from, int to, int flags)
 {
-	return __sysret(sys_dup3(old, new, flags));
+	return __sysret(sys_dup3(from, to, flags));
 }
 #endif
 
@@ -567,21 +567,21 @@ int kill(pid_t pid, int signal)
  */
 
 static __attribute__((unused))
-int sys_link(const char *old, const char *new)
+int sys_link(const char *from, const char *to)
 {
 #ifdef __NR_linkat
-	return my_syscall5(__NR_linkat, AT_FDCWD, old, AT_FDCWD, new, 0);
+	return my_syscall5(__NR_linkat, AT_FDCWD, from, AT_FDCWD, to, 0);
 #elif defined(__NR_link)
-	return my_syscall2(__NR_link, old, new);
+	return my_syscall2(__NR_link, from, to);
 #else
-	return __nolibc_enosys(__func__, old, new);
+	return __nolibc_enosys(__func__, from, to);
 #endif
 }
 
 static __attribute__((unused))
-int link(const char *old, const char *new)
+int link(const char *from, const char *to)
 {
-	return __sysret(sys_link(old, new));
+	return __sysret(sys_link(from, to));
 }
 
 
@@ -823,15 +823,15 @@ int prctl(int option, unsigned long arg2, unsigned long arg3,
  */
 
 static __attribute__((unused))
-int sys_pivot_root(const char *new, const char *old)
+int sys_pivot_root(const char *new_root, const char *put_old)
 {
-	return my_syscall2(__NR_pivot_root, new, old);
+	return my_syscall2(__NR_pivot_root, new_root, put_old);
 }
 
 static __attribute__((unused))
-int pivot_root(const char *new, const char *old)
+int pivot_root(const char *new_root, const char *put_old)
 {
-	return __sysret(sys_pivot_root(new, old));
+	return __sysret(sys_pivot_root(new_root, put_old));
 }
 
 
@@ -1087,21 +1087,21 @@ int stat(const char *path, struct stat *buf)
  */
 
 static __attribute__((unused))
-int sys_symlink(const char *old, const char *new)
+int sys_symlink(const char *from, const char *to)
 {
 #ifdef __NR_symlinkat
-	return my_syscall3(__NR_symlinkat, old, AT_FDCWD, new);
+	return my_syscall3(__NR_symlinkat, from, AT_FDCWD, to);
 #elif defined(__NR_symlink)
-	return my_syscall2(__NR_symlink, old, new);
+	return my_syscall2(__NR_symlink, from, to);
 #else
-	return __nolibc_enosys(__func__, old, new);
+	return __nolibc_enosys(__func__, from, to);
 #endif
 }
 
 static __attribute__((unused))
-int symlink(const char *old, const char *new)
+int symlink(const char *from, const char *to)
 {
-	return __sysret(sys_symlink(old, new));
+	return __sysret(sys_symlink(from, to));
 }
 
 

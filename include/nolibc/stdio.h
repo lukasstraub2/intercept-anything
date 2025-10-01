@@ -143,10 +143,11 @@ int putchar(int c)
  * success or EOF on error. It automatically retries on short writes.
  */
 static __attribute__((unused))
-int _fwrite(const void *buf, size_t size, FILE *stream)
+int _fwrite(const void *_buf, size_t size, FILE *stream)
 {
 	ssize_t ret;
 	int fd = fileno(stream);
+	const char* buf = (const char *)_buf;
 
 	while (size) {
 		ret = write(fd, buf, size);
@@ -159,14 +160,15 @@ int _fwrite(const void *buf, size_t size, FILE *stream)
 }
 
 static __attribute__((unused))
-size_t fwrite(const void *s, size_t size, size_t nmemb, FILE *stream)
+size_t fwrite(const void *_buf, size_t size, size_t nmemb, FILE *stream)
 {
 	size_t written;
+	const char* buf = (const char *)_buf;
 
 	for (written = 0; written < nmemb; written++) {
-		if (_fwrite(s, size, stream) != 0)
+		if (_fwrite(buf, size, stream) != 0)
 			break;
-		s += size;
+		buf += size;
 	}
 	return written;
 }

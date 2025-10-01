@@ -56,13 +56,13 @@ void _start_c(long *sp)
 
 	/* assign argc and argv */
 	argc = *sp;
-	argv = (void *)(sp + 1);
+	argv = (char **)(sp + 1);
 
 	/* find environ */
 	environ = envp = argv + argc + 1;
 
 	/* find _auxv */
-	for (auxv = (void *)envp; *auxv++;)
+	for (auxv = (unsigned long *)envp; *auxv++;)
 		;
 	_auxv = auxv;
 

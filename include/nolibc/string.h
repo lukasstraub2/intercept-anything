@@ -75,7 +75,7 @@ void *memcpy(void *dst, const void *src, size_t len)
 __attribute__((weak,unused,section(".text.nolibc_memset")))
 void *memset(void *dst, int b, size_t len)
 {
-	char *p = dst;
+	char *p = (char *)dst;
 
 	while (len--) {
 		/* prevent gcc from recognizing memset() here */
@@ -161,7 +161,7 @@ char *strdup(const char *str)
 	char *ret;
 
 	len = strlen(str);
-	ret = malloc(len + 1);
+	ret = (char *)malloc(len + 1);
 	if (__builtin_expect(ret != NULL, 1))
 		memcpy(ret, str, len + 1);
 
@@ -175,7 +175,7 @@ char *strndup(const char *str, size_t maxlen)
 	char *ret;
 
 	len = strnlen(str, maxlen);
-	ret = malloc(len + 1);
+	ret = (char *)malloc(len + 1);
 	if (__builtin_expect(ret != NULL, 1)) {
 		memcpy(ret, str, len);
 		ret[len] = '\0';

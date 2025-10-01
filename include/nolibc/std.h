@@ -15,7 +15,11 @@
 
 /* note: may already be defined */
 #ifndef NULL
+#ifdef __cplusplus
+#define NULL (nullptr)
+#else
 #define NULL ((void *)0)
+#endif
 #endif
 
 #include "stdint.h"
