@@ -166,10 +166,11 @@ static int install_filter() {
 
     struct sock_filter filter[] = {
         BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
-                 (offsetof(struct seccomp_data, arch))),
+                 (__u32)(offsetof(struct seccomp_data, arch))),
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
-        BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                 (__u32)(offsetof(struct seccomp_data, nr))),
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mmap, 65, 0),
 #ifdef __NR_close_range
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_close_range, 64, 0),
@@ -292,14 +293,15 @@ static int install_filter() {
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat, 2, 0),
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat2, 1, 0),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
-        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
-                 (offsetof(struct seccomp_data, instruction_pointer) + 4)),
+        BPF_STMT(
+            BPF_LD + BPF_W + BPF_ABS,
+            (__u32)(offsetof(struct seccomp_data, instruction_pointer) + 4)),
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K,
                  (__u32)(((unsigned long)start_text) >> 32), 0, 3),
         BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
-                 (offsetof(struct seccomp_data, instruction_pointer))),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (__u32)start_text, 0, 1),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (__u32)&__etext, 0, 1),
+                 (__u32)(offsetof(struct seccomp_data, instruction_pointer))),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (__u32)(uintptr_t)start_text, 0, 1),
+        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (__u32)(uintptr_t)&__etext, 0, 1),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
     };

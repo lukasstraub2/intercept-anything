@@ -6,6 +6,8 @@
 
 extern char** environ;
 
+extern "C" {
+
 JNIEXPORT void JNICALL
 Java_me_lukasstraub2_android_libexecve_1thread_ExecveThread_execveThread(
     JNIEnv* env,
@@ -31,4 +33,5 @@ Java_me_lukasstraub2_android_libexecve_1thread_ExecveThread_execveThread(
         jbyteArray _str = (jbyteArray)env->GetObjectArrayElement(_argv, i);
         env->ReleaseByteArrayElements(_str, (jbyte*)argv[i], 0);
     }
+}
 }
