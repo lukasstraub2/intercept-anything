@@ -7,35 +7,7 @@
 #ifndef _NOLIBC_STDLIB_H
 #define _NOLIBC_STDLIB_H
 
-#include "std.h"
-#include "arch.h"
-#include "types.h"
-#include "sys.h"
-#include "string.h"
-#include <linux/auxvec.h>
-
-struct nolibc_heap {
-	size_t	len;
-	char	user_p[] __attribute__((__aligned__));
-};
-
-/* Buffer used to store int-to-ASCII conversions. Will only be implemented if
- * any of the related functions is implemented. The area is large enough to
- * store "18446744073709551615" or "-9223372036854775808" and the final zero.
- */
-static __attribute__((unused)) char itoa_buffer[21];
-
-/*
- * As much as possible, please keep functions alphabetically sorted.
- */
-
-/* must be exported, as it's used by libgcc for various divide functions */
-__attribute__((weak,unused,noreturn,section(".text.nolibc_abort")))
-void abort(void)
-{
-	sys_kill(sys_getpid(), SIGABRT);
-	for (;;);
-}
+#include <stdint.h>
 
 static __attribute__((unused))
 long atol(const char *s)
@@ -66,130 +38,6 @@ int atoi(const char *s)
 	return atol(s);
 }
 
-static __attribute__((unused))
-void free(void *ptr)
-{
-	struct nolibc_heap *heap;
-
-	if (!ptr)
-		return;
-
-	heap = container_of(ptr, struct nolibc_heap, user_p);
-	munmap(heap, heap->len);
-}
-
-/* getenv() tries to find the environment variable named <name> in the
- * environment array pointed to by global variable "environ" which must be
- * declared as a char **, and must be terminated by a NULL (it is recommended
- * to set this variable to the "envp" argument of main()). If the requested
- * environment variable exists its value is returned otherwise NULL is
- * returned.
- */
-static __attribute__((unused))
-char *getenv(const char *name)
-{
-	int idx, i;
-
-	if (environ) {
-		for (idx = 0; environ[idx]; idx++) {
-			for (i = 0; name[i] && name[i] == environ[idx][i];)
-				i++;
-			if (!name[i] && environ[idx][i] == '=')
-				return &environ[idx][i+1];
-		}
-	}
-	return NULL;
-}
-
-static __attribute__((unused))
-unsigned long getauxval(unsigned long type)
-{
-	const unsigned long *auxv = _auxv;
-	unsigned long ret;
-
-	if (!auxv)
-		return 0;
-
-	while (1) {
-		if (!auxv[0] && !auxv[1]) {
-			ret = 0;
-			break;
-		}
-
-		if (auxv[0] == type) {
-			ret = auxv[1];
-			break;
-		}
-
-		auxv += 2;
-	}
-
-	return ret;
-}
-
-static __attribute__((unused))
-void *malloc(size_t len)
-{
-	struct nolibc_heap *heap;
-
-	/* Always allocate memory with size multiple of 4096. */
-	len  = sizeof(*heap) + len;
-	len  = (len + 4095UL) & -4096UL;
-	heap = (struct nolibc_heap *)mmap(NULL, len, PROT_READ|PROT_WRITE,
-					  MAP_ANONYMOUS|MAP_PRIVATE,-1, 0);
-	if (__builtin_expect(heap == MAP_FAILED, 0))
-		return NULL;
-
-	heap->len = len;
-	return heap->user_p;
-}
-
-static __attribute__((unused))
-void *calloc(size_t size, size_t nmemb)
-{
-	size_t x = size * nmemb;
-
-	if (__builtin_expect(size && ((x / size) != nmemb), 0)) {
-		SET_ERRNO(ENOMEM);
-		return NULL;
-	}
-
-	/*
-	 * No need to zero the heap, the MAP_ANONYMOUS in malloc()
-	 * already does it.
-	 */
-	return malloc(x);
-}
-
-static __attribute__((unused))
-void *realloc(void *old_ptr, size_t new_size)
-{
-	struct nolibc_heap *heap;
-	size_t user_p_len;
-	void *ret;
-
-	if (!old_ptr)
-		return malloc(new_size);
-
-	heap = container_of(old_ptr, struct nolibc_heap, user_p);
-	user_p_len = heap->len - sizeof(*heap);
-	/*
-	 * Don't realloc() if @user_p_len >= @new_size, this block of
-	 * memory is still enough to handle the @new_size. Just return
-	 * the same pointer.
-	 */
-	if (user_p_len >= new_size)
-		return old_ptr;
-
-	ret = malloc(new_size);
-	if (__builtin_expect(!ret, 0))
-		return NULL;
-
-	memcpy(ret, heap->user_p, heap->len);
-	munmap(heap, heap->len);
-	return ret;
-}
-
 /* Converts the unsigned long integer <in> to its hex representation into
  * buffer <buffer>, which must be long enough to store the number and the
  * trailing zero (17 bytes for "ffffffffffffffff" or 9 for "ffffffff"). The
@@ -218,16 +66,6 @@ int utoh_r(unsigned long in, char *buffer)
 
 	buffer[digits] = 0;
 	return digits;
-}
-
-/* converts unsigned long <in> to an hex string using the static itoa_buffer
- * and returns the pointer to that string.
- */
-static __inline__ __attribute__((unused))
-char *utoh(unsigned long in)
-{
-	utoh_r(in, itoa_buffer);
-	return itoa_buffer;
 }
 
 /* Converts the unsigned long integer <in> to its string representation into
@@ -292,36 +130,6 @@ char *ltoa_r(long in, char *buffer)
 	return buffer;
 }
 
-/* converts long integer <in> to a string using the static itoa_buffer and
- * returns the pointer to that string.
- */
-static __inline__ __attribute__((unused))
-char *itoa(long in)
-{
-	itoa_r(in, itoa_buffer);
-	return itoa_buffer;
-}
-
-/* converts long integer <in> to a string using the static itoa_buffer and
- * returns the pointer to that string. Same as above, for compatibility.
- */
-static __inline__ __attribute__((unused))
-char *ltoa(long in)
-{
-	itoa_r(in, itoa_buffer);
-	return itoa_buffer;
-}
-
-/* converts unsigned long integer <in> to a string using the static itoa_buffer
- * and returns the pointer to that string.
- */
-static __inline__ __attribute__((unused))
-char *utoa(unsigned long in)
-{
-	utoa_r(in, itoa_buffer);
-	return itoa_buffer;
-}
-
 /* Converts the unsigned 64-bit integer <in> to its hex representation into
  * buffer <buffer>, which must be long enough to store the number and the
  * trailing zero (17 bytes for "ffffffffffffffff"). The buffer is filled from
@@ -354,16 +162,6 @@ int u64toh_r(uint64_t in, char *buffer)
 
 	buffer[digits] = 0;
 	return digits;
-}
-
-/* converts uint64_t <in> to an hex string using the static itoa_buffer and
- * returns the pointer to that string.
- */
-static __inline__ __attribute__((unused))
-char *u64toh(uint64_t in)
-{
-	u64toh_r(in, itoa_buffer);
-	return itoa_buffer;
 }
 
 /* Converts the unsigned 64-bit integer <in> to its string representation into
@@ -417,28 +215,5 @@ int i64toa_r(int64_t in, char *buffer)
 	len += u64toa_r(in, ptr);
 	return len;
 }
-
-/* converts int64_t <in> to a string using the static itoa_buffer and returns
- * the pointer to that string.
- */
-static __inline__ __attribute__((unused))
-char *i64toa(int64_t in)
-{
-	i64toa_r(in, itoa_buffer);
-	return itoa_buffer;
-}
-
-/* converts uint64_t <in> to a string using the static itoa_buffer and returns
- * the pointer to that string.
- */
-static __inline__ __attribute__((unused))
-char *u64toa(uint64_t in)
-{
-	u64toa_r(in, itoa_buffer);
-	return itoa_buffer;
-}
-
-/* make sure to include all global symbols */
-#include "nolibc.h"
 
 #endif /* _NOLIBC_STDLIB_H */

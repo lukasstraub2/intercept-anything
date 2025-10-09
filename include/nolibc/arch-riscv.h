@@ -7,9 +7,6 @@
 #ifndef _NOLIBC_ARCH_RISCV_H
 #define _NOLIBC_ARCH_RISCV_H
 
-#include "compiler.h"
-#include "crt.h"
-
 /* Syscalls for RISCV :
  *   - stack is 16-byte aligned
  *   - syscall number is passed in a7
@@ -138,20 +135,5 @@
 	);                                                                    \
 	_arg1;                                                                \
 })
-
-/* startup code */
-void __attribute__((weak, noreturn, optimize("Os", "omit-frame-pointer"))) __no_stack_protector _start(void)
-{
-	__asm__ volatile (
-		".option push\n"
-		".option norelax\n"
-		"lla  gp, __global_pointer$\n"
-		".option pop\n"
-		"mv   a0, sp\n"           /* save stack pointer to a0, as arg1 of _start_c */
-		"andi sp, a0, -16\n"      /* sp must be 16-byte aligned                    */
-		"call _start_c\n"         /* transfer to c runtime                         */
-	);
-	__builtin_unreachable();
-}
 
 #endif /* _NOLIBC_ARCH_RISCV_H */

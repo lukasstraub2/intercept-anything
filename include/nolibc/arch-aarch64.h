@@ -7,9 +7,6 @@
 #ifndef _NOLIBC_ARCH_AARCH64_H
 #define _NOLIBC_ARCH_AARCH64_H
 
-#include "compiler.h"
-#include "crt.h"
-
 /* Syscalls for AARCH64 :
  *   - registers are 64-bit
  *   - stack is 16-byte aligned
@@ -141,14 +138,4 @@
 	_arg1;                                                                \
 })
 
-/* startup code */
-void __attribute__((weak, noreturn, optimize("Os", "omit-frame-pointer"))) __no_stack_protector _start(void)
-{
-	__asm__ volatile (
-		"mov x0, sp\n"          /* save stack pointer to x0, as arg1 of _start_c */
-		"and sp, x0, -16\n"     /* sp must be 16-byte aligned in the callee      */
-		"bl  _start_c\n"        /* transfer to c runtime                         */
-	);
-	__builtin_unreachable();
-}
 #endif /* _NOLIBC_ARCH_AARCH64_H */

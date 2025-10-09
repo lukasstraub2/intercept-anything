@@ -7,9 +7,6 @@
 #ifndef _NOLIBC_ARCH_I386_H
 #define _NOLIBC_ARCH_I386_H
 
-#include "compiler.h"
-#include "crt.h"
-
 /* Syscalls for i386 :
  *   - mostly similar to x86_64
  *   - registers are 32-bit
@@ -154,27 +151,5 @@
 	);							\
 	_eax;							\
 })
-
-/* startup code */
-/*
- * i386 System V ABI mandates:
- * 1) last pushed argument must be 16-byte aligned.
- * 2) The deepest stack frame should be set to zero
- *
- */
-void __attribute__((weak, noreturn, optimize("Os", "omit-frame-pointer"))) __no_stack_protector _start(void)
-{
-	__asm__ volatile (
-		"xor  %ebp, %ebp\n"       /* zero the stack frame                                */
-		"mov  %esp, %eax\n"       /* save stack pointer to %eax, as arg1 of _start_c     */
-		"add  $12, %esp\n"        /* avoid over-estimating after the 'and' & 'sub' below */
-		"and  $-16, %esp\n"       /* the %esp must be 16-byte aligned on 'call'          */
-		"sub  $12, %esp\n"        /* sub 12 to keep it aligned after the push %eax       */
-		"push %eax\n"             /* push arg1 on stack to support plain stack modes too */
-		"call _start_c\n"         /* transfer to c runtime                               */
-		"hlt\n"                   /* ensure it does not return                           */
-	);
-	__builtin_unreachable();
-}
 
 #endif /* _NOLIBC_ARCH_I386_H */

@@ -7,9 +7,6 @@
 #ifndef _NOLIBC_ARCH_X86_64_H
 #define _NOLIBC_ARCH_X86_64_H
 
-#include "compiler.h"
-#include "crt.h"
-
 /* Syscalls for x86_64 :
  *   - registers are 64-bit
  *   - syscall number is passed in rax
@@ -153,66 +150,5 @@
 	);                                                                    \
 	_ret;                                                                 \
 })
-
-/* startup code */
-/*
- * x86-64 System V ABI mandates:
- * 1) %rsp must be 16-byte aligned right before the function call.
- * 2) The deepest stack frame should be zero (the %rbp).
- *
- */
-void __attribute__((weak, noreturn, optimize("Os", "omit-frame-pointer"))) __no_stack_protector _start(void)
-{
-	__asm__ volatile (
-		"xor  %ebp, %ebp\n"       /* zero the stack frame                            */
-		"mov  %rsp, %rdi\n"       /* save stack pointer to %rdi, as arg1 of _start_c */
-		"and  $-16, %rsp\n"       /* %rsp must be 16-byte aligned before call        */
-		"call _start_c\n"         /* transfer to c runtime                           */
-		"hlt\n"                   /* ensure it does not return                       */
-	);
-	__builtin_unreachable();
-}
-
-#define NOLIBC_ARCH_HAS_MEMMOVE
-void *memmove(void *dst, const void *src, size_t len);
-
-#define NOLIBC_ARCH_HAS_MEMCPY
-void *memcpy(void *dst, const void *src, size_t len);
-
-#define NOLIBC_ARCH_HAS_MEMSET
-void *memset(void *dst, int c, size_t len);
-
-__asm__ (
-".section .text.nolibc_memmove_memcpy\n"
-".weak memmove\n"
-".weak memcpy\n"
-"memmove:\n"
-"memcpy:\n"
-	"movq %rdx, %rcx\n\t"
-	"movq %rdi, %rax\n\t"
-	"movq %rdi, %rdx\n\t"
-	"subq %rsi, %rdx\n\t"
-	"cmpq %rcx, %rdx\n\t"
-	"jb   .Lbackward_copy\n\t"
-	"rep movsb\n\t"
-	"retq\n"
-".Lbackward_copy:"
-	"leaq -1(%rdi, %rcx, 1), %rdi\n\t"
-	"leaq -1(%rsi, %rcx, 1), %rsi\n\t"
-	"std\n\t"
-	"rep movsb\n\t"
-	"cld\n\t"
-	"retq\n"
-
-".section .text.nolibc_memset\n"
-".weak memset\n"
-"memset:\n"
-	"xchgl %eax, %esi\n\t"
-	"movq  %rdx, %rcx\n\t"
-	"pushq %rdi\n\t"
-	"rep stosb\n\t"
-	"popq  %rax\n\t"
-	"retq\n"
-);
 
 #endif /* _NOLIBC_ARCH_X86_64_H */
