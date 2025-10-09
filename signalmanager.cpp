@@ -1,11 +1,8 @@
 
-#include "mynolibc.h"
-
 #include "intercept.h"
 #include "util.h"
 #include "mysys.h"
 #include "mysignal.h"
-#include "asm/siginfo.h"
 #include "mylock.h"
 #include "myseccomp.h"
 #include "signalmanager.h"
@@ -15,8 +12,9 @@
 #define DEBUG_ENV "DEBUG_SIGNAL"
 #include "debug.h"
 
-static_assert(sizeof(sigset_t) == 8, "sigset_t");
-static_assert(sizeof(sigset_t) == sizeof(long), "sigset_t");
+#include <signal.h>
+#include <string.h>
+#include <unistd.h>
 
 typedef union mysigset_t mysigset_t;
 union mysigset_t {

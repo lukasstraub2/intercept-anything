@@ -27,7 +27,8 @@
 #pragma once
 
 #include "myelf.h"
-#include "std.h"
+
+#include <fcntl.h>
 
 #define Z_PROG 0
 #define Z_INTERP 1

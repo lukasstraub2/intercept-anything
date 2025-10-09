@@ -1,6 +1,5 @@
 
-#include "mynolibc.h"
-
+#include "sys.h"
 #include "mysys.h"
 #include "mylock.h"
 #include "linux/sched.h"
@@ -8,7 +7,14 @@
 #include "util.h"
 
 #include "mysignal.h"
-#include "asm/siginfo.h"
+
+#include <signal.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <sys/mman.h>
+#include <bits/ioctl.h>
+#include <unistd.h>
+#include <stdio.h>
 
 #define num_threads (16)
 #define stack_size (512 * 1024)

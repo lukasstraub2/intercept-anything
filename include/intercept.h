@@ -1,9 +1,10 @@
 #pragma once
 
-#include "mynolibc.h"
 #include "tls.h"
 #include "config.h"
 #include "myseccomp.h"
+
+#include <sys/types.h>
 
 struct Context {
     Tls* tls;

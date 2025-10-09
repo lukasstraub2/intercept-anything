@@ -1,18 +1,13 @@
 
-#include "mynolibc.h"
-
 #include "mysignal.h"
 #include "myseccomp.h"
 #include "mysys.h"
 #include "intercept.h"
 #include "loader.h"
-#include "mytypes.h"
 #include "config.h"
 #include "signalmanager.h"
 #include "tls.h"
 #include "util.h"
-
-#include "asm/siginfo.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
@@ -21,6 +16,19 @@
 #include "linux/bpf.h"
 #include "linux/filter.h"
 #include "linux/seccomp.h"
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <signal.h>
+#include <stddef.h>
+#include <sys/prctl.h>
+#include <string.h>
+
+extern "C" {
+int __main_prepare_threaded();
+int __external_thread_register(int tid);
+}
 
 static int initialized = 0;
 

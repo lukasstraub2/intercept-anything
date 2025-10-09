@@ -6,7 +6,16 @@
 
 #pragma once
 
-#include "mynolibc.h"
+#include "arch.h"
+#include "mysys.h"
+
+#include <syscall.h>
+#include <signal.h>
+
+extern "C" {
+#include "../libs/musl/src/include/features.h"
+#include "ksigaction.h"
+}
 
 typedef void (*sighandler_t)(int sig);
 

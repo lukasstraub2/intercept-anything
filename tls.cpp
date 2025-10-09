@@ -1,11 +1,12 @@
 
-#include "mynolibc.h"
-
 #include "tls.h"
 #include "mylock.h"
 #include "util.h"
 #include "rmap.h"
 #include "mysys.h"
+
+#include <stdlib.h>
+#include <unistd.h>
 
 static_assert(sizeof(Spinlock) >= sizeof(pid_t), "pid_t > Spinlock");
 

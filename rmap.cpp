@@ -1,9 +1,9 @@
 
-#include "mynolibc.h"
-
 #include "rmap.h"
 #include "mylock.h"
 #include "util.h"
+
+#include <stdlib.h>
 
 static uint32_t rmap_size(RMap* rmap) {
     uint32_t size = __atomic_load_n(&rmap->size, __ATOMIC_RELAXED);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <signal.h>
+
 typedef struct SysArgs SysArgs;
 struct SysArgs {
     unsigned long num;

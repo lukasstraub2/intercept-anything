@@ -1,8 +1,9 @@
 #pragma once
 
-#include "mynolibc.h"
 #include "mylist.h"
 #include "base_types.h"
+
+#include <stdint.h>
 
 typedef uint32_t Spinlock __attribute__((aligned(8)));
 typedef Spinlock Mutex;

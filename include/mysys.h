@@ -1,7 +1,8 @@
 #pragma once
 
 #include "sys.h"
-#include "asm-generic/posix_types.h"
+
+#include <fcntl.h>
 
 static __attribute__((unused)) int sys_openat(int dirfd,
                                               const char* path,

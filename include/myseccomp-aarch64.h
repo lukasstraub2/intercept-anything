@@ -1,11 +1,5 @@
 #pragma once
 
-#include "mynolibc.h"
-#include "myseccomp.h"
-
-#include <asm/sigcontext.h>
-#include <asm/ucontext.h>
-
 #define AUDIT_ARCH_CURRENT AUDIT_ARCH_AARCH64
 #define stack_grows_down
 

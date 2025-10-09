@@ -5,6 +5,9 @@
 #include "mysys.h"
 #include "linux/futex.h"
 
+#include <stdlib.h>
+#include <sys/mman.h>
+
 typedef struct LocalMutexes LocalMutexes;
 struct LocalMutexes {
     Spinlock size;

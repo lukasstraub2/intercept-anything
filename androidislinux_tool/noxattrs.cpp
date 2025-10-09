@@ -2,6 +2,8 @@
 #include "noxattrs.h"
 #include "intercept.h"
 
+#include <errno.h>
+
 static ssize_t noxattrs_xattr(Context* ctx,
                               const This* noxattrs,
                               const CallXattr* call) {

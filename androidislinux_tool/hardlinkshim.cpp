@@ -1,6 +1,5 @@
 
-#include "mynolibc.h"
-
+#include "itoa.h"
 #include "mylock.h"
 #include "signalmanager.h"
 
@@ -18,6 +17,12 @@
 #define stat wonky_stat
 #include "asm/stat.h"
 #undef stat
+
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <dirent.h>
+#include <sys/mman.h>
 
 struct This {
     CallHandler hardlinkshim;

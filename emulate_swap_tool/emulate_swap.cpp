@@ -1,11 +1,11 @@
 
-#include "mynolibc.h"
-
 #include "emulate_swap.h"
 #include "intercept.h"
 #include "signalmanager.h"
 #include "util.h"
 #include "mysys.h"
+
+#include <sys/mman.h>
 
 static int mktemp(unsigned long size) {
     char filename[] = "/var/tmp/.swap-XXXXXX";

@@ -1,6 +1,6 @@
 
-#include "mynolibc.h"
-
+#include "sys.h"
+#include "itoa.h"
 #include "rootlink.h"
 #include "config.h"
 #include "intercept.h"
@@ -9,6 +9,10 @@
 #include "linux/socket.h"
 #include "linux/un.h"
 #include "mysocket.h"
+
+#include <string.h>
+#include <errno.h>
+#include <stdlib.h>
 
 struct This {
     CallHandler rootlink;

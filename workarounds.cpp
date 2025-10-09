@@ -1,10 +1,11 @@
 
-#include "mynolibc.h"
-
 #include "mysys.h"
 #include "workarounds.h"
 #include "intercept.h"
 #include "linux/ptrace.h"
+
+#include <string.h>
+#include <stdlib.h>
 
 struct This {
     CallHandler waround;

@@ -1,12 +1,13 @@
 
-#include "mynolibc.h"
-
+#include "sys.h"
 #include "rootshim.h"
 #include "config.h"
 #include "intercept.h"
 #include "mytypes.h"
 #include "util.h"
 #include "signalmanager.h"
+
+#include <string.h>
 
 struct This {
     CallHandler rootshim;

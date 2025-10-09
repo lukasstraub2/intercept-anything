@@ -24,15 +24,20 @@
  * SOFTWARE.
  */
 
-#include "mynolibc.h"
-
 #include "loader.h"
 #include "trampo.h"
 #include "intercept.h"
+#include "features.h"
+#include "../libs/musl/src/include/features.h"
+#include "../libs/musl/src/internal/libc.h"
 
 #define DEBUG_ENV "DEBUG_LOADER"
 #include "debug.h"
 
+#include <string.h>
+#include <unistd.h>
+
+extern char** environ;
 int main(int argc, char** argv, char** envp) {
     unsigned long* sp = (unsigned long*)argv;
     sp--;
@@ -59,7 +64,7 @@ int main(int argc, char** argv, char** envp) {
     memcpy(&argv[0], &argv[1],
            (unsigned long)after_auxv - (unsigned long)&argv[1]);
     environ--;
-    _auxv--;
+    libc.auxv--;
     /* SP points to argc. */
     (*sp)--;
 

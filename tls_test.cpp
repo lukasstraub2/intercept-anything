@@ -1,7 +1,7 @@
 
-#include "mynolibc.h"
-
 #include "tls.h"
+
+#include <stdlib.h>
 
 int main(int argc, char** argv) {
     tls_init();

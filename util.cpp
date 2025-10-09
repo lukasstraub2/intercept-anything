@@ -1,9 +1,11 @@
 
-#include "mynolibc.h"
-
 #include "util.h"
 #include "tls.h"
 #include "mysys.h"
+#include "itoa.h"
+
+#include <string.h>
+#include <stdlib.h>
 
 void randchar6(char* buf) {
     int ret;

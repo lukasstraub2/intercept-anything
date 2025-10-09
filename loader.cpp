@@ -24,10 +24,8 @@
  * SOFTWARE.
  */
 
-#include "mynolibc.h"
-
+#include "mysys.h"
 #include "loader.h"
-#include "mprotect.h"
 #include "trampo.h"
 #include "myelf.h"
 
@@ -36,7 +34,8 @@
 
 #include "util.h"
 
-#define PAGE_SIZE 4096
+#include <sys/mman.h>
+
 #define ALIGN (PAGE_SIZE - 1)
 #define ROUND_PG(x) (((x) + (ALIGN)) & ~(ALIGN))
 #define TRUNC_PG(x) ((x) & ~(ALIGN))

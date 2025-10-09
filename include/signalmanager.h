@@ -1,7 +1,9 @@
 #pragma once
 
 #include "intercept.h"
-#include "asm/siginfo.h"
+
+#include <signal.h>
+#include <stdlib.h>
 
 typedef void (*myhandler_t)(int sig, siginfo_t* info, void* ucontext);
 

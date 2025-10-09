@@ -26,8 +26,7 @@
 
 #pragma once
 
-#include <linux/elf.h>
-#include "stdint.h"
+#include <elf.h>
 
 #if defined(__x86_64__) || defined(__aarch64__)
 #define Elf_Ehdr Elf64_Ehdr
