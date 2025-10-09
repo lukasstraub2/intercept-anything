@@ -1,0 +1,3 @@
+[submodule "musl"]
+	path = libs/musl
+	url = https://github.com/lukasstraub2/musl.git
