@@ -16,25 +16,42 @@
 #include <string.h>
 #include <unistd.h>
 
-typedef union mysigset_t mysigset_t;
-union mysigset_t {
-    sigset_t sigset;
-    unsigned long cast;
-};
+static int signotset(sigset_t* dest, const sigset_t* left) {
+    unsigned long i = 0, *d = (unsigned long*)dest, *l = (unsigned long*)left;
+    for (; i < (_NSIG / 8 / sizeof(long)); i++) {
+        d[i] = ~l[i];
+    }
+    return 0;
+}
 
-#define SIG_BIT(signum) (1lu << ((signum)-1))
-const mysigset_t full_mask = {.cast = ~(SIG_BIT(SIGBUS) | SIG_BIT(SIGFPE) |
-                                        SIG_BIT(SIGILL) | SIG_BIT(SIGSEGV) |
-                                        SIG_BIT(SIGSYS) | SIG_BIT(SIGABRT))};
+static const sigset_t* full_mask() {
+    static sigset_t set;
+    static int init = 0;
 
-static int install_generic_handler(int signum, const struct sigaction* act);
+    if (init) {
+        return &set;
+    }
+
+    sigfillset(&set);
+    sigdelset(&set, SIGBUS);
+    sigdelset(&set, SIGFPE);
+    sigdelset(&set, SIGILL);
+    sigdelset(&set, SIGSEGV);
+    sigdelset(&set, SIGSYS);
+    sigdelset(&set, SIGABRT);
+
+    return &set;
+}
+
+static int install_generic_handler(int signum,
+                                   const struct k_sigaction* const act);
 
 #define mysignal_size (64)
 typedef struct MySignal MySignal;
 struct MySignal {
     int staging_signum;
-    struct sigaction staging_signal;
-    struct sigaction mysignal[mysignal_size];
+    struct k_sigaction staging_signal;
+    struct k_sigaction mysignal[mysignal_size];
 };
 
 static RMap* map;
@@ -114,7 +131,7 @@ static MySignal* _get_mysignal(Tls* tls) {
     return alloc;
 }
 
-static struct sigaction* get_mysignal(MySignal* mysignal, int signum) {
+static struct k_sigaction* get_mysignal(MySignal* mysignal, int signum) {
     assert(signum > 0);
     return mysignal->mysignal + signum - 1;
 }
@@ -123,8 +140,8 @@ static void recover_mysignal(MySignal* mysignal) {
     int signum = mysignal->staging_signum;
 
     if (signum) {
-        struct sigaction* mysig = get_mysignal(mysignal, signum);
-        memcpy(mysig, &mysignal->staging_signal, sizeof(struct sigaction));
+        struct k_sigaction* mysig = get_mysignal(mysignal, signum);
+        *mysig = mysignal->staging_signal;
         __asm volatile("" ::: "memory");
         WRITE_ONCE(mysignal->staging_signum, 0);
         __asm volatile("" ::: "memory");
@@ -133,14 +150,14 @@ static void recover_mysignal(MySignal* mysignal) {
 
 static void update_mysignal(MySignal* mysignal,
                             int signum,
-                            const struct sigaction* act) {
-    struct sigaction* mysig = get_mysignal(mysignal, signum);
+                            const struct k_sigaction* act) {
+    struct k_sigaction* mysig = get_mysignal(mysignal, signum);
 
-    memcpy(&mysignal->staging_signal, act, sizeof(struct sigaction));
+    mysignal->staging_signal = *act;
     __asm volatile("" ::: "memory");
     WRITE_ONCE(mysignal->staging_signum, signum);
     __asm volatile("" ::: "memory");
-    memcpy(mysig, &mysignal->staging_signal, sizeof(struct sigaction));
+    *mysig = mysignal->staging_signal;
     __asm volatile("" ::: "memory");
     WRITE_ONCE(mysignal->staging_signum, 0);
     __asm volatile("" ::: "memory");
@@ -155,31 +172,30 @@ void signalmanager_please_callback(Tls* tls) {
 
 static void raise_unmasked(int signum) {
     int ret;
-    struct sigaction act = {};
-    act.sa_handler = SIG_DFL;
-    struct sigaction oldact;
-    const mysigset_t empty = {.cast = 0};
+    struct k_sigaction act = {};
+    act.handler = SIG_DFL;
+    struct k_sigaction oldact;
+    const sigset_t empty = {};
     sigset_t oldset;
 
-    ret = sys_rt_sigaction(signum, &act, &oldact, sizeof(sigset_t));
+    ret = sys_rt_sigaction(signum, &act, &oldact);
     if (ret < 0) {
         exit_error("rt_sigaction(%d): %d", signum, ret);
     }
 
-    ret = sys_rt_sigprocmask(SIG_SETMASK, &empty.sigset, &oldset,
-                             sizeof(sigset_t));
+    ret = sys_rt_sigprocmask(SIG_SETMASK, &empty, &oldset);
     if (ret < 0) {
         exit_error("rt_sigprocmask(0): %d", ret);
     }
 
     raise(signum);
 
-    ret = sys_rt_sigprocmask(SIG_SETMASK, &oldset, nullptr, sizeof(sigset_t));
+    ret = sys_rt_sigprocmask(SIG_SETMASK, &oldset, nullptr);
     if (ret < 0) {
         exit_error("rt_sigprocmask(oldset): %d", ret);
     }
 
-    ret = sys_rt_sigaction(signum, &oldact, nullptr, sizeof(sigset_t));
+    ret = sys_rt_sigaction(signum, &oldact, nullptr);
     if (ret < 0) {
         exit_error("rt_sigaction(%d): %d", signum, ret);
     }
@@ -212,21 +228,21 @@ generic_handler(int signum, siginfo_t* info, void* ucontext) {
         return;
     }
 
-    if (pc_in_our_code(ucontext) && ~full_mask.cast & SIG_BIT(signum)) {
+    if (pc_in_our_code(ucontext) && !sigismember(full_mask(), signum)) {
         raise_unmasked(signum);
     }
 
     mutex_lock(tls, mutex);
     MySignal* mysignal = _get_mysignal(tls);
-    struct sigaction* ptr = get_mysignal(mysignal, signum);
-    const struct sigaction copy = *ptr;
+    struct k_sigaction* ptr = get_mysignal(mysignal, signum);
+    const struct k_sigaction copy = *ptr;
 
-    if (ptr->sa_flags & SA_RESETHAND) {
-        ptr->sa_handler = SIG_DFL;
+    if (ptr->flags & SA_RESETHAND) {
+        ptr->handler = SIG_DFL;
     }
     mutex_unlock(tls, mutex);
 
-    const __sighandler_t handler = copy.sa_handler;
+    void (*const handler)(int) = copy.handler;
     const myhandler_t _handler = (myhandler_t)handler;
 
     if (handler == SIG_DFL) {
@@ -237,21 +253,21 @@ generic_handler(int signum, siginfo_t* info, void* ucontext) {
         // noop
     } else {
         trace_plus("signal %d: registered handler\n");
-        mysigset_t sa_mask = {.sigset = copy.sa_mask};
-        if (!(copy.sa_flags & SA_NODEFER)) {
-            sa_mask.cast |= SIG_BIT(signum);
+        sigset_t sa_mask;
+        memcpy(&sa_mask, copy.mask, _NSIG / 8);
+        if (!(copy.flags & SA_NODEFER)) {
+            sigaddset(&sa_mask, signum);
         }
-        mysigset_t set = {.sigset = *uctx_set};
-        set.cast |= sa_mask.cast;
-        set.cast &= full_mask.cast;
+        sigset_t set = *uctx_set;
+        sigorset(&set, &set, &sa_mask);
+        sigandset(&set, &set, full_mask());
 
-        int ret = sys_rt_sigprocmask(SIG_SETMASK, &set.sigset, nullptr,
-                                     sizeof(sigset_t));
+        int ret = sys_rt_sigprocmask(SIG_SETMASK, &set, nullptr);
         if (ret < 0) {
             exit_error("rt_sigprocmask(uctx_set): %d", ret);
         }
 
-        if (copy.sa_flags & SA_SIGINFO) {
+        if (copy.flags & SA_SIGINFO) {
             _handler(signum, info, ucontext);
         } else {
             handler(signum);
@@ -281,8 +297,7 @@ generic_handler(int signum, siginfo_t* info, void* ucontext) {
         WRITE_ONCE(*_jumpbuf, nullptr);
         __asm volatile("" ::: "memory");
 
-        int ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, nullptr,
-                                     sizeof(sigset_t));
+        int ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, nullptr);
         if (ret < 0) {
             exit_error("rt_sigprocmask(uctx_set): %d", ret);
         }
@@ -299,8 +314,7 @@ void signalmanager_sigsys_mask_until_sigreturn(Context* ctx) {
     struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
     sigset_t* uctx_set = &uctx->uc_sigmask;
 
-    ret = sys_rt_sigprocmask(SIG_SETMASK, &full_mask.sigset, uctx_set,
-                             sizeof(sigset_t));
+    ret = sys_rt_sigprocmask(SIG_SETMASK, full_mask(), uctx_set);
     if (ret < 0) {
         exit_error("rt_sigprocmask(0): %d", ret);
     }
@@ -317,7 +331,7 @@ void signalmanager_sigsys_unmask(void* ucontext) {
     struct ucontext* uctx = (struct ucontext*)ucontext;
     sigset_t* uctx_set = &uctx->uc_sigmask;
 
-    ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, nullptr, sizeof(sigset_t));
+    ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, nullptr);
     if (ret < 0) {
         exit_error("rt_sigprocmask(uctx_set): %d", ret);
     }
@@ -329,10 +343,10 @@ static int signalmanager_sigprocmask(Context* ctx,
     RetInt* _ret = call->ret;
     struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
     sigset_t* _uctx_set = &uctx->uc_sigmask;
-    mysigset_t uctx_set = {.sigset = *_uctx_set};
-    mysigset_t set = {};
+    sigset_t uctx_set = *_uctx_set;
+    sigset_t set = {};
 
-    if (call->sigsetsize != sizeof(sigset_t)) {
+    if (call->sigsetsize > _NSIG / 8) {
         _ret->ret = -EINVAL;
         goto out;
     }
@@ -343,28 +357,29 @@ static int signalmanager_sigprocmask(Context* ctx,
         goto out;
     }
 
-    set = {.sigset = *call->set};
-    set.cast &= full_mask.cast;
+    set = *call->set;
+    sigandset(&set, &set, full_mask());
 
     signalmanager_sigsys_mask_until_sigreturn(ctx);
     if (call->oldset) {
-        *call->oldset = uctx_set.sigset;
+        *call->oldset = uctx_set;
     }
 
     // Any changes to sigprocmask would be reset on sigreturn
     switch (call->how) {
         case SIG_BLOCK:
-            uctx_set.cast |= set.cast;
+            sigorset(&uctx_set, &uctx_set, &set);
             _ret->ret = 0;
             break;
 
         case SIG_UNBLOCK:
-            uctx_set.cast &= ~set.cast;
+            signotset(&set, &set);
+            sigandset(&uctx_set, &uctx_set, &set);
             _ret->ret = 0;
             break;
 
         case SIG_SETMASK:
-            uctx_set.cast = set.cast;
+            uctx_set = set;
             _ret->ret = 0;
             break;
 
@@ -372,7 +387,7 @@ static int signalmanager_sigprocmask(Context* ctx,
             _ret->ret = -EINVAL;
             break;
     }
-    *_uctx_set = uctx_set.sigset;
+    *_uctx_set = uctx_set;
 
 out:
     return _ret->ret;
@@ -383,9 +398,9 @@ static int signalmanager_sigaction(Context* ctx,
                                    const CallSigaction* call) {
     RetInt* _ret = call->ret;
     MySignal* mysignal = nullptr;
-    struct sigaction* mysig = nullptr;
+    struct k_sigaction* mysig = nullptr;
 
-    if (call->signum <= 0 || call->sigsetsize != sizeof(sigset_t)) {
+    if (call->signum <= 0 || call->sigsetsize > _NSIG / 8) {
         _ret->ret = -EINVAL;
         goto out;
     }
@@ -396,7 +411,7 @@ static int signalmanager_sigaction(Context* ctx,
     mysig = get_mysignal(mysignal, call->signum);
 
     if (call->oldact) {
-        memcpy(call->oldact, mysig, sizeof(struct sigaction));
+        *call->oldact = *mysig;
     }
 
     if (call->act) {
@@ -423,7 +438,7 @@ void signalmanager_install_sigsys(myhandler_t handler) {
     int ret;
     struct sigaction sig = {};
     sig.sa_handler = (decltype(sig.sa_handler))handler;
-    sig.sa_mask = full_mask.sigset;
+    sig.sa_mask = *full_mask();
     sig.sa_flags = SA_NODEFER | SA_SIGINFO;
 
     ret = sigaction(SIGSYS, &sig, nullptr);
@@ -434,12 +449,13 @@ void signalmanager_install_sigsys(myhandler_t handler) {
     trace("registered signal handler\n");
 }
 
-static int install_generic_handler(int signum, const struct sigaction* act) {
+static int install_generic_handler(int signum,
+                                   const struct k_sigaction* const act) {
     DefaultAction def = default_action(signum);
-    struct sigaction copy;
-    memcpy(&copy, act, sizeof(struct sigaction));
+    struct k_sigaction copy;
+    copy = *act;
 
-    if (act->sa_handler == SIG_DFL) {
+    if (act->handler == SIG_DFL) {
         switch (def) {
             case ACTION_CONT:
             case ACTION_IGNORE:
@@ -448,32 +464,32 @@ static int install_generic_handler(int signum, const struct sigaction* act) {
             case ACTION_STOP:
             case ACTION_TERM:
             case ACTION_CORE:
-                copy.sa_handler = (decltype(copy.sa_handler))generic_handler;
-                copy.sa_mask = full_mask.sigset;
-                copy.sa_flags &= ~(SA_RESETHAND);
+                copy.handler = (decltype(copy.handler))generic_handler;
+                memcpy(&copy.mask, full_mask(), _NSIG / 8);
+                copy.flags &= ~(SA_RESETHAND);
                 // TODO: enforce SA_NODEFER for unmasked signals
                 break;
 
             case ACTION_STOP_KILL:
                 break;
         }
-    } else if (act->sa_handler == SIG_IGN) {
+    } else if (act->handler == SIG_IGN) {
         // noop
     } else {
-        copy.sa_handler = (decltype(copy.sa_handler))generic_handler;
-        copy.sa_mask = full_mask.sigset;
-        copy.sa_flags &= ~(SA_RESETHAND);
+        copy.handler = (decltype(copy.handler))generic_handler;
+        memcpy(&copy.mask, full_mask(), _NSIG / 8);
+        copy.flags &= ~(SA_RESETHAND);
         // TODO: enforce SA_NODEFER for unmasked signals
     }
 
-    copy.sa_flags |= SA_SIGINFO;
+    copy.flags |= SA_SIGINFO;
 
-    if (!(copy.sa_flags & SA_RESTORER)) {
-        copy.sa_flags |= SA_RESTORER;
-        copy.sa_restorer = __restore_rt;
+    if (!(copy.flags & SA_RESTORER)) {
+        copy.flags |= SA_RESTORER;
+        copy.restorer = __restore_rt;
     }
 
-    return sys_rt_sigaction(signum, &copy, nullptr, sizeof(sigset_t));
+    return sys_rt_sigaction(signum, &copy, nullptr);
 }
 
 const CallHandler* signalmanager_init(const CallHandler* next) {
@@ -499,18 +515,17 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
     MySignal* mysignal = _get_mysignal(tls);
 
     for (int signum = 1; signum <= mysignal_size; signum++) {
-        struct sigaction act;
-        long ret = sys_rt_sigaction(signum, nullptr, &act, sizeof(sigset_t));
+        struct k_sigaction act;
+        long ret = sys_rt_sigaction(signum, nullptr, &act);
         if (ret < 0) {
             exit_error("rt_sigaction(): %ld", -ret);
         }
         update_mysignal(mysignal, signum, &act);
     }
 
-    mysigset_t unblock = {.cast = full_mask.cast};
-    unblock.cast = ~unblock.cast;
-    int ret = sys_rt_sigprocmask(SIG_UNBLOCK, &unblock.sigset, nullptr,
-                                 sizeof(sigset_t));
+    sigset_t unblock = *full_mask();
+    signotset(&unblock, &unblock);
+    int ret = sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, nullptr);
     if (ret < 0) {
         exit_error("rt_sigprocmask(): %d", -ret);
     }

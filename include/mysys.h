@@ -84,15 +84,29 @@ static __attribute__((unused)) int sys_execveat(int dirfd,
 static __attribute__((unused)) int sys_rt_sigprocmask(int how,
                                                       const sigset_t* set,
                                                       sigset_t* oldset,
-                                                      size_t sigsetsize) {
-    return my_syscall4(__NR_rt_sigprocmask, how, set, oldset, sigsetsize);
+                                                      size_t size) {
+    return my_syscall4(__NR_rt_sigprocmask, how, set, oldset, size);
 }
 
-static __attribute__((unused)) int sys_rt_sigaction(int signum,
-                                                    const struct sigaction* act,
-                                                    struct sigaction* oldact,
-                                                    size_t sigsetsize) {
-    return my_syscall4(__NR_rt_sigaction, signum, act, oldact, sigsetsize);
+static __attribute__((unused)) int sys_rt_sigprocmask(int how,
+                                                      const sigset_t* set,
+                                                      sigset_t* oldset) {
+    return sys_rt_sigprocmask(how, set, oldset, _NSIG / 8);
+}
+
+static __attribute__((unused)) int sys_rt_sigaction(
+    int signum,
+    const struct k_sigaction* act,
+    struct k_sigaction* oldact,
+    size_t size) {
+    return my_syscall4(__NR_rt_sigaction, signum, act, oldact, size);
+}
+
+static __attribute__((unused)) int sys_rt_sigaction(
+    int signum,
+    const struct k_sigaction* act,
+    struct k_sigaction* oldact) {
+    return sys_rt_sigaction(signum, act, oldact, _NSIG / 8);
 }
 
 static __attribute__((unused)) int sys_linkat(int olddirfd,

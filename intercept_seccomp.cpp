@@ -754,8 +754,8 @@ static int handle_rt_sigprocmask(Context* ctx,
 
 static int handle_rt_sigaction(Context* ctx,
                                int signum,
-                               const struct sigaction* act,
-                               struct sigaction* oldact,
+                               const struct k_sigaction* act,
+                               struct k_sigaction* oldact,
                                size_t sigsetsize) {
     trace("rt_sigaction(%d)\n", signum);
 
@@ -1792,8 +1792,8 @@ static unsigned long handle_syscall(Context* ctx, SysArgs* args) {
 
         case __NR_rt_sigaction:
             ret = handle_rt_sigaction(
-                ctx, args->arg1, (const struct sigaction*)args->arg2,
-                (struct sigaction*)args->arg3, args->arg4);
+                ctx, args->arg1, (const struct k_sigaction*)args->arg2,
+                (struct k_sigaction*)args->arg3, args->arg4);
             break;
 
 #ifdef __NR_link

@@ -19,32 +19,10 @@ extern "C" {
 
 typedef void (*sighandler_t)(int sig);
 
-/*
- * int sigaction(int signum, const struct sigaction *act, struct sigaction
- * *oldact);
- */
-
-static __attribute__((unused)) int sys_sigaction(int signum,
-                                                 const struct sigaction* act,
-                                                 struct sigaction* oldact) {
-    return my_syscall4(__NR_rt_sigaction, signum, act, oldact,
-                       sizeof(sigset_t));
-}
-
-__attribute__((weak,
-               unused,
-               noreturn,
-               optimize("omit-frame-pointer"),
-               section(".text.__restore_rt"))) void
-__restore_rt(void) {
-    my_syscall0(__NR_rt_sigreturn);
-    __builtin_unreachable();
-}
-
-static __attribute__((unused)) int sigaction(int signum,
-                                             const struct sigaction* act,
-                                             struct sigaction* oldact) {
-    struct sigaction act2 = *act;
+static __attribute__((unused)) int my_sigaction(int signum,
+                                                const struct k_sigaction* act,
+                                                struct k_sigaction* oldact) {
+    struct k_sigaction act2 = *act;
     int ret;
 
     /*
@@ -79,12 +57,12 @@ static __attribute__((unused)) int sigaction(int signum,
      * the signal is caught.
      *
      */
-    if (!act2.sa_restorer) {
-        act2.sa_flags |= SA_RESTORER;
-        act2.sa_restorer = __restore_rt;
+    if (!act2.restorer) {
+        act2.flags |= SA_RESTORER;
+        act2.restorer = __restore_rt;
     }
 
-    ret = sys_sigaction(signum, &act2, oldact);
+    ret = sys_rt_sigaction(signum, &act2, oldact);
     if (ret < 0) {
         return ret;
     }
