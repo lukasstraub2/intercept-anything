@@ -85,9 +85,18 @@ __attribute__((noinline, section("signal_entry"))) static int _handler(
 
 __attribute__((noinline, section("signal_entry"))) static void
 handler(int sig, siginfo_t* info, void* ucontext) {
-    const pid_t tid = gettid();
+    const pid_t tid = sys_gettid();
+    Tls* tls = _tls_get_noalloc(tid);
+    if (!tls) {
+        int ret = __external_thread_register(tid);
+        if (ret < 0) {
+            abort();
+        }
+
+        tls = _tls_get(tid);
+    }
     trace_plus("gettid(): %u\n", tid);
-    Tls* tls = _tls_get(tid);
+
     signalmanager_please_callback(tls);
 
     if (info->si_errno) {
@@ -2922,6 +2931,10 @@ void intercept_init(int recursing, const char* exe) {
     }
     memcpy(_self_exe, exe, exe_len);
 
+    int ret = __main_prepare_threaded();
+    if (ret != 0) {
+        abort();
+    }
     tls_init();
     mutex_init();
     page_size_init();
