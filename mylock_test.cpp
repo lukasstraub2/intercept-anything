@@ -68,11 +68,13 @@ static void handler(int sig, siginfo_t* info, void* ucontext);
 static void install_sighandler() {
     struct sigaction sig = {};
     sig.sa_handler = (decltype(sig.sa_handler))handler;
-    // sigemptyset(&sig.sa_mask);
+    sigemptyset(&sig.sa_mask);
     sig.sa_flags = SA_NODEFER | SA_SIGINFO;
 
-    unsigned long unblock = (1u << (SIGSYS - 1));
-    sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, nullptr, sizeof(unblock));
+    sigset_t unblock;
+    sigemptyset(&unblock);
+    sigaddset(&unblock, SIGSYS);
+    sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, nullptr);
 
     sigaction(SIGSYS, &sig, nullptr);
 }

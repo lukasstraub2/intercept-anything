@@ -72,11 +72,13 @@ static void handler(int sig, siginfo_t* info, void* ucontext);
 static void install_sighandler() {
     struct sigaction sig = {};
     sig.sa_handler = (decltype(sig.sa_handler))handler;
-    // sigemptyset(&sig.sa_mask);
+    sigemptyset(&sig.sa_mask);
     sig.sa_flags = SA_NODEFER | SA_SIGINFO;
 
-    unsigned long unblock = (1u << (SIGSYS - 1));
-    sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, nullptr, sizeof(unblock));
+    sigset_t unblock;
+    sigemptyset(&unblock);
+    sigaddset(&unblock, SIGSYS);
+    sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, nullptr);
 
     sigaction(SIGSYS, &sig, nullptr);
 }
@@ -179,7 +181,7 @@ static void handler(int sig, siginfo_t* info, void* ucontext) {
     mutex_recover(tls);
     do_work(tls);
 
-    __builtin_longjmp(tls->jumpbuf, 1);
+    __builtin_longjmp((void**)tls->jumpbuf, 1);
 }
 
 __attribute__((noinline)) static void thread_loop() {
@@ -193,7 +195,7 @@ __attribute__((noinline)) static void thread_loop() {
 static void thread() {
     Tls* tls = tls_get();
 
-    if (!__builtin_setjmp(tls->jumpbuf)) {
+    if (!__builtin_setjmp((void**)tls->jumpbuf)) {
         const char tmp = 'c';
         int ret = sys_write(sem[1], &tmp, 1);
         if (ret != 1) {
