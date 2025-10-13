@@ -996,6 +996,14 @@ struct linux_dirent {
     char d_name[];
 };
 
+struct linux_dirent64 {
+    uint64_t d_ino;
+    int64_t d_off;
+    unsigned short d_reclen;
+    unsigned char d_type;
+    char d_name[];
+};
+
 static ssize_t hardlink_getdents(Context* ctx,
                                  const This* hardlinkshim,
                                  const CallGetdents* call) {

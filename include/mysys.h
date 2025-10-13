@@ -325,7 +325,7 @@ static __attribute__((unused)) int sys_connect(int fd,
 
 static __attribute__((unused)) int sys_fanotify_mark(int fanotify_fd,
                                                      unsigned int flags,
-                                                     __u64 mask,
+                                                     uint64_t mask,
                                                      int dfd,
                                                      const char* pathname) {
     return my_syscall5(__NR_fanotify_mark, fanotify_fd, flags, mask, dfd,
@@ -334,7 +334,7 @@ static __attribute__((unused)) int sys_fanotify_mark(int fanotify_fd,
 
 static __attribute__((unused)) int sys_inotify_add_watch(int fd,
                                                          const char* pathname,
-                                                         __u32 mask) {
+                                                         uint32_t mask) {
     return my_syscall3(__NR_inotify_add_watch, fd, pathname, mask);
 }
 
@@ -357,9 +357,9 @@ static __attribute__((unused)) int sys_tkill(pid_t tid, int sig) {
 }
 
 static __attribute__((unused)) ssize_t sys_splice(int fd_in,
-                                                  __kernel_loff_t* off_in,
+                                                  off_t* off_in,
                                                   int fd_out,
-                                                  __kernel_loff_t* off_out,
+                                                  off_t* off_out,
                                                   size_t len,
                                                   unsigned int flags) {
     return my_syscall6(__NR_splice, fd_in, off_in, fd_out, off_out, len, flags);
@@ -386,4 +386,10 @@ static __attribute__((unused)) int sys_close_range(unsigned int fd,
 #else
     return __nolibc_enosys(__func__, fd, max_fd, flags);
 #endif
+}
+
+static __attribute__((unused)) int sys_mprotect(void* addr,
+                                                size_t length,
+                                                int prot) {
+    return my_syscall3(__NR_mprotect, addr, length, prot);
 }

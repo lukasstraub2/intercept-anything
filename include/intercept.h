@@ -498,7 +498,7 @@ __attribute__((unused)) static void callconnect_copy(CallConnect* dst,
 struct CallFanotifyMark {
     int fd;
     unsigned int flags;
-    __u64 mask;
+    uint64_t mask;
     int dirfd;
     const char* path;
     RetInt* ret;
@@ -519,7 +519,7 @@ __attribute__((unused)) static void callfanotify_mark_copy(
 struct CallInotifyAddWatch {
     int fd;
     const char* path;
-    __u32 mask;
+    uint64_t mask;
     RetInt* ret;
 };
 typedef struct CallInotifyAddWatch CallInotifyAddWatch;
@@ -578,8 +578,8 @@ typedef struct CallSigprocmask CallSigprocmask;
 
 struct CallSigaction {
     int signum;
-    const struct sigaction* act;
-    struct sigaction* oldact;
+    const struct k_sigaction* act;
+    struct k_sigaction* oldact;
     size_t sigsetsize;
     RetInt* ret;
 };
