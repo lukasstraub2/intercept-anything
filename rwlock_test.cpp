@@ -235,7 +235,7 @@ static void verifier_thread() {
         last = tmp;
     }
 
-    printf("count: %llu\n", last);
+    printf("count: %lu\n", last);
     sys_exit_group(0);
 }
 
