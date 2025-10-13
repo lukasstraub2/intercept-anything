@@ -5,6 +5,8 @@ project("intercept-anything"
     LANGUAGES CXX
     HOMEPAGE_URL "https://github.com/lukasstraub2/intercept-anything")
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Android")
     add_library(Threads INTERFACE)
     add_library(JNI INTERFACE)
@@ -24,7 +26,7 @@ else()
     endif()
 endif()
 
-include(CheckCXXCompilerFlag)
+add_subdirectory(libs/musl)
 
 if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "^aarch64.*|^armv8.*")
     set(ARCH "aarch64")
@@ -34,41 +36,28 @@ else()
     message(FATAL_ERROR "Architecture not supported: ${CMAKE_SYSTEM_PROCESSOR}")
 endif()
 
-check_cxx_compiler_flag(-lgcc USE_LIBGCC)
-if(${USE_LIBGCC})
-    set(LIBGCC -lgcc)
-else()
-    set(LIBGCC -lcompiler_rt)
-endif()
-
-add_compile_options(-g -O1 -pipe -Wall -Wextra -Wno-cast-function-type -Wno-unused-parameter -Wno-missing-field-initializers -fno-stack-protector -fno-exceptions)
-set(CMAKE_C_VISIBILITY_PRESET hidden)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-include_directories(include)
-set_property(GLOBAL PROPERTY C_STANDARD 11)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 set(FREESTANDING_CFLAGS -nostdinc)
 set(FREESTANDING_LDFLAGS -nostartfiles -nodefaultlibs -nostdlib ${LIBGCC})
 set(FREESTANDING_INCLUDE include/nolibc "include/linux-headers/${ARCH}/include")
 
+include_directories(include include/nolibc "include/linux-headers/${ARCH}/include")
+add_compile_definitions(_GNU_SOURCE)
+add_compile_options(-O1 -pipe -fPIE)
+
 add_library(freestanding OBJECT
     loader.cpp mylock.cpp rmap.cpp tls.cpp intercept_seccomp.cpp util.cpp signalmanager.cpp workarounds.cpp execve_here.cpp)
-target_compile_options(freestanding PRIVATE ${FREESTANDING_CFLAGS})
-target_include_directories(freestanding PRIVATE ${FREESTANDING_INCLUDE})
+target_link_libraries(freestanding PRIVATE c)
 
 set(TOOLS_OBJS tools freestanding)
 add_library(tools INTERFACE)
-target_compile_options(tools INTERFACE ${FREESTANDING_CFLAGS})
-target_include_directories(tools INTERFACE ${FREESTANDING_INCLUDE})
-target_link_libraries(tools INTERFACE ${FREESTANDING_LDFLAGS})
+target_link_libraries(tools INTERFACE c)
 
 add_library(loader_main OBJECT loader_main.cpp)
 target_link_libraries(loader_main PRIVATE tools)
 
-set(STATIC_TOOLS_OBJS static_tools ${TOOLS_OBJS} loader_main)
+set(STATIC_TOOLS_OBJS static_tools ${TOOLS_OBJS} loader_main crt_pie)
 add_library(static_tools INTERFACE)
-target_link_libraries(static_tools INTERFACE -Wl,--no-relax -Wl,-Ttext-segment,0xA0000000 -static)
+target_link_libraries(static_tools INTERFACE -Wl,-z,relro,-z,now -Wl,-Ttext-segment,0xA0000000 -static-pie)
 target_link_libraries(static_tools INTERFACE tools)
 
 add_library(androidislinux_tool OBJECT
