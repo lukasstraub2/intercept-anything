@@ -2,7 +2,6 @@
 #include "sys.h"
 #include "mysys.h"
 #include "mylock.h"
-#include "linux/sched.h"
 #include "tls.h"
 #include "util.h"
 #include "mysignal.h"
@@ -13,6 +12,7 @@
 #include <sys/mman.h>
 #include <bits/ioctl.h>
 #include <unistd.h>
+#include <sched.h>
 
 #define num_threads (16)
 #define stack_size (512 * 1024)

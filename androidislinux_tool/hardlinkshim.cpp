@@ -14,15 +14,12 @@
 #include "mysys.h"
 #include "mytypes.h"
 
-#define stat wonky_stat
-#include "asm/stat.h"
-#undef stat
-
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <string.h>
 #include <dirent.h>
 #include <sys/mman.h>
+#include <kstat.h>
 
 struct This {
     CallHandler hardlinkshim;
@@ -517,7 +514,7 @@ static int hardlink_stat(Context* ctx,
 
     if (ret) {
         int cnt;
-        struct wonky_stat* statbuf_plain;
+        struct kstat* statbuf_plain;
         struct statx* statbuf_x;
         CallStat _call;
         callstat_copy(&_call, call);
@@ -545,7 +542,7 @@ static int hardlink_stat(Context* ctx,
             case STATTYPE_PLAIN:
             case STATTYPE_L:
             case STATTYPE_AT:
-                statbuf_plain = (struct wonky_stat*)_call.statbuf;
+                statbuf_plain = (struct kstat*)_call.statbuf;
                 statbuf_plain->st_nlink = cnt;
                 break;
 

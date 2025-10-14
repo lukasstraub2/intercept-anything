@@ -2,7 +2,6 @@
 #include "sys.h"
 #include "execve_thread.h"
 #include "loader.h"
-#include "util.h"
 #include "trampo.h"
 
 #include <string.h>

@@ -6,13 +6,11 @@
 #include "intercept.h"
 #include "util.h"
 
-#include "linux/socket.h"
-#include "linux/un.h"
-#include "mysocket.h"
-
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 struct This {
     CallHandler rootlink;
@@ -332,7 +330,7 @@ static int rootlink_connect(Context* ctx,
     CallConnect _call;
     callconnect_copy(&_call, call);
 
-    struct __kernel_sockaddr_storage* generic = (decltype(generic))call->addr;
+    struct sockaddr_storage* generic = (decltype(generic))call->addr;
     if (generic->ss_family == AF_UNIX) {
         struct sockaddr_un* addr = (decltype(addr))call->addr;
         if (addr->sun_path[0] != '\0') {
