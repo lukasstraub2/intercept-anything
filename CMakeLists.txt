@@ -26,6 +26,8 @@ else()
     endif()
 endif()
 
+set(CMAKE_C_VISIBILITY_PRESET hidden)
+
 add_subdirectory(libs/musl)
 
 if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "^aarch64.*|^armv8.*")
@@ -36,28 +38,27 @@ else()
     message(FATAL_ERROR "Architecture not supported: ${CMAKE_SYSTEM_PROCESSOR}")
 endif()
 
-set(FREESTANDING_CFLAGS -nostdinc)
-set(FREESTANDING_LDFLAGS -nostartfiles -nodefaultlibs -nostdlib ${LIBGCC})
-set(FREESTANDING_INCLUDE include/nolibc "include/linux-headers/${ARCH}/include")
-
 include_directories(include include/nolibc "include/linux-headers/${ARCH}/include")
 add_compile_definitions(_GNU_SOURCE)
-add_compile_options(-O1 -pipe -fPIE)
+add_compile_options(-O1 -pipe -fPIC -Wno-shift-op-parentheses)
 
 add_library(freestanding OBJECT
     loader.cpp mylock.cpp rmap.cpp tls.cpp intercept_seccomp.cpp util.cpp signalmanager.cpp workarounds.cpp execve_here.cpp)
 target_link_libraries(freestanding PRIVATE c)
 
-set(TOOLS_OBJS tools freestanding)
+set(TOOLS_OBJS tools freestanding crt_pie)
 add_library(tools INTERFACE)
+target_link_libraries(tools INTERFACE -Wl,-z,relro,-z,now -static-pie)
 target_link_libraries(tools INTERFACE c)
 
 add_library(loader_main OBJECT loader_main.cpp)
 target_link_libraries(loader_main PRIVATE tools)
 
-set(STATIC_TOOLS_OBJS static_tools ${TOOLS_OBJS} loader_main crt_pie)
+add_library(stubs OBJECT stubs.cpp)
+
+set(STATIC_TOOLS_OBJS static_tools ${TOOLS_OBJS} loader_main)
 add_library(static_tools INTERFACE)
-target_link_libraries(static_tools INTERFACE -Wl,-z,relro,-z,now -Wl,-Ttext-segment,0xA0000000 -static-pie)
+target_link_libraries(static_tools INTERFACE -Wl,-Ttext-segment,0xA0000000)
 target_link_libraries(static_tools INTERFACE tools)
 
 add_library(androidislinux_tool OBJECT
@@ -79,22 +80,22 @@ add_executable(emulate_swap
     emulate_swap_tool/emulate_swap_main.cpp)
 target_link_libraries(emulate_swap PUBLIC ${STATIC_TOOLS_OBJS})
 
-add_library(execve_thread SHARED libexecve_thread.cpp stubs.cpp)
-target_link_libraries(execve_thread PRIVATE freestanding Threads)
+add_library(execve_thread SHARED libexecve_thread.cpp)
+target_link_libraries(execve_thread PRIVATE freestanding Threads stubs)
 
 if(TARGET JNI)
-    add_library(execve_thread_jni SHARED libexecve_thread.cpp libexecve_thread_jni.cpp stubs.cpp)
-    target_link_libraries(execve_thread_jni PRIVATE freestanding Threads JNI)
+    add_library(execve_thread_jni SHARED libexecve_thread.cpp libexecve_thread_jni.cpp)
+    target_link_libraries(execve_thread_jni PRIVATE freestanding Threads JNI stubs)
 endif()
 
-add_executable(mylock_test mylock_test.cpp stubs.cpp)
-target_link_libraries(mylock_test PRIVATE ${TOOLS_OBJS})
+add_executable(mylock_test mylock_test.cpp)
+target_link_libraries(mylock_test PRIVATE ${TOOLS_OBJS} stubs)
 
-add_executable(rwlock_test rwlock_test.cpp stubs.cpp)
-target_link_libraries(rwlock_test PRIVATE ${TOOLS_OBJS})
+add_executable(rwlock_test rwlock_test.cpp)
+target_link_libraries(rwlock_test PRIVATE ${TOOLS_OBJS} stubs)
 
-add_executable(execve_here_test execve_here_test.cpp stubs.cpp)
-target_link_libraries(execve_here_test PRIVATE ${TOOLS_OBJS})
+add_executable(execve_here_test execve_here_test.cpp)
+target_link_libraries(execve_here_test PRIVATE ${TOOLS_OBJS} stubs)
 
 add_executable(execve_thread_test execve_thread_test.cpp)
 target_link_libraries(execve_thread_test PRIVATE execve_thread)

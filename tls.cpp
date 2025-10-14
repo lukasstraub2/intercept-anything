@@ -46,12 +46,11 @@ static Tls* tls_alloc(RMapEntry* entry, const uint32_t tid) {
     Tls* tls;
     pid_t pid = getpid();
 
-    tls = (Tls*)malloc(sizeof(Tls));
+    tls = (Tls*)calloc(1, sizeof(Tls));
     if (!tls) {
         abort();
     }
 
-    // nolibc implementation ensures tls is zero-initialized
     WRITE_ONCE(tls->pid, pid);
     WRITE_ONCE(tls->tid, tid);
     __asm volatile("" ::: "memory");
@@ -95,17 +94,17 @@ void _tls_free(const uint32_t tid) {
 }
 
 Tls* tls_get_noalloc() {
-    pid_t tid = gettid();
+    pid_t tid = sys_gettid();
     return _tls_get_noalloc(tid);
 }
 
 Tls* tls_get() {
-    pid_t tid = gettid();
+    pid_t tid = sys_gettid();
     return _tls_get(tid);
 }
 
 void tls_free() {
-    pid_t tid = gettid();
+    pid_t tid = sys_gettid();
     _tls_free(tid);
 }
 
