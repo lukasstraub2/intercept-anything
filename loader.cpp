@@ -27,6 +27,7 @@
 #include "sys.h"
 #include "loader.h"
 #include "myelf.h"
+#include "pagesize.h"
 
 #define DEBUG_ENV "DEBUG_LOADER"
 #include "debug.h"
@@ -34,9 +35,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#ifndef PAGE_SIZE
-#define PAGE_SIZE getpagesize()
-#endif
 #define ALIGN (PAGE_SIZE - 1)
 #define ROUND_PG(x) (((x) + (ALIGN)) & ~(ALIGN))
 #define TRUNC_PG(x) ((x) & ~(ALIGN))

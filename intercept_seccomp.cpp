@@ -8,6 +8,7 @@
 #include "signalmanager.h"
 #include "tls.h"
 #include "util.h"
+#include "pagesize.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
@@ -18,7 +19,6 @@
 #include "linux/seccomp.h"
 
 #include <fcntl.h>
-#include <unistd.h>
 #include <sys/mman.h>
 #include <signal.h>
 #include <stddef.h>
@@ -36,13 +36,9 @@ static const CallHandler* _next = nullptr;
 
 static char _self_exe[SCRATCH_SIZE];
 const char* self_exe = _self_exe;
-size_t page_size;
 
-static int install_filter();
-static void handler(int sig, siginfo_t* info, void* ucontext);
 static unsigned long handle_syscall(Context* ctx, SysArgs* args);
 static void start_text_init();
-static void page_size_init();
 
 __attribute__((noinline)) static void __handler(Tls* tls,
                                                 int sig,
@@ -133,40 +129,21 @@ extern char __etext;
 extern char __start_signal_entry;
 extern char __stop_signal_entry;
 
-static void page_size_init() {
-    size_t sizes[] = {(4 * 1024), (16 * 1024), (64 * 1024)};
-
-    size_t size;
-    for (int i = 0; i < (int)(sizeof(sizes) / sizeof(sizes[0])); i++) {
-        size = sizes[i];
-        unsigned long ret = (unsigned long)sys_mmap(
-            nullptr, size, PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-        if (ret >= -4095UL) {
-            continue;
-        }
-
-        sys_munmap((void*)ret, size);
-        break;
-    }
-
-    page_size = size;
-}
-
 static void start_text_init() {
     unsigned long addr = (unsigned long)&__etext;
-    addr &= -page_size;  // round down
+    addr &= -PAGE_SIZE;  // round down
 
     while (1) {
         int ret = sys_access((char*)addr, F_OK);
         if (ret != -EFAULT) {
-            addr -= page_size;
+            addr -= PAGE_SIZE;
             continue;
         }
 
         break;
     }
 
-    addr += page_size;
+    addr += PAGE_SIZE;
     start_text = (char*)addr;
 }
 
@@ -2937,7 +2914,6 @@ void intercept_init(int recursing, const char* exe) {
     }
     tls_init();
     mutex_init();
-    page_size_init();
     start_text_init();
 
     const CallHandler* signalmanager = signalmanager_init(&bottom);
