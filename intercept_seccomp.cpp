@@ -40,47 +40,7 @@ const char* self_exe = _self_exe;
 static unsigned long handle_syscall(Context* ctx, SysArgs* args);
 static void start_text_init();
 
-__attribute__((noinline)) static void __handler(Tls* tls,
-                                                int sig,
-                                                siginfo_t* info,
-                                                void* ucontext) {
-    (void)sig;
-
-    Context ctx = {tls, ucontext, 0};
-    ssize_t ret;
-    SysArgs args;
-    fill_sysargs(&args, ucontext);
-    ret = handle_syscall(&ctx, &args);
-
-    set_return(ucontext, ret);
-}
-
-__attribute__((noinline, section("signal_entry"))) static int _handler(
-    Tls* tls,
-    MyJumpbuf** _jumpbuf,
-    int sig,
-    siginfo_t* info,
-    void* ucontext) {
-    MyJumpbuf jumpbuf = {JUMPBUF_MAGIC, {}};
-
-    if (__builtin_setjmp(jumpbuf.jumpbuf)) {
-        return 1;
-    }
-    __asm volatile("" ::: "memory");
-    WRITE_ONCE(*_jumpbuf, &jumpbuf);
-    __asm volatile("" ::: "memory");
-
-    __handler(tls, sig, info, ucontext);
-
-    __asm volatile("" ::: "memory");
-    WRITE_ONCE(*_jumpbuf, nullptr);
-    __asm volatile("" ::: "memory");
-
-    return 0;
-}
-
-__attribute__((noinline, section("signal_entry"))) static void
-handler(int sig, siginfo_t* info, void* ucontext) {
+static void handler(int sig, siginfo_t* info, void* ucontext) {
     const pid_t tid = sys_gettid();
     Tls* tls = _tls_get_noalloc(tid);
     if (!tls) {
@@ -91,6 +51,13 @@ handler(int sig, siginfo_t* info, void* ucontext) {
 
         tls = _tls_get(tid);
     }
+
+    Context ctx = {tls, ucontext, 0};
+    ssize_t ret;
+    SysArgs args;
+
+    (void)sig;
+
     trace_plus("gettid(): %u\n", tid);
 
     signalmanager_please_callback(tls);
@@ -99,35 +66,14 @@ handler(int sig, siginfo_t* info, void* ucontext) {
         exit_error("Invalid arch, terminating");
     }
 
-    MyJumpbuf* sp = (MyJumpbuf*)get_sp(ucontext);
-    MyJumpbuf** jumpbuf;
-    for (int i = 0; i < jumpbuf_alloc; i++) {
-        jumpbuf = tls->jumpbuf + i;
-        if (!*jumpbuf) {
-            break;
-        }
-#ifdef stack_grows_down
-        if (*jumpbuf < sp) {
-            break;
-        }
-#else
-#error Unsupported Architecture
-#endif
-    }
+    fill_sysargs(&args, ucontext);
+    ret = handle_syscall(&ctx, &args);
 
-    __asm volatile("" ::: "memory");
-    signalmanager_sigsys_unmask(ucontext);
-    __asm volatile("" ::: "memory");
-
-    while (_handler(tls, jumpbuf, sig, info, ucontext))
-        ;
+    set_return(ucontext, ret);
 }
 
 static char* start_text;
 extern char __etext;
-
-extern char __start_signal_entry;
-extern char __stop_signal_entry;
 
 static void start_text_init() {
     unsigned long addr = (unsigned long)&__etext;
@@ -149,10 +95,7 @@ static void start_text_init() {
 
 int pc_in_our_code(void* ucontext) {
     char* pc = (char*)get_pc(ucontext);
-    int in_text = pc >= start_text && pc < &__etext;
-    int in_signal_entry =
-        pc >= &__start_signal_entry && pc < &__stop_signal_entry;
-    return in_text && !in_signal_entry;
+    return pc >= start_text && pc < &__etext;
 }
 
 static int install_filter() {
@@ -2052,12 +1995,13 @@ static int bottom_open(Context* ctx, const This* data, const CallOpen* call) {
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->at) {
         ret = sys_openat(call->dirfd, call->path, call->flags, call->mode);
     } else {
         ret = sys_open(call->path, call->flags, call->mode);
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2067,7 +2011,7 @@ static int bottom_stat(Context* ctx, const This* data, const CallStat* call) {
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     switch (call->type) {
         case STATTYPE_PLAIN:
             ret = sys_stat(call->path, call->statbuf);
@@ -2095,6 +2039,7 @@ static int bottom_stat(Context* ctx, const This* data, const CallStat* call) {
             abort();
             break;
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2106,12 +2051,13 @@ static ssize_t bottom_readlink(Context* ctx,
     ssize_t ret;
     RetSSize* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->at) {
         ret = sys_readlinkat(call->dirfd, call->path, call->buf, call->bufsiz);
     } else {
         ret = sys_readlink(call->path, call->buf, call->bufsiz);
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2123,12 +2069,13 @@ static int bottom_access(Context* ctx,
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->at) {
         ret = sys_faccessat(call->dirfd, call->path, call->mode);
     } else {
         ret = sys_access(call->path, call->mode);
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2177,7 +2124,9 @@ static int _bottom_exec(Context* ctx, const This* data, CallExec* call) {
     thread_exit_exec(ctx->tls);
     ctx->tls = nullptr;
 
+    signalmanager_enable_signals(ctx);
     ret = sys_execve(call->path, call->argv, call->envp);
+    signalmanager_disable_signals(ctx);
 
     call->ret->ret = ret;
     return ret;
@@ -2363,13 +2312,14 @@ static int bottom_link(Context* ctx, const This* data, const CallLink* call) {
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->at) {
         ret = sys_linkat(call->olddirfd, call->oldpath, call->newdirfd,
                          call->newpath, call->flags);
     } else {
         ret = sys_link(call->oldpath, call->newpath);
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2380,12 +2330,13 @@ static int bottom_symlink(Context* ctx,
                           const CallLink* call) {
     int ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->at) {
         ret = sys_symlinkat(call->oldpath, call->newdirfd, call->newpath);
     } else {
         ret = sys_symlink(call->oldpath, call->newpath);
     }
+    signalmanager_disable_signals(ctx);
 
     call->ret->ret = ret;
     return ret;
@@ -2396,12 +2347,13 @@ static int bottom_unlink(Context* ctx,
                          const CallUnlink* call) {
     int ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->at) {
         ret = sys_unlinkat(call->dirfd, call->path, call->flags);
     } else {
         ret = sys_unlink(call->path);
     }
+    signalmanager_disable_signals(ctx);
 
     call->ret->ret = ret;
     return ret;
@@ -2522,7 +2474,7 @@ static int bottom_removexattr(Context* ctx,
 static ssize_t bottom_xattr(Context* ctx,
                             const This* data,
                             const CallXattr* call) {
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     switch (call->type) {
         case XATTRTYPE_SET:
             return bottom_setxattr(ctx, data, call);
@@ -2544,6 +2496,7 @@ static ssize_t bottom_xattr(Context* ctx,
             abort();
             break;
     }
+    signalmanager_disable_signals(ctx);
 }
 
 static int bottom_rename(Context* ctx,
@@ -2551,7 +2504,7 @@ static int bottom_rename(Context* ctx,
                          const CallRename* call) {
     int ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     switch (call->type) {
         case RENAMETYPE_PLAIN:
             ret = sys_rename(call->oldpath, call->newpath);
@@ -2571,6 +2524,7 @@ static int bottom_rename(Context* ctx,
             abort();
             break;
     }
+    signalmanager_disable_signals(ctx);
 
     call->ret->ret = ret;
     return ret;
@@ -2580,12 +2534,13 @@ static int bottom_chdir(Context* ctx, const This* data, const CallChdir* call) {
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->f) {
         ret = sys_fchdir(call->fd);
     } else {
         ret = sys_chdir(call->path);
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2595,7 +2550,7 @@ static int bottom_chmod(Context* ctx, const This* data, const CallChmod* call) {
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     switch (call->type) {
         case CHMODTYPE_PLAIN:
             ret = sys_chmod(call->path, call->mode);
@@ -2613,6 +2568,7 @@ static int bottom_chmod(Context* ctx, const This* data, const CallChmod* call) {
             abort();
             break;
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2624,12 +2580,13 @@ static int bottom_truncate(Context* ctx,
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->f) {
         ret = sys_ftruncate(call->fd, call->length);
     } else {
         ret = sys_truncate(call->path, call->length);
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2639,12 +2596,13 @@ static int bottom_mkdir(Context* ctx, const This* data, const CallMkdir* call) {
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->at) {
         ret = sys_mkdirat(call->dirfd, call->path, call->mode);
     } else {
         ret = sys_mkdir(call->path, call->mode);
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2656,13 +2614,14 @@ static ssize_t bottom_getdents(Context* ctx,
     ssize_t ret;
     RetSSize* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->is64) {
         ret =
             sys_getdents64(call->fd, (linux_dirent64*)call->dirp, call->count);
     } else {
         ret = sys_getdents(call->fd, call->dirp, call->count);
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2672,12 +2631,13 @@ static int bottom_mknod(Context* ctx, const This* data, const CallMknod* call) {
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->at) {
         ret = sys_mknodat(call->dirfd, call->path, call->mode, call->dev);
     } else {
         ret = sys_mknod(call->path, call->mode, call->dev);
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2689,12 +2649,13 @@ static int bottom_accept(Context* ctx,
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->is4) {
         ret = sys_accept4(call->fd, call->addr, call->addrlen, call->flags);
     } else {
         ret = sys_accept(call->fd, call->addr, call->addrlen);
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2706,12 +2667,13 @@ static int bottom_connect(Context* ctx,
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->is_bind) {
         ret = sys_bind(call->fd, call->addr, call->addrlen);
     } else {
         ret = sys_connect(call->fd, call->addr, call->addrlen);
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2723,9 +2685,10 @@ static int bottom_fanotify_mark(Context* ctx,
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     ret = sys_fanotify_mark(call->fd, call->flags, call->mask, call->dirfd,
                             call->path);
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2737,8 +2700,9 @@ static int bottom_inotify_add_watch(Context* ctx,
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     ret = sys_inotify_add_watch(call->fd, call->path, call->mask);
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2750,7 +2714,7 @@ static int bottom_rlimit(Context* ctx,
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     switch (call->type) {
         case RLIMITTYPE_GET:
             ret = sys_getrlimit(call->resource, call->old_rlim);
@@ -2770,6 +2734,7 @@ static int bottom_rlimit(Context* ctx,
             abort();
             break;
     }
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2781,8 +2746,9 @@ static long bottom_ptrace(Context* ctx,
     long ret;
     RetLong* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     ret = sys_ptrace(call->request, call->pid, call->addr, call->data);
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2792,8 +2758,9 @@ static int bottom_kill(Context* ctx, const This* data, const CallKill* call) {
     int ret;
     RetInt* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     ret = sys_kill(call->pid, call->sig);
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;
@@ -2802,12 +2769,13 @@ static int bottom_kill(Context* ctx, const This* data, const CallKill* call) {
 static int bottom_close(Context* ctx, const This* data, const CallClose* call) {
     int ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     if (call->is_range) {
         ret = sys_close_range(call->fd, call->max_fd, call->flags);
     } else {
         ret = sys_close(call->fd);
     }
+    signalmanager_disable_signals(ctx);
 
     call->ret->ret = ret;
     return ret;
@@ -2828,9 +2796,10 @@ static unsigned long bottom_mmap(Context* ctx,
     unsigned long ret;
     RetUL* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
+    signalmanager_enable_signals(ctx);
     ret = (unsigned long)sys_mmap((void*)call->addr, call->len, call->prot,
                                   call->flags, call->fd, call->off);
+    signalmanager_disable_signals(ctx);
 
     _ret->ret = ret;
     return ret;

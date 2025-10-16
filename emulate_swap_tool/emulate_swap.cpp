@@ -37,8 +37,6 @@ static unsigned long emulate_swap_mmap(Context* ctx,
     unsigned long ret;
     RetUL* _ret = call->ret;
 
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
-
     ret = (unsigned long)sys_mmap((void*)call->addr, call->len, call->prot,
                                   call->flags, call->fd, call->off);
 

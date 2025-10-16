@@ -27,15 +27,6 @@ struct Cache {
     char out[SCRATCH_SIZE];
 };
 
-#define JUMPBUF_MAGIC \
-    "jumpbuf magic .o0o._.o0o._.o0o._.o0o._.o0o._.o0o._.o0o._.o0o._."
-#define JUMPBUF_MAGIC_LEN (64)
-typedef struct MyJumpbuf MyJumpbuf;
-struct MyJumpbuf {
-    char magic[JUMPBUF_MAGIC_LEN];
-    void* jumpbuf[5];
-};
-
 #define TLS_LIST_ALLOC 4096
 #define jumpbuf_alloc (32)
 struct Tls {
@@ -44,7 +35,7 @@ struct Tls {
     Cache cache;
     RobustMutexList my_robust_mutex_list;
     RwLockList my_rwlock_list;
-    MyJumpbuf* jumpbuf[jumpbuf_alloc];
+    void* jumpbuf[5];  // for lock tests
     int workarounds_traceme;
 };
 

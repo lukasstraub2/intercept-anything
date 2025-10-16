@@ -217,8 +217,7 @@ static void handle_default(int signum) {
     }
 }
 
-__attribute__((noinline, section("signal_entry"))) static void
-generic_handler(int signum, siginfo_t* info, void* ucontext) {
+static void generic_handler(int signum, siginfo_t* info, void* ucontext) {
     struct ucontext* uctx = (struct ucontext*)ucontext;
     sigset_t* uctx_set = &uctx->uc_sigmask;
     Tls* tls = tls_get();
@@ -253,12 +252,13 @@ generic_handler(int signum, siginfo_t* info, void* ucontext) {
         // noop
     } else {
         trace_plus("signal %d: registered handler\n");
-        sigset_t sa_mask;
+        sigset_t sa_mask = {};
         memcpy(&sa_mask, copy.mask, _NSIG / 8);
         if (!(copy.flags & SA_NODEFER)) {
             sigaddset(&sa_mask, signum);
         }
-        sigset_t set = *uctx_set;
+        sigset_t set = {};
+        memcpy(&set, uctx_set, _NSIG / 8);
         sigorset(&set, &set, &sa_mask);
         sigandset(&set, &set, full_mask());
 
@@ -273,62 +273,26 @@ generic_handler(int signum, siginfo_t* info, void* ucontext) {
             handler(signum);
         }
     }
+}
 
-    MyJumpbuf* sp = (MyJumpbuf*)get_sp(ucontext);
-    MyJumpbuf** _jumpbuf;
-    for (int i = jumpbuf_alloc - 1; i >= 0; i--) {
-        _jumpbuf = tls->jumpbuf + i;
-#ifdef stack_grows_down
-        if (*_jumpbuf && *_jumpbuf >= sp) {
-            break;
-        }
-#else
-#error Unsupported Architecture
-#endif
+void signalmanager_disable_signals(Context* ctx) {
+    if (!ctx->ucontext) {
+        return;
     }
 
-    if (*_jumpbuf) {
-        assert(!memcmp((*_jumpbuf)->magic, JUMPBUF_MAGIC, JUMPBUF_MAGIC_LEN));
-    }
-
-    if (pc_in_our_code(ucontext) && *_jumpbuf) {
-        MyJumpbuf* jumpbuf = *_jumpbuf;
-        __asm volatile("" ::: "memory");
-        WRITE_ONCE(*_jumpbuf, nullptr);
-        __asm volatile("" ::: "memory");
-
-        int ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, nullptr);
-        if (ret < 0) {
-            exit_error("rt_sigprocmask(uctx_set): %d", ret);
-        }
-        __builtin_longjmp(jumpbuf->jumpbuf, 1);
+    int ret = sys_rt_sigprocmask(SIG_SETMASK, full_mask(), nullptr);
+    if (ret < 0) {
+        exit_error("rt_sigprocmask(0): %d", ret);
     }
 }
 
-void signalmanager_sigsys_mask_until_sigreturn(Context* ctx) {
-    if (ctx->signalmanager_masked || !ctx->ucontext) {
+void signalmanager_enable_signals(Context* ctx) {
+    if (!ctx->ucontext) {
         return;
     }
 
     int ret;
     struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
-    sigset_t* uctx_set = &uctx->uc_sigmask;
-
-    ret = sys_rt_sigprocmask(SIG_SETMASK, full_mask(), uctx_set);
-    if (ret < 0) {
-        exit_error("rt_sigprocmask(0): %d", ret);
-    }
-
-    ctx->signalmanager_masked = 1;
-}
-
-void signalmanager_sigsys_unmask(void* ucontext) {
-    if (!ucontext) {
-        return;
-    }
-
-    int ret;
-    struct ucontext* uctx = (struct ucontext*)ucontext;
     sigset_t* uctx_set = &uctx->uc_sigmask;
 
     ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, nullptr);
@@ -342,8 +306,7 @@ static int signalmanager_sigprocmask(Context* ctx,
                                      const CallSigprocmask* call) {
     RetInt* _ret = call->ret;
     struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
-    sigset_t* _uctx_set = &uctx->uc_sigmask;
-    sigset_t uctx_set = *_uctx_set;
+    sigset_t* uctx_set = &uctx->uc_sigmask;
     sigset_t set = {};
 
     if (call->sigsetsize > _NSIG / 8) {
@@ -351,35 +314,33 @@ static int signalmanager_sigprocmask(Context* ctx,
         goto out;
     }
 
+    if (call->oldset) {
+        memcpy(call->oldset, uctx_set, call->sigsetsize);
+    }
+
     if (!call->set) {
-        _ret->ret = sys_rt_sigprocmask(call->how, call->set, call->oldset,
-                                       call->sigsetsize);
+        _ret->ret = 0;
         goto out;
     }
 
-    set = *call->set;
+    memcpy(&set, call->set, call->sigsetsize);
     sigandset(&set, &set, full_mask());
-
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
-    if (call->oldset) {
-        *call->oldset = uctx_set;
-    }
 
     // Any changes to sigprocmask would be reset on sigreturn
     switch (call->how) {
         case SIG_BLOCK:
-            sigorset(&uctx_set, &uctx_set, &set);
+            sigorset(uctx_set, uctx_set, &set);
             _ret->ret = 0;
             break;
 
         case SIG_UNBLOCK:
             signotset(&set, &set);
-            sigandset(&uctx_set, &uctx_set, &set);
+            sigandset(uctx_set, uctx_set, &set);
             _ret->ret = 0;
             break;
 
         case SIG_SETMASK:
-            uctx_set = set;
+            memcpy(uctx_set, &set, _NSIG / 8);
             _ret->ret = 0;
             break;
 
@@ -387,7 +348,6 @@ static int signalmanager_sigprocmask(Context* ctx,
             _ret->ret = -EINVAL;
             break;
     }
-    *_uctx_set = uctx_set;
 
 out:
     return _ret->ret;
@@ -400,13 +360,12 @@ static int signalmanager_sigaction(Context* ctx,
     MySignal* mysignal = nullptr;
     struct k_sigaction* mysig = nullptr;
 
-    if (call->signum <= 0 || call->sigsetsize > _NSIG / 8) {
+    if (call->signum <= 0 || call->sigsetsize != _NSIG / 8) {
         _ret->ret = -EINVAL;
         goto out;
     }
 
     mutex_lock(ctx->tls, mutex);
-    signalmanager_sigsys_mask_until_sigreturn(ctx);
     mysignal = _get_mysignal(ctx->tls);
     mysig = get_mysignal(mysignal, call->signum);
 
