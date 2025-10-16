@@ -100,8 +100,11 @@ target_link_libraries(execve_here_test PRIVATE ${TOOLS_OBJS} stubs)
 add_executable(execve_thread_test execve_thread_test.cpp)
 target_link_libraries(execve_thread_test PRIVATE execve_thread)
 
+add_executable(signal_tests signal_tests.cpp)
+
 enable_testing()
 add_test(NAME mylock_test COMMAND mylock_test)
 add_test(NAME rwlock_test COMMAND rwlock_test)
 add_test(NAME execve_here_test COMMAND execve_here_test)
 add_test(NAME execve_thread_test COMMAND execve_thread_test)
+add_test(NAME signal_tests COMMAND emulate_swap signal_tests)
