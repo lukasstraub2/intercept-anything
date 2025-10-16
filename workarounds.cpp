@@ -49,6 +49,22 @@ static int workarounds_exec(Context* ctx,
         maybe_recitfy_traceme(ctx->tls);
     }
 
+    if (call->at && call->path[0] != '/') {
+        return waround->next->exec(ctx, waround->next->exec_next, call);
+    }
+
+    if (!strcmp(call->path, "/proc/self/exe")) {
+        if (call->at && call->flags & AT_SYMLINK_NOFOLLOW) {
+            call->ret->ret = -ELOOP;
+            return -ELOOP;
+        }
+
+        CallExec copy;
+        callexec_copy(&copy, call);
+        copy.path = self_exe;
+        return waround->next->exec(ctx, waround->next->exec_next, &copy);
+    }
+
     return waround->next->exec(ctx, waround->next->exec_next, call);
 }
 
