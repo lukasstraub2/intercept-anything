@@ -43,6 +43,14 @@ else()
     message(FATAL_ERROR "Architecture not supported: ${CMAKE_SYSTEM_PROCESSOR}")
 endif()
 
+include(CheckLinkerFlag)
+check_linker_flag(CXX "-Wl,-Ttext-segment,0xA0000000" USE_TEXT_SEGMENT)
+if(USE_TEXT_SEGMENT)
+    set(TEXT_SEGMENT -Wl,-Ttext-segment,0xA0000000)
+else()
+    set(TEXT_SEGMENT -Wl,--image-base,0xA0000000)
+endif()
+
 include_directories(include include/nolibc)
 add_compile_definitions(_GNU_SOURCE)
 add_compile_options(-O1 -pipe -fPIE -Wno-shift-op-parentheses)
@@ -61,7 +69,7 @@ target_link_libraries(loader_main PRIVATE tools)
 
 set(STATIC_TOOLS_OBJS static_tools ${TOOLS_OBJS} loader_main)
 add_library(static_tools INTERFACE)
-target_link_libraries(static_tools INTERFACE -Wl,-Ttext-segment,0xA0000000 tools)
+target_link_libraries(static_tools INTERFACE ${TEXT_SEGMENT} tools)
 
 add_library(androidislinux_tool OBJECT
     androidislinux_tool/androidislinux.cpp
