@@ -16,12 +16,31 @@
 #include <string.h>
 #include <unistd.h>
 
-static int signotset(sigset_t* dest, const sigset_t* left) {
+static void _sigemptyset(sigset_t* set) {
+    memset(set, 0, sizeof(sigset_t));
+}
+
+static void _sigfillset(sigset_t* set) {
+    memset(set, 0xff, sizeof(sigset_t));
+}
+
+static void _sigaddset(sigset_t* set, int sig) {
+    unsigned s = sig - 1;
+    set->__bits[s / 8 / sizeof *set->__bits] |=
+        1UL << (s & 8 * sizeof *set->__bits - 1);
+}
+
+static void _sigdelset(sigset_t* set, int sig) {
+    unsigned s = sig - 1;
+    set->__bits[s / 8 / sizeof *set->__bits] &=
+        ~(1UL << (s & 8 * sizeof *set->__bits - 1));
+}
+
+static void signotset(sigset_t* dest, const sigset_t* left) {
     unsigned long i = 0, *d = (unsigned long*)dest, *l = (unsigned long*)left;
     for (; i < (_NSIG / 8 / sizeof(long)); i++) {
         d[i] = ~l[i];
     }
-    return 0;
 }
 
 static const sigset_t* full_mask() {
@@ -32,13 +51,13 @@ static const sigset_t* full_mask() {
         return &set;
     }
 
-    sigfillset(&set);
-    sigdelset(&set, SIGBUS);
-    sigdelset(&set, SIGFPE);
-    sigdelset(&set, SIGILL);
-    sigdelset(&set, SIGSEGV);
-    sigdelset(&set, SIGSYS);
-    sigdelset(&set, SIGABRT);
+    _sigfillset(&set);
+    _sigdelset(&set, SIGBUS);
+    _sigdelset(&set, SIGFPE);
+    _sigdelset(&set, SIGILL);
+    _sigdelset(&set, SIGSEGV);
+    _sigdelset(&set, SIGSYS);
+    _sigdelset(&set, SIGABRT);
 
     return &set;
 }
