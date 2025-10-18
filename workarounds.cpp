@@ -55,7 +55,7 @@ static int workarounds_exec(Context* ctx,
 
     if (!strcmp(call->path, "/proc/self/exe")) {
         if (call->at && call->flags & AT_SYMLINK_NOFOLLOW) {
-            call->ret->ret = -ELOOP;
+            *call->ret = -ELOOP;
             return -ELOOP;
         }
 

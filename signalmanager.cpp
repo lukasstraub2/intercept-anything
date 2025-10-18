@@ -304,13 +304,13 @@ void signalmanager_enable_signals(Context* ctx) {
 static int signalmanager_sigprocmask(Context* ctx,
                                      const This* sigmgmt,
                                      const CallSigprocmask* call) {
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
     struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
     sigset_t* uctx_set = &uctx->uc_sigmask;
     sigset_t set = {};
 
     if (call->sigsetsize > _NSIG / 8) {
-        _ret->ret = -EINVAL;
+        *_ret = -EINVAL;
         goto out;
     }
 
@@ -319,7 +319,7 @@ static int signalmanager_sigprocmask(Context* ctx,
     }
 
     if (!call->set) {
-        _ret->ret = 0;
+        *_ret = 0;
         goto out;
     }
 
@@ -330,38 +330,38 @@ static int signalmanager_sigprocmask(Context* ctx,
     switch (call->how) {
         case SIG_BLOCK:
             sigorset(uctx_set, uctx_set, &set);
-            _ret->ret = 0;
+            *_ret = 0;
             break;
 
         case SIG_UNBLOCK:
             signotset(&set, &set);
             sigandset(uctx_set, uctx_set, &set);
-            _ret->ret = 0;
+            *_ret = 0;
             break;
 
         case SIG_SETMASK:
             memcpy(uctx_set, &set, _NSIG / 8);
-            _ret->ret = 0;
+            *_ret = 0;
             break;
 
         default:
-            _ret->ret = -EINVAL;
+            *_ret = -EINVAL;
             break;
     }
 
 out:
-    return _ret->ret;
+    return *_ret;
 }
 
 static int signalmanager_sigaction(Context* ctx,
                                    const This* sigmgmt,
                                    const CallSigaction* call) {
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
     MySignal* mysignal = nullptr;
     struct k_sigaction* mysig = nullptr;
 
     if (call->signum <= 0 || call->sigsetsize != _NSIG / 8) {
-        _ret->ret = -EINVAL;
+        *_ret = -EINVAL;
         goto out;
     }
 
@@ -379,18 +379,18 @@ static int signalmanager_sigaction(Context* ctx,
     mutex_unlock(ctx->tls, mutex);
 
     if (call->signum == SIGSYS) {
-        _ret->ret = 0;
+        *_ret = 0;
         goto out;
     }
 
     if (call->act) {
-        _ret->ret = install_generic_handler(call->signum, call->act);
+        *_ret = install_generic_handler(call->signum, call->act);
     } else {
-        _ret->ret = 0;
+        *_ret = 0;
     }
 
 out:
-    return _ret->ret;
+    return *_ret;
 }
 
 void signalmanager_install_sigsys(myhandler_t handler) {

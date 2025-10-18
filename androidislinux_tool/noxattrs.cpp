@@ -7,7 +7,7 @@
 static ssize_t noxattrs_xattr(Context* ctx,
                               const This* noxattrs,
                               const CallXattr* call) {
-    call->ret->ret = -EOPNOTSUPP;
+    *call->ret = -EOPNOTSUPP;
     return -EOPNOTSUPP;
 }
 

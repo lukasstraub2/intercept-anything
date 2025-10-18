@@ -35,7 +35,7 @@ static unsigned long emulate_swap_mmap(Context* ctx,
                                        const This* swap,
                                        const CallMmap* call) {
     unsigned long ret;
-    RetUL* _ret = call->ret;
+    unsigned long* _ret = call->ret;
 
     ret = (unsigned long)sys_mmap((void*)call->addr, call->len, call->prot,
                                   call->flags, call->fd, call->off);
@@ -56,7 +56,7 @@ static unsigned long emulate_swap_mmap(Context* ctx,
         sys_close(fd);
     }
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 

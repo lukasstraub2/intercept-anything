@@ -67,7 +67,7 @@ static ssize_t mangle_path(char* out, size_t out_len, const char* path) {
 #define _MANGLE_PATH(__path, errret, prefix)                       \
     ssize_t prefix##len = mangle_path(nullptr, 0, (__path));       \
     if (prefix##len < 0) {                                         \
-        call->ret->ret = prefix##len;                              \
+        *call->ret = prefix##len;                                  \
         return prefix##len;                                        \
     }                                                              \
                                                                    \
@@ -326,7 +326,7 @@ static int fill_addr_un(struct sockaddr_un* addr, char* sun_path) {
 static int rootlink_connect(Context* ctx,
                             const This* rootlink,
                             const CallConnect* call) {
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
     CallConnect _call;
     callconnect_copy(&_call, call);
 
@@ -337,7 +337,7 @@ static int rootlink_connect(Context* ctx,
             // Not an abstract socket
             ssize_t len = mangle_path(nullptr, 0, addr->sun_path);
             if (len < 0) {
-                _ret->ret = len;
+                *_ret = len;
                 return len;
             }
 
@@ -352,7 +352,7 @@ static int rootlink_connect(Context* ctx,
                     new_path, O_RDONLY | O_DIRECTORY | O_NOCTTY | O_CLOEXEC, 0);
                 *slash = '/';
                 if (dirfd < 0) {
-                    _ret->ret = dirfd;
+                    *_ret = dirfd;
                     return dirfd;
                 }
 
@@ -374,7 +374,7 @@ static int rootlink_connect(Context* ctx,
                 int ret = fill_addr_un(&new_addr, fd_path);
                 if (ret < 0) {
                     sys_close(dirfd);
-                    _ret->ret = ret;
+                    *_ret = ret;
                     return ret;
                 }
 
@@ -389,7 +389,7 @@ static int rootlink_connect(Context* ctx,
                 struct sockaddr_un new_addr;
                 int ret = fill_addr_un(&new_addr, new_path);
                 if (ret < 0) {
-                    _ret->ret = ret;
+                    *_ret = ret;
                     return ret;
                 }
 

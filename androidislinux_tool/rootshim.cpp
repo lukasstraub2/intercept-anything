@@ -131,7 +131,7 @@ static ssize_t handle_path(Context* ctx,
 #define _FILL_SHIM(ctx, __path, prefix)                                  \
     ssize_t prefix##shim_ret = handle_path((ctx), nullptr, 0, (__path)); \
     if (prefix##shim_ret < 0) {                                          \
-        call->ret->ret = prefix##shim_ret;                               \
+        *call->ret = prefix##shim_ret;                                   \
         return prefix##shim_ret;                                         \
     }                                                                    \
                                                                          \
@@ -139,7 +139,7 @@ static ssize_t handle_path(Context* ctx,
     prefix##shim_ret =                                                   \
         handle_path((ctx), prefix##shim, prefix##shim_ret, (__path));    \
     if (prefix##shim_ret < 0) {                                          \
-        call->ret->ret = prefix##shim_ret;                               \
+        *call->ret = prefix##shim_ret;                                   \
         return prefix##shim_ret;                                         \
     }                                                                    \
     (__path) = prefix##shim->target;
@@ -149,7 +149,7 @@ static ssize_t handle_path(Context* ctx,
 static int rootshim_open(Context* ctx,
                          const This* rootshim,
                          const CallOpen* call) {
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
     CallOpen _call;
     callopen_copy(&_call, call);
 
@@ -161,27 +161,27 @@ static int rootshim_open(Context* ctx,
 
     if (shim->is_handled) {
         if ((call->flags & O_NOFOLLOW) && shim->is_symlink) {
-            _ret->ret = -ELOOP;
+            *_ret = -ELOOP;
             goto fail;
         }
 
         rootshim->next->open(ctx, rootshim->next->open_next, &_call);
         shim_unlink(shim);
 
-        return _ret->ret;
+        return *_ret;
     } else {
         return rootshim->next->open(ctx, rootshim->next->open_next, call);
     }
 
 fail:
     shim_unlink(shim);
-    return _ret->ret;
+    return *_ret;
 }
 
 static int rootshim_stat(Context* ctx,
                          const This* rootshim,
                          const CallStat* call) {
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
     CallStat _call;
     callstat_copy(&_call, call);
 
@@ -203,7 +203,7 @@ static int rootshim_stat(Context* ctx,
         rootshim->next->stat(ctx, rootshim->next->stat_next, &_call);
         shim_unlink(shim);
 
-        return _ret->ret;
+        return *_ret;
     } else {
         return rootshim->next->stat(ctx, rootshim->next->stat_next, call);
     }
@@ -212,7 +212,7 @@ static int rootshim_stat(Context* ctx,
 static ssize_t rootshim_readlink(Context* ctx,
                                  const This* rootshim,
                                  const CallReadlink* call) {
-    RetSSize* _ret = call->ret;
+    ssize_t* _ret = call->ret;
     CallReadlink _call;
     callreadlink_copy(&_call, call);
 
@@ -228,17 +228,17 @@ static ssize_t rootshim_readlink(Context* ctx,
         len = min(call->bufsiz, len);
 
         if (!shim->is_symlink) {
-            _ret->ret = -EINVAL;
+            *_ret = -EINVAL;
             goto fail;
         } else if (!call->buf) {
-            _ret->ret = -EFAULT;
+            *_ret = -EFAULT;
             goto fail;
         }
         shim_unlink(shim);
 
         memcpy(call->buf, shim->target, len);
 
-        _ret->ret = len;
+        *_ret = len;
         return len;
     } else {
         return rootshim->next->readlink(ctx, rootshim->next->readlink_next,
@@ -247,13 +247,13 @@ static ssize_t rootshim_readlink(Context* ctx,
 
 fail:
     shim_unlink(shim);
-    return _ret->ret;
+    return *_ret;
 }
 
 static int rootshim_access(Context* ctx,
                            const This* rootshim,
                            const CallAccess* call) {
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
     CallAccess _call;
     callaccess_copy(&_call, call);
 
@@ -267,7 +267,7 @@ static int rootshim_access(Context* ctx,
         rootshim->next->access(ctx, rootshim->next->access_next, &_call);
         shim_unlink(shim);
 
-        return _ret->ret;
+        return *_ret;
     } else {
         return rootshim->next->access(ctx, rootshim->next->access_next, call);
     }
@@ -276,7 +276,7 @@ static int rootshim_access(Context* ctx,
 static ssize_t rootshim_xattr(Context* ctx,
                               const This* rootshim,
                               const CallXattr* call) {
-    RetSSize* _ret = call->ret;
+    ssize_t* _ret = call->ret;
     CallXattr _call;
     callxattr_copy(&_call, call);
 
@@ -288,7 +288,7 @@ static ssize_t rootshim_xattr(Context* ctx,
 
     if (shim->is_handled) {
         shim_unlink(shim);
-        _ret->ret = -EOPNOTSUPP;
+        *_ret = -EOPNOTSUPP;
         goto fail;
     } else {
         return rootshim->next->xattr(ctx, rootshim->next->xattr_next, call);
@@ -296,7 +296,7 @@ static ssize_t rootshim_xattr(Context* ctx,
 
 fail:
     shim_unlink(shim);
-    return _ret->ret;
+    return *_ret;
 }
 
 // Provide only readonly functions for now

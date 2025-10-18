@@ -396,13 +396,13 @@ __attribute__((unused)) static int handle_open(Context* ctx,
                                                mode_t mode) {
     trace("open(%s)\n", or_null(path));
 
-    RetInt ret = {0};
+    int ret = {0};
     CallOpen call = {
         .at = 0, .path = path, .flags = flags, .mode = mode, .ret = &ret};
 
     _next->open(ctx, _next->open_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_openat(Context* ctx,
@@ -412,7 +412,7 @@ static int handle_openat(Context* ctx,
                          mode_t mode) {
     trace("openat(%s)\n", or_null(path));
 
-    RetInt ret = {0};
+    int ret = {0};
     CallOpen call = {.at = 1,
                      .dirfd = dirfd,
                      .path = path,
@@ -422,7 +422,7 @@ static int handle_openat(Context* ctx,
 
     _next->open(ctx, _next->open_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 int loader_open(const char* path, int flags, mode_t mode) {
@@ -443,25 +443,25 @@ __attribute__((unused)) static int handle_stat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallStat call = {
         .type = STATTYPE_PLAIN, .path = path, .statbuf = statbuf, .ret = &ret};
 
     _next->stat(ctx, _next->stat_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_fstat(Context* ctx, int fd, void* statbuf) {
     trace("fstat()\n");
 
-    RetInt ret = {0};
+    int ret = {0};
     CallStat call = {
         .type = STATTYPE_F, .dirfd = fd, .statbuf = statbuf, .ret = &ret};
 
     _next->stat(ctx, _next->stat_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 __attribute__((unused)) static int handle_lstat(Context* ctx,
@@ -473,13 +473,13 @@ __attribute__((unused)) static int handle_lstat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallStat call = {
         .type = STATTYPE_L, .path = path, .statbuf = statbuf, .ret = &ret};
 
     _next->stat(ctx, _next->stat_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_newfstatat(Context* ctx,
@@ -493,7 +493,7 @@ static int handle_newfstatat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallStat call = {.type = STATTYPE_AT,
                      .dirfd = dirfd,
                      .path = path,
@@ -503,7 +503,7 @@ static int handle_newfstatat(Context* ctx,
 
     _next->stat(ctx, _next->stat_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_statx(Context* ctx,
@@ -518,7 +518,7 @@ static int handle_statx(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallStat call = {.type = STATTYPE_X,
                      .dirfd = dirfd,
                      .path = path,
@@ -529,7 +529,7 @@ static int handle_statx(Context* ctx,
 
     _next->stat(ctx, _next->stat_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 __attribute__((unused)) static ssize_t handle_readlink(Context* ctx,
@@ -546,13 +546,13 @@ __attribute__((unused)) static ssize_t handle_readlink(Context* ctx,
     // Not a symlink: -EINVAL
     // buf nullptr: -EFAULT
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallReadlink call = {
         .at = 0, .path = path, .buf = buf, .bufsiz = bufsiz, .ret = &ret};
 
     _next->readlink(ctx, _next->readlink_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static ssize_t handle_readlinkat(Context* ctx,
@@ -568,7 +568,7 @@ static ssize_t handle_readlinkat(Context* ctx,
         return -EFAULT;
     }
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallReadlink call = {.at = 1,
                          .dirfd = dirfd,
                          .path = path,
@@ -578,7 +578,7 @@ static ssize_t handle_readlinkat(Context* ctx,
 
     _next->readlink(ctx, _next->readlink_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 __attribute__((unused)) static int handle_access(Context* ctx,
@@ -590,12 +590,12 @@ __attribute__((unused)) static int handle_access(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallAccess call = {.at = 0, .path = path, .mode = mode, .ret = &ret};
 
     _next->access(ctx, _next->access_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_faccessat(Context* ctx,
@@ -608,13 +608,13 @@ static int handle_faccessat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallAccess call = {
         .at = 1, .dirfd = dirfd, .path = path, .mode = mode, .ret = &ret};
 
     _next->access(ctx, _next->access_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_execve(Context* ctx,
@@ -627,13 +627,13 @@ static int handle_execve(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallExec call = {
         .at = 0, .path = path, .argv = argv, .envp = envp, .ret = &ret};
 
     _next->exec(ctx, _next->exec_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_execveat(Context* ctx,
@@ -648,7 +648,7 @@ static int handle_execveat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallExec call = {.at = 1,
                      .dirfd = dirfd,
                      .path = path,
@@ -659,7 +659,7 @@ static int handle_execveat(Context* ctx,
 
     _next->exec(ctx, _next->exec_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_rt_sigprocmask(Context* ctx,
@@ -669,7 +669,7 @@ static int handle_rt_sigprocmask(Context* ctx,
                                  size_t sigsetsize) {
     trace("rt_sigprocmask()\n");
 
-    RetInt ret = {0};
+    int ret = {0};
     CallSigprocmask call = {.how = how,
                             .set = set,
                             .oldset = oldset,
@@ -678,7 +678,7 @@ static int handle_rt_sigprocmask(Context* ctx,
 
     _next->sigprocmask(ctx, _next->sigprocmask_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_rt_sigaction(Context* ctx,
@@ -688,7 +688,7 @@ static int handle_rt_sigaction(Context* ctx,
                                size_t sigsetsize) {
     trace("rt_sigaction(%d)\n", signum);
 
-    RetInt ret = {0};
+    int ret = {0};
     CallSigaction call = {.signum = signum,
                           .act = act,
                           .oldact = oldact,
@@ -697,7 +697,7 @@ static int handle_rt_sigaction(Context* ctx,
 
     _next->sigaction(ctx, _next->sigaction_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 __attribute__((unused)) static int handle_link(Context* ctx,
@@ -709,13 +709,13 @@ __attribute__((unused)) static int handle_link(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallLink call = {
         .at = 0, .oldpath = oldpath, .newpath = newpath, .ret = &ret};
 
     _next->link(ctx, _next->link_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_linkat(Context* ctx,
@@ -730,7 +730,7 @@ static int handle_linkat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallLink call = {.at = 1,
                      .olddirfd = olddirfd,
                      .oldpath = oldpath,
@@ -741,7 +741,7 @@ static int handle_linkat(Context* ctx,
 
     _next->link(ctx, _next->link_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 __attribute__((unused)) static int handle_symlink(Context* ctx,
@@ -753,13 +753,13 @@ __attribute__((unused)) static int handle_symlink(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallLink call = {
         .at = 0, .oldpath = oldpath, .newpath = newpath, .ret = &ret};
 
     _next->symlink(ctx, _next->symlink_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_symlinkat(Context* ctx,
@@ -772,7 +772,7 @@ static int handle_symlinkat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallLink call = {.at = 1,
                      .oldpath = oldpath,
                      .newdirfd = newdirfd,
@@ -781,7 +781,7 @@ static int handle_symlinkat(Context* ctx,
 
     _next->symlink(ctx, _next->symlink_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 __attribute__((unused)) static int handle_unlink(Context* ctx,
@@ -792,12 +792,12 @@ __attribute__((unused)) static int handle_unlink(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallUnlink call = {.at = 0, .path = pathname, .ret = &ret};
 
     _next->unlink(ctx, _next->unlink_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_unlinkat(Context* ctx,
@@ -810,13 +810,13 @@ static int handle_unlinkat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallUnlink call = {
         .at = 1, .dirfd = dirfd, .path = pathname, .flags = flags, .ret = &ret};
 
     _next->unlink(ctx, _next->unlink_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_setxattr(Context* ctx,
@@ -831,7 +831,7 @@ static int handle_setxattr(Context* ctx,
         return -EFAULT;
     }
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_SET,
                       .type2 = XATTRTYPE_PLAIN,
                       .path = path,
@@ -843,7 +843,7 @@ static int handle_setxattr(Context* ctx,
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_lsetxattr(Context* ctx,
@@ -858,7 +858,7 @@ static int handle_lsetxattr(Context* ctx,
         return -EFAULT;
     }
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_SET,
                       .type2 = XATTRTYPE_L,
                       .path = path,
@@ -870,7 +870,7 @@ static int handle_lsetxattr(Context* ctx,
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_fsetxattr(Context* ctx,
@@ -881,7 +881,7 @@ static int handle_fsetxattr(Context* ctx,
                             int flags) {
     trace("fsetxattr(%d)\n", fd);
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_SET,
                       .type2 = XATTRTYPE_F,
                       .fd = fd,
@@ -893,7 +893,7 @@ static int handle_fsetxattr(Context* ctx,
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static ssize_t handle_getxattr(Context* ctx,
@@ -907,7 +907,7 @@ static ssize_t handle_getxattr(Context* ctx,
         return -EFAULT;
     }
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_GET,
                       .type2 = XATTRTYPE_PLAIN,
                       .path = path,
@@ -918,7 +918,7 @@ static ssize_t handle_getxattr(Context* ctx,
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static ssize_t handle_lgetxattr(Context* ctx,
@@ -932,7 +932,7 @@ static ssize_t handle_lgetxattr(Context* ctx,
         return -EFAULT;
     }
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_GET,
                       .type2 = XATTRTYPE_L,
                       .path = path,
@@ -943,7 +943,7 @@ static ssize_t handle_lgetxattr(Context* ctx,
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static ssize_t handle_fgetxattr(Context* ctx,
@@ -953,7 +953,7 @@ static ssize_t handle_fgetxattr(Context* ctx,
                                 size_t size) {
     trace("fgetxattr(%d)\n", fd);
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_GET,
                       .type2 = XATTRTYPE_F,
                       .fd = fd,
@@ -964,7 +964,7 @@ static ssize_t handle_fgetxattr(Context* ctx,
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static ssize_t handle_listxattr(Context* ctx,
@@ -977,7 +977,7 @@ static ssize_t handle_listxattr(Context* ctx,
         return -EFAULT;
     }
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_LIST,
                       .type2 = XATTRTYPE_PLAIN,
                       .path = path,
@@ -987,7 +987,7 @@ static ssize_t handle_listxattr(Context* ctx,
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static ssize_t handle_llistxattr(Context* ctx,
@@ -1000,7 +1000,7 @@ static ssize_t handle_llistxattr(Context* ctx,
         return -EFAULT;
     }
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_LIST,
                       .type2 = XATTRTYPE_L,
                       .path = path,
@@ -1010,7 +1010,7 @@ static ssize_t handle_llistxattr(Context* ctx,
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static ssize_t handle_flistxattr(Context* ctx,
@@ -1019,7 +1019,7 @@ static ssize_t handle_flistxattr(Context* ctx,
                                  size_t size) {
     trace("flistxattr(%d)\n", fd);
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_LIST,
                       .type2 = XATTRTYPE_F,
                       .fd = fd,
@@ -1029,7 +1029,7 @@ static ssize_t handle_flistxattr(Context* ctx,
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_removexattr(Context* ctx,
@@ -1041,7 +1041,7 @@ static int handle_removexattr(Context* ctx,
         return -EFAULT;
     }
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_REMOVE,
                       .type2 = XATTRTYPE_PLAIN,
                       .path = path,
@@ -1050,7 +1050,7 @@ static int handle_removexattr(Context* ctx,
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_lremovexattr(Context* ctx,
@@ -1062,7 +1062,7 @@ static int handle_lremovexattr(Context* ctx,
         return -EFAULT;
     }
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_REMOVE,
                       .type2 = XATTRTYPE_L,
                       .path = path,
@@ -1071,13 +1071,13 @@ static int handle_lremovexattr(Context* ctx,
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_fremovexattr(Context* ctx, int fd, const char* name) {
     trace("fremovexattr(%d)\n", fd);
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallXattr call = {.type = XATTRTYPE_REMOVE,
                       .type2 = XATTRTYPE_F,
                       .fd = fd,
@@ -1086,7 +1086,7 @@ static int handle_fremovexattr(Context* ctx, int fd, const char* name) {
 
     _next->xattr(ctx, _next->xattr_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 __attribute__((unused)) static int handle_rename(Context* ctx,
@@ -1098,7 +1098,7 @@ __attribute__((unused)) static int handle_rename(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallRename call = {.type = RENAMETYPE_PLAIN,
                        .oldpath = oldpath,
                        .newpath = newpath,
@@ -1106,7 +1106,7 @@ __attribute__((unused)) static int handle_rename(Context* ctx,
 
     _next->rename(ctx, _next->rename_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_renameat(Context* ctx,
@@ -1120,7 +1120,7 @@ static int handle_renameat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallRename call = {.type = RENAMETYPE_AT,
                        .olddirfd = olddirfd,
                        .oldpath = oldpath,
@@ -1130,7 +1130,7 @@ static int handle_renameat(Context* ctx,
 
     _next->rename(ctx, _next->rename_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_renameat2(Context* ctx,
@@ -1145,7 +1145,7 @@ static int handle_renameat2(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallRename call = {.type = RENAMETYPE_AT2,
                        .olddirfd = olddirfd,
                        .oldpath = oldpath,
@@ -1156,7 +1156,7 @@ static int handle_renameat2(Context* ctx,
 
     _next->rename(ctx, _next->rename_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_chdir(Context* ctx, const char* path) {
@@ -1166,23 +1166,23 @@ static int handle_chdir(Context* ctx, const char* path) {
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallChdir call = {.f = 0, .path = path, .ret = &ret};
 
     _next->chdir(ctx, _next->chdir_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_fchdir(Context* ctx, int fd) {
     trace("fchdir(%d)\n", fd);
 
-    RetInt ret = {0};
+    int ret = {0};
     CallChdir call = {.f = 1, .fd = fd, .ret = &ret};
 
     _next->chdir(ctx, _next->chdir_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_exit(Context* ctx, int status) {
@@ -1212,24 +1212,24 @@ __attribute__((unused)) static int handle_chmod(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallChmod call = {
         .type = CHMODTYPE_PLAIN, .path = path, .mode = mode, .ret = &ret};
 
     _next->chmod(ctx, _next->chmod_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_fchmod(Context* ctx, int fd, mode_t mode) {
     trace("fchmod(%d)\n", fd);
 
-    RetInt ret = {0};
+    int ret = {0};
     CallChmod call = {.type = CHMODTYPE_F, .fd = fd, .mode = mode, .ret = &ret};
 
     _next->chmod(ctx, _next->chmod_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_fchmodat(Context* ctx,
@@ -1242,7 +1242,7 @@ static int handle_fchmodat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallChmod call = {.type = CHMODTYPE_AT,
                       .dirfd = dirfd,
                       .path = path,
@@ -1251,7 +1251,7 @@ static int handle_fchmodat(Context* ctx,
 
     _next->chmod(ctx, _next->chmod_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_truncate(Context* ctx, const char* path, off_t length) {
@@ -1261,23 +1261,23 @@ static int handle_truncate(Context* ctx, const char* path, off_t length) {
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallTruncate call = {.f = 0, .path = path, .length = length, .ret = &ret};
 
     _next->truncate(ctx, _next->truncate_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_ftruncate(Context* ctx, int fd, off_t length) {
     trace("ftruncate(%d)\n", fd);
 
-    RetInt ret = {0};
+    int ret = {0};
     CallTruncate call = {.f = 1, .fd = fd, .length = length, .ret = &ret};
 
     _next->truncate(ctx, _next->truncate_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 __attribute__((unused)) static int handle_mkdir(Context* ctx,
@@ -1289,12 +1289,12 @@ __attribute__((unused)) static int handle_mkdir(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallMkdir call = {.at = 0, .path = path, .mode = mode, .ret = &ret};
 
     _next->mkdir(ctx, _next->mkdir_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_mkdirat(Context* ctx,
@@ -1307,13 +1307,13 @@ static int handle_mkdirat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallMkdir call = {
         .at = 1, .dirfd = dirfd, .path = path, .mode = mode, .ret = &ret};
 
     _next->mkdir(ctx, _next->mkdir_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 __attribute__((unused)) static ssize_t handle_getdents(Context* ctx,
@@ -1322,13 +1322,13 @@ __attribute__((unused)) static ssize_t handle_getdents(Context* ctx,
                                                        size_t count) {
     trace("getdents(%d)\n", fd);
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallGetdents call = {
         .is64 = 0, .fd = fd, .dirp = dirp, .count = count, .ret = &ret};
 
     _next->getdents(ctx, _next->getdents_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static ssize_t handle_getdents64(Context* ctx,
@@ -1337,13 +1337,13 @@ static ssize_t handle_getdents64(Context* ctx,
                                  size_t count) {
     trace("getdents64(%d)\n", fd);
 
-    RetSSize ret = {0};
+    ssize_t ret = {0};
     CallGetdents call = {
         .is64 = 1, .fd = fd, .dirp = dirp, .count = count, .ret = &ret};
 
     _next->getdents(ctx, _next->getdents_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 __attribute__((unused)) static int handle_mknod(Context* ctx,
@@ -1356,13 +1356,13 @@ __attribute__((unused)) static int handle_mknod(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallMknod call = {
         .at = 0, .path = path, .mode = mode, .dev = dev, .ret = &ret};
 
     _next->mknod(ctx, _next->mknod_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_mknodat(Context* ctx,
@@ -1376,7 +1376,7 @@ static int handle_mknodat(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallMknod call = {.at = 1,
                       .dirfd = dirfd,
                       .path = path,
@@ -1386,19 +1386,19 @@ static int handle_mknodat(Context* ctx,
 
     _next->mknod(ctx, _next->mknod_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_accept(Context* ctx, int fd, void* addr, int* addrlen) {
     trace("accept()\n");
 
-    RetInt ret = {0};
+    int ret = {0};
     CallAccept call = {
         .is4 = 0, .fd = fd, .addr = addr, .addrlen = addrlen, .ret = &ret};
 
     _next->accept(ctx, _next->accept_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_accept4(Context* ctx,
@@ -1408,7 +1408,7 @@ static int handle_accept4(Context* ctx,
                           int flags) {
     trace("accept4()\n");
 
-    RetInt ret = {0};
+    int ret = {0};
     CallAccept call = {.is4 = 1,
                        .fd = fd,
                        .addr = addr,
@@ -1418,31 +1418,31 @@ static int handle_accept4(Context* ctx,
 
     _next->accept(ctx, _next->accept_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_bind(Context* ctx, int fd, void* addr, int addrlen) {
     trace("bind()\n");
 
-    RetInt ret = {0};
+    int ret = {0};
     CallConnect call = {
         .is_bind = 1, .fd = fd, .addr = addr, .addrlen = addrlen, .ret = &ret};
 
     _next->connect(ctx, _next->connect_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_connect(Context* ctx, int fd, void* addr, int addrlen) {
     trace("connect()\n");
 
-    RetInt ret = {0};
+    int ret = {0};
     CallConnect call = {
         .is_bind = 0, .fd = fd, .addr = addr, .addrlen = addrlen, .ret = &ret};
 
     _next->connect(ctx, _next->connect_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_fanotify_mark(Context* ctx,
@@ -1457,7 +1457,7 @@ static int handle_fanotify_mark(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallFanotifyMark call = {.fd = fanotify_fd,
                              .flags = flags,
                              .mask = mask,
@@ -1467,7 +1467,7 @@ static int handle_fanotify_mark(Context* ctx,
 
     _next->fanotify_mark(ctx, _next->fanotify_mark_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_inotify_add_watch(Context* ctx,
@@ -1480,13 +1480,13 @@ static int handle_inotify_add_watch(Context* ctx,
         return -EFAULT;
     }
 
-    RetInt ret = {0};
+    int ret = {0};
     CallInotifyAddWatch call = {
         .fd = fd, .path = pathname, .mask = mask, .ret = &ret};
 
     _next->inotify_add_watch(ctx, _next->inotify_add_watch_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_getrlimit(Context* ctx,
@@ -1494,7 +1494,7 @@ static int handle_getrlimit(Context* ctx,
                             void* old_rlim) {
     trace("getrlimit()\n");
 
-    RetInt ret = {0};
+    int ret = {0};
     CallRlimit call = {.type = RLIMITTYPE_GET,
                        .resource = resource,
                        .old_rlim = old_rlim,
@@ -1502,7 +1502,7 @@ static int handle_getrlimit(Context* ctx,
 
     _next->rlimit(ctx, _next->rlimit_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_setrlimit(Context* ctx,
@@ -1510,7 +1510,7 @@ static int handle_setrlimit(Context* ctx,
                             const void* new_rlim) {
     trace("setrlimit()\n");
 
-    RetInt ret = {0};
+    int ret = {0};
     CallRlimit call = {.type = RLIMITTYPE_SET,
                        .resource = resource,
                        .new_rlim = new_rlim,
@@ -1518,7 +1518,7 @@ static int handle_setrlimit(Context* ctx,
 
     _next->rlimit(ctx, _next->rlimit_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_prlimit64(Context* ctx,
@@ -1528,7 +1528,7 @@ static int handle_prlimit64(Context* ctx,
                             void* old_rlim) {
     trace("prlimit64()\n");
 
-    RetInt ret = {0};
+    int ret = {0};
     CallRlimit call = {.type = RLIMITTYPE_PR,
                        .pid = pid,
                        .resource = resource,
@@ -1538,7 +1538,7 @@ static int handle_prlimit64(Context* ctx,
 
     _next->rlimit(ctx, _next->rlimit_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static long handle_ptrace(Context* ctx,
@@ -1548,7 +1548,7 @@ static long handle_ptrace(Context* ctx,
                           void* data) {
     trace("ptrace()\n");
 
-    RetLong ret = {0};
+    long ret = {0};
     CallPtrace call = {.request = request,
                        .pid = pid,
                        .addr = addr,
@@ -1557,29 +1557,29 @@ static long handle_ptrace(Context* ctx,
 
     _next->ptrace(ctx, _next->ptrace_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_kill(Context* ctx, pid_t pid, int sig) {
     trace("kill()\n");
 
-    RetInt ret = {0};
+    int ret = {0};
     CallKill call = {.pid = pid, .sig = sig, .ret = &ret};
 
     _next->kill(ctx, _next->kill_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static int handle_close(Context* ctx, unsigned int fd) {
     trace("close(%u)\n", fd);
 
-    RetInt ret = {0};
+    int ret = {0};
     CallClose call = {.is_range = 0, .fd = fd, .ret = &ret};
 
     _next->close(ctx, _next->close_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 __attribute__((unused)) static int handle_close_range(Context* ctx,
@@ -1588,7 +1588,7 @@ __attribute__((unused)) static int handle_close_range(Context* ctx,
                                                       unsigned int flags) {
     trace("close_range(%u, %u)\n", first, last);
 
-    RetInt ret = {0};
+    int ret = {0};
     CallClose call = {.is_range = 1,
                       .fd = first,
                       .max_fd = last,
@@ -1597,18 +1597,18 @@ __attribute__((unused)) static int handle_close_range(Context* ctx,
 
     _next->close(ctx, _next->close_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static unsigned long handle_misc(Context* ctx, SysArgs* args) {
     trace("misc(%lu)\n", args->num);
 
-    RetUL ret = {0};
+    unsigned long ret = {0};
     CallMisc call = {.args = *args, .ret = &ret};
 
     _next->misc(ctx, _next->misc_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static unsigned long handle_mmap(Context* ctx,
@@ -1620,7 +1620,7 @@ static unsigned long handle_mmap(Context* ctx,
                                  unsigned long off) {
     trace("mmap()\n");
 
-    RetUL ret = {0};
+    unsigned long ret = {0};
     CallMmap call = {
         .addr = addr,
         .len = len,
@@ -1633,7 +1633,7 @@ static unsigned long handle_mmap(Context* ctx,
 
     _next->mmap(ctx, _next->mmap_next, &call);
 
-    return ret.ret;
+    return ret;
 }
 
 static unsigned long handle_syscall(Context* ctx, SysArgs* args) {
@@ -1993,7 +1993,7 @@ static unsigned long handle_syscall(Context* ctx, SysArgs* args) {
 
 static int bottom_open(Context* ctx, const This* data, const CallOpen* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     if (call->at) {
@@ -2003,13 +2003,13 @@ static int bottom_open(Context* ctx, const This* data, const CallOpen* call) {
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
 static int bottom_stat(Context* ctx, const This* data, const CallStat* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     switch (call->type) {
@@ -2041,7 +2041,7 @@ static int bottom_stat(Context* ctx, const This* data, const CallStat* call) {
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2049,7 +2049,7 @@ static ssize_t bottom_readlink(Context* ctx,
                                const This* data,
                                const CallReadlink* call) {
     ssize_t ret;
-    RetSSize* _ret = call->ret;
+    ssize_t* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     if (call->at) {
@@ -2059,7 +2059,7 @@ static ssize_t bottom_readlink(Context* ctx,
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2067,7 +2067,7 @@ static int bottom_access(Context* ctx,
                          const This* data,
                          const CallAccess* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     if (call->at) {
@@ -2077,7 +2077,7 @@ static int bottom_access(Context* ctx,
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2128,7 +2128,7 @@ static int _bottom_exec(Context* ctx, const This* data, CallExec* call) {
     ret = sys_execve(call->path, call->argv, call->envp);
     signalmanager_disable_signals(ctx);
 
-    call->ret->ret = ret;
+    *call->ret = ret;
     return ret;
 }
 
@@ -2229,14 +2229,14 @@ static int open_fullpath_execveat(Context* ctx, const CallExec* call) {
 static int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
     int fd;
     ssize_t ret, size;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
     int64_t exec_argc;
     CallExec _call;
     callexec_copy(&_call, call);
 
     if (0) {
     out:
-        return _ret->ret;
+        return *_ret;
     }
 
     if (call->final) {
@@ -2245,20 +2245,20 @@ static int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
 
     exec_argc = array_len(call->argv);
     if (exec_argc < 0) {
-        _ret->ret = -E2BIG;
+        *_ret = -E2BIG;
         goto out;
     }
 
     ret = open_fullpath_execveat(ctx, call);
     if (ret < 0) {
-        _ret->ret = ret;
+        *_ret = ret;
         goto out;
     }
     fd = ret;
 
     ret = read_header(nullptr, 0, fd);
     if (ret < 0) {
-        _ret->ret = ret;
+        *_ret = ret;
         sys_close(fd);
         goto out;
     }
@@ -2267,7 +2267,7 @@ static int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
     char header[size];
     ret = read_header(header, size, fd);
     if (ret < 0) {
-        _ret->ret = ret;
+        *_ret = ret;
         sys_close(fd);
         goto out;
     }
@@ -2276,7 +2276,7 @@ static int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
     if (header[0] == '#' && header[1] == '!') {
         int sh_argc = cmdline_argc(header, size);
         if (sh_argc == 0) {
-            _ret->ret = -ENOEXEC;
+            *_ret = -ENOEXEC;
             goto out;
         }
 
@@ -2298,19 +2298,19 @@ static int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
     }
 
     if ((size_t)size < sizeof(Elf_Ehdr) || !check_ehdr((Elf_Ehdr*)header)) {
-        _ret->ret = -ENOEXEC;
+        *_ret = -ENOEXEC;
         goto out;
     }
 
     _call.final = 1;
     _next->exec(ctx, _next->exec_next, &_call);
 
-    return _ret->ret;
+    return *_ret;
 }
 
 static int bottom_link(Context* ctx, const This* data, const CallLink* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     if (call->at) {
@@ -2321,7 +2321,7 @@ static int bottom_link(Context* ctx, const This* data, const CallLink* call) {
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2338,7 +2338,7 @@ static int bottom_symlink(Context* ctx,
     }
     signalmanager_disable_signals(ctx);
 
-    call->ret->ret = ret;
+    *call->ret = ret;
     return ret;
 }
 
@@ -2355,7 +2355,7 @@ static int bottom_unlink(Context* ctx,
     }
     signalmanager_disable_signals(ctx);
 
-    call->ret->ret = ret;
+    *call->ret = ret;
     return ret;
 }
 
@@ -2385,7 +2385,7 @@ static int bottom_setxattr(Context* ctx,
             break;
     }
 
-    call->ret->ret = ret;
+    *call->ret = ret;
     return ret;
 }
 
@@ -2413,7 +2413,7 @@ static ssize_t bottom_getxattr(Context* ctx,
             break;
     }
 
-    call->ret->ret = ret;
+    *call->ret = ret;
     return ret;
 }
 
@@ -2440,7 +2440,7 @@ static ssize_t bottom_listxattr(Context* ctx,
             break;
     }
 
-    call->ret->ret = ret;
+    *call->ret = ret;
     return ret;
 }
 
@@ -2467,7 +2467,7 @@ static int bottom_removexattr(Context* ctx,
             break;
     }
 
-    call->ret->ret = ret;
+    *call->ret = ret;
     return ret;
 }
 
@@ -2526,13 +2526,13 @@ static int bottom_rename(Context* ctx,
     }
     signalmanager_disable_signals(ctx);
 
-    call->ret->ret = ret;
+    *call->ret = ret;
     return ret;
 }
 
 static int bottom_chdir(Context* ctx, const This* data, const CallChdir* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     if (call->f) {
@@ -2542,13 +2542,13 @@ static int bottom_chdir(Context* ctx, const This* data, const CallChdir* call) {
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
 static int bottom_chmod(Context* ctx, const This* data, const CallChmod* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     switch (call->type) {
@@ -2570,7 +2570,7 @@ static int bottom_chmod(Context* ctx, const This* data, const CallChmod* call) {
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2578,7 +2578,7 @@ static int bottom_truncate(Context* ctx,
                            const This* data,
                            const CallTruncate* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     if (call->f) {
@@ -2588,13 +2588,13 @@ static int bottom_truncate(Context* ctx,
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
 static int bottom_mkdir(Context* ctx, const This* data, const CallMkdir* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     if (call->at) {
@@ -2604,7 +2604,7 @@ static int bottom_mkdir(Context* ctx, const This* data, const CallMkdir* call) {
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2612,7 +2612,7 @@ static ssize_t bottom_getdents(Context* ctx,
                                const This* data,
                                const CallGetdents* call) {
     ssize_t ret;
-    RetSSize* _ret = call->ret;
+    ssize_t* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     if (call->is64) {
@@ -2623,13 +2623,13 @@ static ssize_t bottom_getdents(Context* ctx,
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
 static int bottom_mknod(Context* ctx, const This* data, const CallMknod* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     if (call->at) {
@@ -2639,7 +2639,7 @@ static int bottom_mknod(Context* ctx, const This* data, const CallMknod* call) {
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2647,7 +2647,7 @@ static int bottom_accept(Context* ctx,
                          const This* data,
                          const CallAccept* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     if (call->is4) {
@@ -2657,7 +2657,7 @@ static int bottom_accept(Context* ctx,
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2665,7 +2665,7 @@ static int bottom_connect(Context* ctx,
                           const This* data,
                           const CallConnect* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     if (call->is_bind) {
@@ -2675,7 +2675,7 @@ static int bottom_connect(Context* ctx,
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2683,14 +2683,14 @@ static int bottom_fanotify_mark(Context* ctx,
                                 const This* data,
                                 const CallFanotifyMark* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     ret = sys_fanotify_mark(call->fd, call->flags, call->mask, call->dirfd,
                             call->path);
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2698,13 +2698,13 @@ static int bottom_inotify_add_watch(Context* ctx,
                                     const This* data,
                                     const CallInotifyAddWatch* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     ret = sys_inotify_add_watch(call->fd, call->path, call->mask);
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2712,7 +2712,7 @@ static int bottom_rlimit(Context* ctx,
                          const This* data,
                          const CallRlimit* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     switch (call->type) {
@@ -2736,7 +2736,7 @@ static int bottom_rlimit(Context* ctx,
     }
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2744,25 +2744,25 @@ static long bottom_ptrace(Context* ctx,
                           const This* data,
                           const CallPtrace* call) {
     long ret;
-    RetLong* _ret = call->ret;
+    long* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     ret = sys_ptrace(call->request, call->pid, call->addr, call->data);
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
 static int bottom_kill(Context* ctx, const This* data, const CallKill* call) {
     int ret;
-    RetInt* _ret = call->ret;
+    int* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     ret = sys_kill(call->pid, call->sig);
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 
@@ -2777,7 +2777,7 @@ static int bottom_close(Context* ctx, const This* data, const CallClose* call) {
     }
     signalmanager_disable_signals(ctx);
 
-    call->ret->ret = ret;
+    *call->ret = ret;
     return ret;
 }
 
@@ -2786,22 +2786,22 @@ static unsigned long bottom_misc(Context* ctx,
                                  const CallMisc* call) {
     debug("Unhandled syscall no. %lu\n", call->args.num);
 
-    call->ret->ret = -ENOSYS;
-    return call->ret->ret;
+    *call->ret = -ENOSYS;
+    return *call->ret;
 }
 
 static unsigned long bottom_mmap(Context* ctx,
                                  const This* data,
                                  const CallMmap* call) {
     unsigned long ret;
-    RetUL* _ret = call->ret;
+    unsigned long* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
     ret = (unsigned long)sys_mmap((void*)call->addr, call->len, call->prot,
                                   call->flags, call->fd, call->off);
     signalmanager_disable_signals(ctx);
 
-    _ret->ret = ret;
+    *_ret = ret;
     return ret;
 }
 

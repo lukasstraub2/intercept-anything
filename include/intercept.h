@@ -13,18 +13,13 @@ struct Context {
 };
 typedef struct Context Context;
 
-struct RetInt {
-    int ret;
-};
-typedef struct RetInt RetInt;
-
 struct CallOpen {
     int at;
     int dirfd;
     const char* path;
     int flags;
     mode_t mode;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallOpen CallOpen;
 
@@ -61,7 +56,7 @@ struct CallStat {
     int flags;
     unsigned int mask;
     void* statbuf;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallStat CallStat;
 
@@ -88,18 +83,13 @@ __attribute__((unused)) static void callstat_copy(CallStat* dst,
     dst->ret = call->ret;
 }
 
-struct RetSSize {
-    ssize_t ret;
-};
-typedef struct RetSSize RetSSize;
-
 struct CallReadlink {
     int at;
     int dirfd;
     const char* path;
     char* buf;
     size_t bufsiz;
-    RetSSize* ret;
+    ssize_t* ret;
 };
 typedef struct CallReadlink CallReadlink;
 
@@ -123,7 +113,7 @@ struct CallAccess {
     int dirfd;
     const char* path;
     int mode;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallAccess CallAccess;
 
@@ -148,7 +138,7 @@ struct CallExec {
     char* const* argv;
     char* const* envp;
     int flags;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallExec CallExec;
 
@@ -175,7 +165,7 @@ struct CallLink {
     int newdirfd;
     const char* newpath;
     int flags;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallLink CallLink;
 
@@ -199,7 +189,7 @@ struct CallUnlink {
     int dirfd;
     const char* path;
     int flags;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallUnlink CallUnlink;
 
@@ -243,7 +233,7 @@ struct CallXattr {
     };
     size_t size;
     int flags;
-    RetSSize* ret;
+    ssize_t* ret;
 };
 typedef struct CallXattr CallXattr;
 
@@ -295,7 +285,7 @@ struct CallRename {
     int newdirfd;
     const char* newpath;
     unsigned int flags;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallRename CallRename;
 
@@ -322,7 +312,7 @@ struct CallChdir {
     int f;
     int fd;
     const char* path;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallChdir CallChdir;
 
@@ -355,7 +345,7 @@ struct CallChmod {
     int dirfd;
     const char* path;
     mode_t mode;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallChmod CallChmod;
 
@@ -377,7 +367,7 @@ struct CallTruncate {
     int fd;
     const char* path;
     off_t length;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallTruncate CallTruncate;
 
@@ -399,7 +389,7 @@ struct CallMkdir {
     int dirfd;
     const char* path;
     mode_t mode;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallMkdir CallMkdir;
 
@@ -419,7 +409,7 @@ struct CallGetdents {
     int fd;
     void* dirp;
     size_t count;
-    RetSSize* ret;
+    ssize_t* ret;
 };
 typedef struct CallGetdents CallGetdents;
 
@@ -439,7 +429,7 @@ struct CallMknod {
     const char* path;
     mode_t mode;
     unsigned int dev;  // Device number
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallMknod CallMknod;
 
@@ -461,7 +451,7 @@ struct CallAccept {
     void* addr;
     int* addrlen;
     int flags;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallAccept CallAccept;
 
@@ -482,7 +472,7 @@ struct CallConnect {
     int fd;
     void* addr;
     int addrlen;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallConnect CallConnect;
 
@@ -501,7 +491,7 @@ struct CallFanotifyMark {
     uint64_t mask;
     int dirfd;
     const char* path;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallFanotifyMark CallFanotifyMark;
 
@@ -520,7 +510,7 @@ struct CallInotifyAddWatch {
     int fd;
     const char* path;
     uint64_t mask;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallInotifyAddWatch CallInotifyAddWatch;
 
@@ -542,7 +532,7 @@ struct CallRlimit {
     unsigned int resource;
     const void* new_rlim;
     void* old_rlim;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallRlimit CallRlimit;
 
@@ -572,7 +562,7 @@ struct CallSigprocmask {
     const sigset_t* set;
     sigset_t* oldset;
     size_t sigsetsize;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallSigprocmask CallSigprocmask;
 
@@ -581,21 +571,16 @@ struct CallSigaction {
     const struct k_sigaction* act;
     struct k_sigaction* oldact;
     size_t sigsetsize;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallSigaction CallSigaction;
-
-struct RetLong {
-    long ret;
-};
-typedef struct RetLong RetLong;
 
 struct CallPtrace {
     long request;
     long pid;
     void* addr;
     void* data;
-    RetLong* ret;
+    long* ret;
 };
 typedef struct CallPtrace CallPtrace;
 
@@ -611,7 +596,7 @@ __attribute__((unused)) static void callptrace_copy(CallPtrace* dst,
 struct CallKill {
     pid_t pid;
     int sig;
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallKill CallKill;
 
@@ -627,7 +612,7 @@ struct CallClose {
     unsigned int fd;
     unsigned int max_fd;  // Only used for close_range
     unsigned int flags;   // Only used for close_range
-    RetInt* ret;
+    int* ret;
 };
 typedef struct CallClose CallClose;
 
@@ -642,14 +627,9 @@ __attribute__((unused)) static void callclose_copy(CallClose* dst,
     dst->ret = call->ret;
 }
 
-struct RetUL {
-    unsigned long ret;
-};
-typedef struct RetUL RetUL;
-
 struct CallMisc {
     SysArgs args;
-    RetUL* ret;
+    unsigned long* ret;
 };
 typedef struct CallMisc CallMisc;
 
@@ -660,7 +640,7 @@ struct CallMmap {
     unsigned long flags;
     unsigned long fd;
     unsigned long off;
-    RetUL* ret;
+    unsigned long* ret;
 };
 typedef struct CallMmap CallMmap;
 
