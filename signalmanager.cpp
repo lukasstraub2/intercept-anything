@@ -58,6 +58,7 @@ static const sigset_t* full_mask() {
     _sigdelset(&set, SIGSEGV);
     _sigdelset(&set, SIGSYS);
     _sigdelset(&set, SIGABRT);
+    init = 1;
 
     return &set;
 }
