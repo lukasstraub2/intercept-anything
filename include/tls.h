@@ -27,7 +27,7 @@ struct Cache {
     char out[SCRATCH_SIZE];
 };
 
-#define TLS_LIST_ALLOC 4096
+#define TLS_LIST_ALLOC 11000
 #define jumpbuf_alloc (32)
 struct Tls {
     pid_t pid;
