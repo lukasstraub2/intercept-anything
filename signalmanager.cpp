@@ -15,6 +15,7 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
+#include <assert.h>
 
 static void _sigemptyset(sigset_t* set) {
     memset(set, 0, sizeof(sigset_t));

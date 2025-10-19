@@ -9,6 +9,7 @@
 #include "tls.h"
 #include "util.h"
 #include "pagesize.h"
+#include "syscall_trampo.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
@@ -24,6 +25,8 @@
 #include <stddef.h>
 #include <sys/prctl.h>
 #include <string.h>
+#include <pthread.h>
+#include <assert.h>
 
 extern "C" {
 int __main_prepare_threaded();
@@ -52,7 +55,7 @@ static void handler(int sig, siginfo_t* info, void* ucontext) {
         tls = _tls_get(tid);
     }
 
-    Context ctx = {tls, ucontext, 0};
+    Context ctx = {tls, ucontext, 0, 0};
     ssize_t ret;
     SysArgs args;
 
@@ -69,7 +72,9 @@ static void handler(int sig, siginfo_t* info, void* ucontext) {
     fill_sysargs(&args, ucontext);
     ret = handle_syscall(&ctx, &args);
 
-    set_return(ucontext, ret);
+    if (!ctx.trampo_armed) {
+        set_return(ucontext, ret);
+    }
 }
 
 static char* start_text;
@@ -108,6 +113,18 @@ static int install_filter() {
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
         BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
                  (__u32)(offsetof(struct seccomp_data, nr))),
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_clone3, 69, 0),
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_clone, 68, 0),
+#ifdef __NR_vfork
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_vfork, 67, 0),
+#else
+        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
+#endif
+#ifdef __NR_fork
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fork, 66, 0),
+#else
+        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
+#endif
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mmap, 65, 0),
 #ifdef __NR_close_range
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_close_range, 64, 0),
@@ -1190,7 +1207,8 @@ static int handle_exit(Context* ctx, int status) {
 
     thread_exit(ctx->tls);
 
-    sys_exit(status);
+    // sys_exit(status);
+    pthread_exit(NULL);
     return 0;
 }
 
@@ -1636,6 +1654,78 @@ static unsigned long handle_mmap(Context* ctx,
     return ret;
 }
 
+__attribute__((unused)) static int handle_fork(Context* ctx) {
+    trace("fork()\n");
+
+    int ret = 0;
+    CallClone call = {
+        .type = CLONETYPE_FORK,
+        .ret = &ret,
+    };
+
+    _next->clone(ctx, _next->clone_next, &call);
+
+    return ret;
+}
+
+__attribute__((unused)) static int handle_vfork(Context* ctx) {
+    trace("vfork()\n");
+
+    int ret = 0;
+    CallClone call = {
+        .type = CLONETYPE_VFORK,
+        .ret = &ret,
+    };
+
+    _next->clone(ctx, _next->clone_next, &call);
+
+    return ret;
+}
+
+static int handle_clone(Context* ctx,
+                        unsigned long clone_flags,
+                        unsigned long newsp,
+                        int* parent_tidptr,
+                        unsigned long tls,
+                        int* child_tidptr) {
+    trace("clone()\n");
+
+    struct clone_args args = {};
+    args.flags = clone_flags;
+    args.stack = newsp;
+    args.parent_tid = (unsigned long)parent_tidptr;
+    args.child_tid = (unsigned long)child_tidptr;
+    args.tls = tls;
+
+    int ret = 0;
+    CallClone call = {
+        .type = CLONETYPE_CLONE,
+        .args = &args,
+        .size = 64,
+        .ret = &ret,
+    };
+
+    _next->clone(ctx, _next->clone_next, &call);
+
+    return ret;
+}
+
+static int handle_clone3(Context* ctx, struct clone_args* uargs, size_t size) {
+    trace("clone3()\n");
+
+    int ret = 0;
+    CallClone call = {
+        .type = CLONETYPE_CLONE,
+        .args = uargs,
+        .size = size,
+        .ret = &ret,
+    };
+
+    _next->clone(ctx, _next->clone_next, &call);
+
+    return ret;
+}
+
 static unsigned long handle_syscall(Context* ctx, SysArgs* args) {
     ssize_t ret;
 
@@ -1981,6 +2071,33 @@ static unsigned long handle_syscall(Context* ctx, SysArgs* args) {
         case __NR_mmap:
             ret = handle_mmap(ctx, args->arg1, args->arg2, args->arg3,
                               args->arg4, args->arg5, args->arg6);
+            break;
+
+#ifdef __NR_fork
+        case __NR_fork:
+            ret = handle_fork(ctx);
+            break;
+#endif
+
+#ifdef __NR_vfork
+        case __NR_vfork:
+            ret = handle_vfork(ctx);
+            break;
+#endif
+
+        case __NR_clone:
+#ifdef __x86_64__
+            ret = handle_clone(ctx, args->arg1, args->arg2, (int*)args->arg3,
+                               args->arg5, (int*)args->arg4);
+#else
+            ret = handle_clone(ctx, args->arg1, args->arg2, (int*)args->arg3,
+                               args->arg4, (int*)args->arg5);
+#endif
+            break;
+
+        case __NR_clone3:
+            ret =
+                handle_clone3(ctx, (struct clone_args*)args->arg1, args->arg2);
             break;
 
         default:
@@ -2805,6 +2922,53 @@ static unsigned long bottom_mmap(Context* ctx,
     return ret;
 }
 
+static int bottom_clone(Context* ctx, const This* data, const CallClone* call) {
+    int* ret = call->ret;
+
+    if (call->type == CLONETYPE_FORK) {
+        *ret = fork();
+        return *ret;
+    }
+
+    if (call->type == CLONETYPE_CLONE || call->type == CLONETYPE_CLONE3) {
+        struct clone_args* args = call->args;
+        if (args->flags & CLONE_CLEAR_SIGHAND) {
+            abort();
+        }
+
+        if (!(args->flags & CLONE_VM)) {
+            *ret = fork();
+            if (*ret) {
+                if (*ret < 0) {
+                    return *ret;
+                }
+
+                if (args->flags & CLONE_PARENT_SETTID) {
+                    int* tidptr = (int*)args->parent_tid;
+                    *tidptr = *ret;
+                }
+            } else {
+                int* tidptr = (int*)args->child_tid;
+
+                if (args->flags & CLONE_CHILD_CLEARTID) {
+                    my_syscall1(__NR_set_tid_address, tidptr);
+                }
+
+                if (args->flags & CLONE_CHILD_SETTID) {
+                    *tidptr = sys_gettid();
+                }
+            }
+            return *ret;
+        }
+    }
+
+syscall_trampo:
+    clone_trampo_arm(ctx->ucontext);
+    ctx->trampo_armed = 1;
+    *ret = 0;
+    return 0;
+}
+
 static const CallHandler bottom = {
     bottom_open,
     nullptr,
@@ -2861,6 +3025,8 @@ static const CallHandler bottom = {
     bottom_misc,
     nullptr,
     bottom_mmap,
+    nullptr,
+    bottom_clone,
     nullptr,
 };
 

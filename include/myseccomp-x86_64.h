@@ -34,3 +34,9 @@ __attribute__((unused)) static void* get_sp(void* ucontext) {
 
     return (void*)ctx->uc_mcontext.gregs[REG_RSP];
 }
+
+__attribute__((unused)) static void set_pc(void* ucontext, unsigned long pc) {
+    struct ucontext* ctx = (struct ucontext*)ucontext;
+
+    ctx->uc_mcontext.gregs[REG_RIP] = pc;
+}

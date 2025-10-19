@@ -56,16 +56,16 @@ add_compile_definitions(_GNU_SOURCE)
 add_compile_options(-O1 -pipe -fPIE -Wno-shift-op-parentheses)
 
 add_library(freestanding OBJECT
-    loader.cpp mylock.cpp rmap.cpp tls.cpp intercept_seccomp.cpp util.cpp signalmanager.cpp workarounds.cpp execve_here.cpp)
+    loader.cpp mylock.cpp rmap.cpp tls.cpp intercept_seccomp.cpp util.cpp signalmanager.cpp workarounds.cpp execve_here.cpp syscall_trampo.cpp)
 target_link_libraries(freestanding PRIVATE c)
-target_include_directories(freestanding PRIVATE "include/linux-headers/${ARCH}/include")
+target_include_directories(freestanding PUBLIC "include/linux-headers/${ARCH}/include")
 
 set(TOOLS_OBJS tools freestanding crt_pie)
 add_library(tools INTERFACE)
 target_link_libraries(tools INTERFACE -Wl,-z,relro,-z,now -static-pie c)
 
 add_library(loader_main OBJECT loader_main.cpp)
-target_link_libraries(loader_main PRIVATE tools)
+target_link_libraries(loader_main PRIVATE ${TOOLS_OBJS})
 
 set(STATIC_TOOLS_OBJS static_tools ${TOOLS_OBJS} loader_main)
 add_library(static_tools INTERFACE)
@@ -77,7 +77,7 @@ add_library(androidislinux_tool OBJECT
     androidislinux_tool/rootshim.cpp
     androidislinux_tool/hardlinkshim.cpp
     androidislinux_tool/rootlink.cpp)
-target_link_libraries(androidislinux_tool PRIVATE tools)
+target_link_libraries(androidislinux_tool PRIVATE ${TOOLS_OBJS})
 
 add_executable(androidislinux androidislinux_tool/main.cpp)
 target_link_libraries(androidislinux PUBLIC androidislinux_tool ${STATIC_TOOLS_OBJS})
