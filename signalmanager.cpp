@@ -494,13 +494,9 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
     mutex_lock(tls, mutex);
     MySignal* mysignal = _get_mysignal(tls);
 
+    const struct k_sigaction dfl = {};
     for (int signum = 1; signum <= mysignal_size; signum++) {
-        struct k_sigaction act;
-        long ret = sys_rt_sigaction(signum, nullptr, &act);
-        if (ret < 0) {
-            exit_error("rt_sigaction(): %ld", -ret);
-        }
-        update_mysignal(mysignal, signum, &act);
+        update_mysignal(mysignal, signum, &dfl);
     }
 
     sigset_t unblock = *full_mask();
@@ -515,10 +511,10 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
             continue;
         }
 
-        long ret =
+        int ret =
             install_generic_handler(signum, get_mysignal(mysignal, signum));
         if (ret < 0) {
-            exit_error("rt_sigaction(): %ld", -ret);
+            exit_error("rt_sigaction(): %d", ret);
         }
     }
     mutex_unlock(tls, mutex);
