@@ -9,6 +9,9 @@
 #include "rmap.h"
 #include "workarounds.h"
 #include "syscall_trampo.h"
+#include "pagesize.h"
+#include "mysys.h"
+#include "util.h"
 
 #define DEBUG_ENV "DEBUG_SIGNAL"
 #include "debug.h"
@@ -17,6 +20,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
+#include <sys/mman.h>
 
 static void _sigemptyset(sigset_t* set) {
     memset(set, 0, sizeof(sigset_t));
@@ -498,21 +502,38 @@ struct sigmgmt_trampo_data {
 typedef struct sigmgmt_trampo_data sigmgmt_trampo_data;
 
 static __thread sigmgmt_trampo_data data = {};
+static unsigned int* vfork_shm = nullptr;
+
+int self_is_vfork() {
+    return data.trampo.vfork;
+}
+
+void vfork_exit_callback() {
+    if (vfork_shm) {
+        __atomic_store_n(vfork_shm, 1, __ATOMIC_RELAXED);
+        futex_wake(vfork_shm, INT_MAX);
+        sys_munmap(vfork_shm, PAGE_SIZE);
+        vfork_shm = nullptr;
+    }
+}
 
 static int signalmanager_clone(Context* ctx,
                                const This* sigmgmt,
                                const CallClone* call) {
-    int* ret = call->ret;
+    int* _ret = call->ret;
 
     if (call->type == CLONETYPE_FORK) {
-        *ret = fork();
-        return *ret;
+        *_ret = fork();
+        return *_ret;
     }
 
     if (call->type == CLONETYPE_VFORK) {
         clone_trampo_arm(&data.trampo, ctx->ucontext);
         ctx->trampo_armed = 1;
-        *ret = 0;
+
+        data.trampo.vfork = 1;
+
+        *_ret = 0;
         return 0;
     }
 
@@ -522,15 +543,37 @@ static int signalmanager_clone(Context* ctx,
     sigset_t* uctx_set = &uctx->uc_sigmask;
 
     if (!(args->flags & CLONE_VM)) {
-        *ret = fork();
-        if (*ret) {
-            if (*ret < 0) {
-                return *ret;
+        unsigned int* shm;
+        if (args->flags & CLONE_VFORK) {
+            shm = (unsigned int*)sys_mmap(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+                                          MAP_ANON | MAP_SHARED, -1, 0);
+            if ((unsigned long)shm >= -4095UL) {
+                *_ret = -ENOMEM;
+                return *_ret;
+            }
+        }
+
+        *_ret = fork();
+        if (*_ret) {
+            if (*_ret < 0) {
+                *_ret = -errno;
+                return *_ret;
             }
 
             if (args->flags & CLONE_PARENT_SETTID) {
                 int* tidptr = (int*)args->parent_tid;
-                *tidptr = *ret;
+                *tidptr = *_ret;
+            }
+
+            if (args->flags & CLONE_VFORK) {
+                while (!__atomic_load_n(&shm, __ATOMIC_RELAXED)) {
+                    int ret = futex_wait(shm, 0);
+                    if (ret == -ETIMEDOUT && is_pid_dead(*_ret)) {
+                        break;
+                    }
+                }
+
+                sys_munmap(shm, PAGE_SIZE);
             }
         } else {
             int* tidptr = (int*)args->child_tid;
@@ -541,7 +584,11 @@ static int signalmanager_clone(Context* ctx,
             }
 
             if (args->flags & CLONE_CHILD_SETTID) {
-                *tidptr = (tid? tid: sys_gettid());
+                *tidptr = (tid ? tid : sys_gettid());
+            }
+
+            if (args->flags & CLONE_VFORK) {
+                vfork_shm = shm;
             }
 
             if (call->type == CLONETYPE_CLONE3 &&
@@ -560,12 +607,16 @@ static int signalmanager_clone(Context* ctx,
                 }
             }
         }
-        return *ret;
+        return *_ret;
     }
 
     // trampo arm waits for the reference count to drop
     clone_trampo_arm(&data.trampo, ctx->ucontext);
     ctx->trampo_armed = 1;
+
+    if (args->flags & CLONE_VFORK) {
+        data.trampo.vfork = 1;
+    }
 
     if (call->type == CLONETYPE_CLONE3 && (args->flags & CLONE_CLEAR_SIGHAND)) {
         sigset_t full;
@@ -587,7 +638,7 @@ static int signalmanager_clone(Context* ctx,
         data.trampo.sig_sys_addr = (uintptr_t)&data.sig_sys;
     }
 
-    *ret = 0;
+    *_ret = 0;
     return 0;
 }
 

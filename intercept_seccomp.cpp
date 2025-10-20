@@ -384,6 +384,7 @@ static ssize_t read_full(int fd, char* buf, size_t count) {
 static void thread_exit(Tls* tls) {
     signalmanager_clean_dead(tls);
     tls_free();
+    vfork_exit_callback();
 }
 
 static void thread_exit_exec(Tls* tls) {
@@ -397,6 +398,7 @@ static void thread_exit_exec(Tls* tls) {
     mutex_recover(tls);
     signalmanager_clean_dead(tls);
     tls_free();
+    vfork_exit_callback();
 }
 
 static const char* or_null(const char* str) {
@@ -1207,8 +1209,11 @@ static int handle_exit(Context* ctx, int status) {
 
     thread_exit(ctx->tls);
 
-    // sys_exit(status);
-    pthread_exit(NULL);
+    if (self_is_vfork()) {
+        sys_exit(status);
+    } else {
+        pthread_exit(NULL);
+    }
     return 0;
 }
 

@@ -40,7 +40,7 @@ void spinlock_unlock(Spinlock* lock) {
     __atomic_store_n(lock, 0, __ATOMIC_RELEASE);
 }
 
-static int futex_wait(Mutex* mutex, Mutex expected) {
+int futex_wait(Mutex* mutex, Mutex expected) {
     signed long ret;
     struct timespec timeout = {1, 0};
 
@@ -58,8 +58,9 @@ static int futex_wait(Mutex* mutex, Mutex expected) {
     return 0;
 }
 
-static void futex_wake(Mutex* mutex) {
-    signed long ret = sys_futex(mutex, FUTEX_WAKE, 1, nullptr, nullptr, 0);
+void futex_wake(Mutex* mutex, int waiters) {
+    signed long ret =
+        sys_futex(mutex, FUTEX_WAKE, waiters, nullptr, nullptr, 0);
     if (ret < 0) {
         abort();
     }
@@ -92,7 +93,7 @@ static int _mutex_lock(const pid_t tid, Mutex* mutex) {
 
 static void __mutex_unlock(Mutex* mutex, pid_t val) {
     __atomic_store_n(mutex, val, __ATOMIC_RELEASE);
-    futex_wake(mutex);
+    futex_wake(mutex, 1);
 }
 
 static void _mutex_unlock(Mutex* mutex) {
@@ -399,7 +400,7 @@ void rwlock_unlock_read(Tls* tls, RwLock* lock) {
             _rwlock_unlock_read(tls, lock, i);
 
             mutex_unlock(tls, &lock->mutex);
-            futex_wake(&lock->waiters);
+            futex_wake(&lock->waiters, 1);
             return;
         }
     }

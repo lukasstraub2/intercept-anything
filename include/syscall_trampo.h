@@ -15,6 +15,7 @@ struct syscall_trampo_data {
     unsigned long savedreg;
     unsigned long refcnt1;
     unsigned long refcnt2;
+    unsigned long vfork;
 };
 typedef struct syscall_trampo_data syscall_trampo_data;
 

@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-typedef uint32_t Spinlock __attribute__((aligned(8)));
+typedef uint32_t Spinlock;
 typedef Spinlock Mutex;
 static_assert(__atomic_always_lock_free(sizeof(Spinlock), 0), "Spinlock");
 
@@ -45,6 +45,9 @@ struct RwLockList {
 };
 
 #define WRITE_ONCE(var, x) __atomic_store_n(&(var), (x), __ATOMIC_RELAXED)
+
+int futex_wait(Mutex* mutex, Mutex expected);
+void futex_wake(Mutex* mutex, int waiters);
 
 int mutex_lock(Tls* tls, RobustMutex* mutex);
 void mutex_unlock(Tls* tls, RobustMutex* mutex);
