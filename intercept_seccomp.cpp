@@ -1715,7 +1715,7 @@ static int handle_clone3(Context* ctx, struct clone_args* uargs, size_t size) {
 
     int ret = 0;
     CallClone call = {
-        .type = CLONETYPE_CLONE,
+        .type = CLONETYPE_CLONE3,
         .args = uargs,
         .size = size,
         .ret = &ret,
@@ -2922,53 +2922,6 @@ static unsigned long bottom_mmap(Context* ctx,
     return ret;
 }
 
-static int bottom_clone(Context* ctx, const This* data, const CallClone* call) {
-    int* ret = call->ret;
-
-    if (call->type == CLONETYPE_FORK) {
-        *ret = fork();
-        return *ret;
-    }
-
-    if (call->type == CLONETYPE_CLONE || call->type == CLONETYPE_CLONE3) {
-        struct clone_args* args = call->args;
-        if (args->flags & CLONE_CLEAR_SIGHAND) {
-            abort();
-        }
-
-        if (!(args->flags & CLONE_VM)) {
-            *ret = fork();
-            if (*ret) {
-                if (*ret < 0) {
-                    return *ret;
-                }
-
-                if (args->flags & CLONE_PARENT_SETTID) {
-                    int* tidptr = (int*)args->parent_tid;
-                    *tidptr = *ret;
-                }
-            } else {
-                int* tidptr = (int*)args->child_tid;
-
-                if (args->flags & CLONE_CHILD_CLEARTID) {
-                    my_syscall1(__NR_set_tid_address, tidptr);
-                }
-
-                if (args->flags & CLONE_CHILD_SETTID) {
-                    *tidptr = sys_gettid();
-                }
-            }
-            return *ret;
-        }
-    }
-
-syscall_trampo:
-    clone_trampo_arm(ctx->ucontext);
-    ctx->trampo_armed = 1;
-    *ret = 0;
-    return 0;
-}
-
 static const CallHandler bottom = {
     bottom_open,
     nullptr,
@@ -3026,7 +2979,7 @@ static const CallHandler bottom = {
     nullptr,
     bottom_mmap,
     nullptr,
-    bottom_clone,
+    nullptr,
     nullptr,
 };
 
@@ -3047,6 +3000,7 @@ void intercept_init(int recursing, const char* exe) {
     if (ret != 0) {
         abort();
     }
+    prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
     tls_init();
     mutex_init();
     start_text_init();

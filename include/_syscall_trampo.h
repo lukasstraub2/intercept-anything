@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mysignal.h"
 #include <signal.h>
 #include <syscall.h>
 
@@ -7,24 +8,7 @@
 #define xstr(s) #s
 
 extern const char syscall_trampo_start[1], clone_trampo_start[1];
-
-struct syscall_trampo_data {
-    unsigned long sig_mask;
-    unsigned long jmp_addr;
-    unsigned long sig_dfl_addr;
-    unsigned long sig_sys_addr;
-    unsigned long num;
-    unsigned long arg1;
-    unsigned long arg2;
-    unsigned long arg3;
-    unsigned long arg4;
-    unsigned long arg5;
-    unsigned long arg6;
-    unsigned long savedreg;
-    unsigned long refcnt1;
-    unsigned long refcnt2;
-};
-typedef struct syscall_trampo_data syscall_trampo_data;
+static_assert(sizeof(struct k_sigaction) == 32, "sizeof(struct k_sigaction)");
 
 // clang-format off
 
@@ -102,8 +86,14 @@ __asm__(
     "movq $" str(__NR_rt_sigaction) ", %rax\n\t"
     "syscall\n\t"
     "test %rax, %rax\n\t"
-    "jnz abort\n\t"
+    "jnz abort\n"
+"0:\n\t"
+    "add $32, %rsi\n\t"
     "dec %rdi\n\t"
+    "cmpq $" str(SIGKILL) ", %rdi\n\t"
+    "jz 0b\n\t"
+    "cmpq $" str(SIGSTOP) ", %rdi\n\t"
+    "jz 0b\n\t"
     "test %rdi, %rdi\n\t"
     "jnz sig_dfl_loop\n"
 "skip_sig_dfl:\n\t"

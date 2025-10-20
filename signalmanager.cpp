@@ -8,6 +8,7 @@
 #include "signalmanager.h"
 #include "rmap.h"
 #include "workarounds.h"
+#include "syscall_trampo.h"
 
 #define DEBUG_ENV "DEBUG_SIGNAL"
 #include "debug.h"
@@ -414,14 +415,23 @@ out:
     return *_ret;
 }
 
+static void fill_sigsys_act(struct k_sigaction* act, myhandler_t handler) {
+    *act = {};
+    act->handler = (decltype(act->handler))handler;
+    memcpy(&act->mask, full_mask(), _NSIG / 8);
+    act->flags = SA_NODEFER | SA_SIGINFO | SA_RESTORER;
+    act->restorer = __restore_rt;
+}
+
+myhandler_t sigsys_handler;
 void signalmanager_install_sigsys(myhandler_t handler) {
     int ret;
-    struct sigaction sig = {};
-    sig.sa_handler = (decltype(sig.sa_handler))handler;
-    sig.sa_mask = *full_mask();
-    sig.sa_flags = SA_NODEFER | SA_SIGINFO;
+    struct k_sigaction act;
 
-    ret = sigaction(SIGSYS, &sig, nullptr);
+    sigsys_handler = handler;
+    fill_sigsys_act(&act, handler);
+
+    ret = sys_rt_sigaction(SIGSYS, &act, nullptr, _NSIG / 8);
     if (ret < 0) {
         exit_error("sigaction(): %d", -ret);
     }
@@ -429,11 +439,11 @@ void signalmanager_install_sigsys(myhandler_t handler) {
     trace("registered signal handler\n");
 }
 
-static int install_generic_handler(int signum,
-                                   const struct k_sigaction* const act) {
+static void fill_generic_handler(int signum,
+                                 struct k_sigaction* dst,
+                                 const struct k_sigaction* const act) {
     DefaultAction def = default_action(signum);
-    struct k_sigaction copy;
-    copy = *act;
+    *dst = *act;
 
     if (act->handler == SIG_DFL) {
         switch (def) {
@@ -444,9 +454,9 @@ static int install_generic_handler(int signum,
             case ACTION_STOP:
             case ACTION_TERM:
             case ACTION_CORE:
-                copy.handler = (decltype(copy.handler))generic_handler;
-                memcpy(&copy.mask, full_mask(), _NSIG / 8);
-                copy.flags &= ~(SA_RESETHAND);
+                dst->handler = (decltype(dst->handler))generic_handler;
+                memcpy(&dst->mask, full_mask(), _NSIG / 8);
+                dst->flags &= ~(SA_RESETHAND);
                 // TODO: enforce SA_NODEFER for unmasked signals
                 break;
 
@@ -456,20 +466,129 @@ static int install_generic_handler(int signum,
     } else if (act->handler == SIG_IGN) {
         // noop
     } else {
-        copy.handler = (decltype(copy.handler))generic_handler;
-        memcpy(&copy.mask, full_mask(), _NSIG / 8);
-        copy.flags &= ~(SA_RESETHAND);
+        dst->handler = (decltype(dst->handler))generic_handler;
+        memcpy(&dst->mask, full_mask(), _NSIG / 8);
+        dst->flags &= ~(SA_RESETHAND);
         // TODO: enforce SA_NODEFER for unmasked signals
     }
 
-    copy.flags |= SA_SIGINFO;
+    dst->flags |= SA_SIGINFO;
 
-    if (!(copy.flags & SA_RESTORER)) {
-        copy.flags |= SA_RESTORER;
-        copy.restorer = __restore_rt;
+    if (!(dst->flags & SA_RESTORER)) {
+        dst->flags |= SA_RESTORER;
+        dst->restorer = __restore_rt;
     }
+}
+
+static int install_generic_handler(int signum,
+                                   const struct k_sigaction* const act) {
+    struct k_sigaction copy;
+    fill_generic_handler(signum, &copy, act);
 
     return sys_rt_sigaction(signum, &copy, nullptr);
+}
+
+struct sigmgmt_trampo_data {
+    syscall_trampo_data trampo;
+    sigset_t sig_mask;
+    struct k_sigaction sig_dfl_act[mysignal_size];
+    struct k_sigaction sig_sys;
+    struct clone_args args;
+};
+typedef struct sigmgmt_trampo_data sigmgmt_trampo_data;
+
+static __thread sigmgmt_trampo_data data = {};
+
+static int signalmanager_clone(Context* ctx,
+                               const This* sigmgmt,
+                               const CallClone* call) {
+    int* ret = call->ret;
+
+    if (call->type == CLONETYPE_FORK) {
+        *ret = fork();
+        return *ret;
+    }
+
+    if (call->type == CLONETYPE_VFORK) {
+        clone_trampo_arm(&data.trampo, ctx->ucontext);
+        ctx->trampo_armed = 1;
+        *ret = 0;
+        return 0;
+    }
+
+    assert(call->type == CLONETYPE_CLONE || call->type == CLONETYPE_CLONE3);
+    struct clone_args* args = call->args;
+    struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
+    sigset_t* uctx_set = &uctx->uc_sigmask;
+
+    if (!(args->flags & CLONE_VM)) {
+        *ret = fork();
+        if (*ret) {
+            if (*ret < 0) {
+                return *ret;
+            }
+
+            if (args->flags & CLONE_PARENT_SETTID) {
+                int* tidptr = (int*)args->parent_tid;
+                *tidptr = *ret;
+            }
+        } else {
+            int* tidptr = (int*)args->child_tid;
+            int tid = 0;
+
+            if (args->flags & CLONE_CHILD_CLEARTID) {
+                tid = my_syscall1(__NR_set_tid_address, tidptr);
+            }
+
+            if (args->flags & CLONE_CHILD_SETTID) {
+                *tidptr = (tid? tid: sys_gettid());
+            }
+
+            if (call->type == CLONETYPE_CLONE3 &&
+                (args->flags & CLONE_CLEAR_SIGHAND)) {
+                memset(mysignal->mysignal, 0, sizeof(mysignal->mysignal));
+                for (int signum = 1; signum <= mysignal_size; signum++) {
+                    if (signum == SIGKILL || signum == SIGSTOP) {
+                        continue;
+                    }
+
+                    int ret = install_generic_handler(
+                        signum, mysignal->mysignal + signum - 1);
+                    if (ret < 0) {
+                        exit_error("rt_sigaction(): %d", ret);
+                    }
+                }
+            }
+        }
+        return *ret;
+    }
+
+    // trampo arm waits for the reference count to drop
+    clone_trampo_arm(&data.trampo, ctx->ucontext);
+    ctx->trampo_armed = 1;
+
+    if (call->type == CLONETYPE_CLONE3 && (args->flags & CLONE_CLEAR_SIGHAND)) {
+        sigset_t full;
+        _sigfillset(&full);
+
+        memcpy(&data.sig_mask, uctx_set, _NSIG / 8);
+        memcpy(uctx_set, &full, _NSIG / 8);
+        data.trampo.sig_mask = (uintptr_t)&data.sig_mask;
+
+        // the trampoline restores the signals in reverse order
+        const struct k_sigaction dfl = {};
+        for (int idx = 1; idx <= mysignal_size; idx++) {
+            int signum = mysignal_size + 1 - idx;
+            fill_generic_handler(signum, data.sig_dfl_act + idx - 1, &dfl);
+        }
+        data.trampo.sig_dfl_addr = (uintptr_t)&data.sig_dfl_act;
+
+        fill_sigsys_act(&data.sig_sys, sigsys_handler);
+        data.trampo.sig_sys_addr = (uintptr_t)&data.sig_sys;
+    }
+
+    *ret = 0;
+    return 0;
 }
 
 const CallHandler* signalmanager_init(const CallHandler* next) {
@@ -486,6 +605,8 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
     sigmgmt.sigprocmask_next = nullptr;
     sigmgmt.sigaction = signalmanager_sigaction;
     sigmgmt.sigaction_next = nullptr;
+    sigmgmt.clone = signalmanager_clone;
+    sigmgmt.clone_next = nullptr;
 
     mutex = mutex_alloc();
     map = rmap_alloc(64);

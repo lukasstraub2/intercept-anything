@@ -6,6 +6,10 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <string.h>
+#include <pthread.h>
+#include <sys/mman.h>
+#include "arch.h"
+#include "pagesize.h"
 
 #define DEBUG_ENV "DEBUG"
 #include "debug.h"
@@ -90,6 +94,67 @@ void test_preserve_sigprocmask() {
     }
 }
 
+#define CLONE_CLEAR_SIGHAND 0x100000000ULL
+
+struct clone_args {
+    unsigned long flags;
+    unsigned long pidfd;
+    unsigned long child_tid;
+    unsigned long parent_tid;
+    unsigned long exit_signal;
+    unsigned long stack;
+    unsigned long stack_size;
+    unsigned long tls;
+    unsigned long set_tid;
+    unsigned long set_tid_size;
+    unsigned long cgroup;
+};
+
+__attribute__((noinline)) static pid_t _myclone(void (*fn)(),
+                                                struct clone_args* args) {
+    pid_t tid = my_syscall2(__NR_clone3, args, sizeof(*args));
+
+    if (tid) {
+        return tid;
+    }
+
+    fn();
+    for (;;)
+        my_syscall1(__NR_exit, 0);
+}
+
+#define mystack_size (512 * 1024)
+
+static pid_t myclone(void (*fn)()) {
+    (void)mmap(NULL, PAGE_SIZE, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    char* stack = (char*)mmap(NULL, mystack_size, PROT_READ | PROT_WRITE,
+                              MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    (void)mmap(NULL, PAGE_SIZE, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#ifdef stack_grows_down
+    stack += mystack_size;
+#endif
+
+    struct clone_args args = {};
+    args.stack = (uintptr_t)stack;
+    args.stack_size = mystack_size;
+    args.flags = CLONE_VFORK | CLONE_VM | CLONE_CLEAR_SIGHAND;
+
+    pid_t tid = _myclone(fn, &args);
+
+    return tid;
+}
+
+static void noop() {}
+
+void test_clear_sighand() {
+    int ret;
+
+    ret = myclone(noop);
+    if (ret < 0) {
+        exit_error("myclone(): %s\n", strerror(-ret));
+    }
+}
+
 int main(int argc, char** argv) {
     if (argc == 2 && !strcmp(argv[1], "--preserve_sigprocmask_child")) {
         preserve_sigprocmask_child();
@@ -97,6 +162,7 @@ int main(int argc, char** argv) {
     }
 
     test_preserve_sigprocmask();
+    test_clear_sighand();
 
     return 0;
 }

@@ -53,7 +53,7 @@ endif()
 
 include_directories(include include/nolibc)
 add_compile_definitions(_GNU_SOURCE)
-add_compile_options(-O1 -pipe -fPIE -Wno-shift-op-parentheses)
+add_compile_options(-g -O1 -pipe -fPIE -Wno-shift-op-parentheses)
 
 add_library(freestanding OBJECT
     loader.cpp mylock.cpp rmap.cpp tls.cpp intercept_seccomp.cpp util.cpp signalmanager.cpp workarounds.cpp execve_here.cpp syscall_trampo.cpp)
