@@ -2,13 +2,10 @@
 #include "mylock.h"
 #include "util.h"
 #include "mysys.h"
+#include "linux/futex.h"
 
 #include <stdlib.h>
 #include <sys/mman.h>
-
-#define FUTEX_WAIT 0
-#define FUTEX_WAKE 1
-#define FUTEX_TID_MASK 0x3fffffff
 
 typedef struct LocalMutexes LocalMutexes;
 struct LocalMutexes {
