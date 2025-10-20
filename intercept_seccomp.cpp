@@ -30,7 +30,7 @@
 
 extern "C" {
 int __main_prepare_threaded();
-int __external_thread_register(int tid);
+int __external_thread_register_maybe();
 }
 
 static int initialized = 0;
@@ -45,14 +45,11 @@ static void start_text_init();
 
 static void handler(int sig, siginfo_t* info, void* ucontext) {
     const pid_t tid = sys_gettid();
-    Tls* tls = _tls_get_noalloc(tid);
-    if (!tls) {
-        int ret = __external_thread_register(tid);
-        if (ret < 0) {
-            abort();
-        }
+    Tls* tls = _tls_get(tid);
 
-        tls = _tls_get(tid);
+    int reti = __external_thread_register_maybe();
+    if (reti < 0) {
+        abort();
     }
 
     Context ctx = {tls, ucontext, 0, 0};
