@@ -43,13 +43,17 @@ const char* self_exe = _self_exe;
 static unsigned long handle_syscall(Context* ctx, SysArgs* args);
 static void start_text_init();
 
+static __thread Tls _tls = {};
 static void handler(int sig, siginfo_t* info, void* ucontext) {
-    const pid_t tid = sys_gettid();
-    Tls* tls = _tls_get(tid);
-
+    Tls* tls = &_tls;
     int reti = __external_thread_register_maybe();
     if (reti < 0) {
         abort();
+    }
+
+    if (!tls->pid) {
+        tls->pid = getpid();
+        tls->tid = gettid();
     }
 
     Context ctx = {tls, ucontext, 0, 0};
@@ -57,8 +61,6 @@ static void handler(int sig, siginfo_t* info, void* ucontext) {
     SysArgs args;
 
     (void)sig;
-
-    trace_plus("gettid(): %u\n", tid);
 
     signalmanager_please_callback(tls);
 
@@ -380,7 +382,6 @@ static ssize_t read_full(int fd, char* buf, size_t count) {
 
 static void thread_exit(Tls* tls) {
     signalmanager_clean_dead(tls);
-    tls_free();
     vfork_exit_callback();
 }
 
@@ -394,7 +395,6 @@ static void thread_exit_exec(Tls* tls) {
 
     mutex_recover(tls);
     signalmanager_clean_dead(tls);
-    tls_free();
     vfork_exit_callback();
 }
 
@@ -442,11 +442,17 @@ static int handle_openat(Context* ctx,
 }
 
 int loader_open(const char* path, int flags, mode_t mode) {
+    Tls* tls = &_tls;
     if (!initialized) {
         return sys_open(path, flags, mode);
     }
 
-    Context ctx = {tls_get(), nullptr, 0};
+    if (!tls->pid) {
+        tls->pid = getpid();
+        tls->tid = gettid();
+    }
+
+    Context ctx = {tls, nullptr, 0};
     return handle_openat(&ctx, AT_FDCWD, path, flags, mode);
 }
 
