@@ -156,6 +156,7 @@ __asm__(
 // there is no absolute jump on aarch64 and syscalls
 // do not clobber any registers.
 // hacky, but clobber x8 (syscall number) or x16 (ip0) or x17 (ip1)
+// x18 is platform-specific and should not be used on android
 __asm__(
 "syscall_trampo_start:\n\t"
     "svc 0\n\t"
