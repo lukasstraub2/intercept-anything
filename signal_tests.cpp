@@ -120,7 +120,7 @@ __attribute__((noinline)) static pid_t _myclone(void (*fn)(),
 
     fn();
     for (;;)
-        my_syscall1(__NR_exit, 0);
+        my_syscall1(__NR_exit_group, 0);
 }
 
 #define mystack_size (512 * 1024)
@@ -138,20 +138,76 @@ static pid_t myclone(void (*fn)()) {
     args.stack = (uintptr_t)stack;
     args.stack_size = mystack_size;
     args.flags = CLONE_VFORK | CLONE_VM | CLONE_CLEAR_SIGHAND;
+    args.exit_signal = SIGCHLD;
 
     pid_t tid = _myclone(fn, &args);
 
     return tid;
 }
 
-static void noop() {}
+static void clear_sighand_child() {
+    int ret;
+    struct sigaction act;
+
+    for (int sig = 1; sig <= 31; sig++) {
+        if (sig == SIGKILL || sig == SIGSTOP) {
+            continue;
+        }
+        ret = sigaction(sig, nullptr, &act);
+        if (ret < 0) {
+            exit_error("sigaction(%u): %s", sig, strerror(errno));
+        }
+
+        if (sigismember(&act.sa_mask, SIGWINCH)) {
+            exit_error("signal was not cleared: %d", sig);
+        }
+    }
+
+    for (int sig = SIGRTMIN; sig <= SIGRTMAX; sig++) {
+        ret = sigaction(sig, nullptr, &act);
+        if (ret < 0) {
+            exit_error("sigaction(%u): %s", sig, strerror(errno));
+        }
+
+        if (sigismember(&act.sa_mask, SIGWINCH)) {
+            exit_error("signal was not cleared: %d", sig);
+        }
+    }
+}
 
 void test_clear_sighand() {
     int ret;
+    sigset_t set;
+    sigemptyset(&set);
 
-    ret = myclone(noop);
+    clear_all();
+
+    sigaddset(&set, SIGWINCH);
+    struct sigaction sa = {};
+    sa.sa_mask = set;
+    sa.sa_handler = SIG_IGN;
+    ret = sigaction(SIGWINCH, &sa, nullptr);
+
+    ret = myclone(clear_sighand_child);
     if (ret < 0) {
         exit_error("myclone(): %s\n", strerror(-ret));
+    }
+
+    int pid = ret;
+    int wstatus;
+    ret = waitpid(pid, &wstatus, 0);
+    if (ret < 0) {
+        exit_error("waitpid(): %s", strerror(errno));
+    }
+
+    ret = WEXITSTATUS(wstatus);
+    if (ret != 0) {
+        exit_error("child exited with ret %u", ret);
+    }
+
+    ret = WTERMSIG(wstatus);
+    if (ret != 0) {
+        exit_error("child terminated with signal %u", ret);
     }
 }
 
