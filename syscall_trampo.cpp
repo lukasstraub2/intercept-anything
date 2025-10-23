@@ -11,6 +11,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
+#include <pthread.h>
 
 static void arm(syscall_trampo_data* data,
                 void* ucontext,
@@ -22,6 +23,7 @@ static void arm(syscall_trampo_data* data,
 
     while (__atomic_load_n(&data->refcnt1, __ATOMIC_ACQUIRE) ||
            __atomic_load_n(&data->refcnt2, __ATOMIC_ACQUIRE)) {
+        sched_yield();
     }
 
     *data = {};

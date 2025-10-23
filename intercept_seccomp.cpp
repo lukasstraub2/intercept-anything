@@ -381,7 +381,6 @@ static ssize_t read_full(int fd, char* buf, size_t count) {
 }
 
 static void thread_exit(Tls* tls) {
-    signalmanager_clean_dead(tls);
     vfork_exit_callback();
 }
 
@@ -394,7 +393,6 @@ static void thread_exit_exec(Tls* tls) {
     assert(RLIST_EMPTY(&tls->my_rwlock_list.head));
 
     mutex_recover(tls);
-    signalmanager_clean_dead(tls);
     vfork_exit_callback();
 }
 

@@ -12,6 +12,7 @@
 #include "pagesize.h"
 #include "mysys.h"
 #include "util.h"
+#include "mylist.h"
 
 #define DEBUG_ENV "DEBUG_SIGNAL"
 #include "debug.h"
@@ -21,6 +22,119 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/mman.h>
+#include <pthread.h>
+
+#define mysignal_size (64)
+struct MySignal {
+    pthread_mutex_t mutex;
+    struct k_sigaction mysignal[mysignal_size];
+};
+typedef struct MySignal MySignal;
+
+static __thread MySignal* mysignal;
+static __thread int inherit_completed = 0;
+
+struct InheritEntry {
+    RLIST_ENTRY(InheritEntry) next;
+    MySignal* mysignal;
+    long tid;
+};
+typedef struct InheritEntry InheritEntry;
+
+RLIST_HEAD(InheritHead, InheritEntry);
+static InheritHead head;
+static pthread_mutex_t inherit_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static void mysignal_lock() {
+    int ret = pthread_mutex_lock(&mysignal->mutex);
+    if (ret) {
+        abort();
+    }
+}
+
+static void mysignal_unlock() {
+    int ret = pthread_mutex_unlock(&mysignal->mutex);
+    if (ret) {
+        abort();
+    }
+}
+
+static MySignal* mysignal_new() {
+    MySignal* signal = (MySignal*)malloc(sizeof(MySignal));
+    if (!signal) {
+        return nullptr;
+    }
+
+    signal->mutex = PTHREAD_MUTEX_INITIALIZER;
+    return signal;
+}
+
+static void inherit_list_lock() {
+    int ret = pthread_mutex_lock(&inherit_list_mutex);
+    if (ret) {
+        abort();
+    }
+}
+
+static void inherit_list_unlock() {
+    int ret = pthread_mutex_unlock(&inherit_list_mutex);
+    if (ret) {
+        abort();
+    }
+}
+
+static InheritEntry* inherit_list_new() {
+    InheritEntry* entry;
+    entry = (InheritEntry*)calloc(1, sizeof(InheritEntry));
+    if (!entry) {
+        return nullptr;
+    }
+
+    entry->tid = -1;
+
+    inherit_list_lock();
+    RLIST_INSERT_HEAD(&head, entry, next);
+    inherit_list_unlock();
+
+    return entry;
+}
+
+static void inherit_list_maybe_inherit() {
+    if (inherit_completed) {
+        return;
+    }
+    inherit_completed = 1;
+
+    long tid = gettid();
+
+    inherit_list_lock();
+    int found = 0;
+    InheritEntry *elm, *temp;
+    RLIST_FOREACH(elm, &head, next, temp) {
+        long elm_tid = __atomic_load_n(&elm->tid, __ATOMIC_RELAXED);
+
+        if (!elm_tid) {
+            RLIST_REMOVE(&head, elm, next);
+            free(elm);
+        }
+
+        if (elm_tid == tid) {
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+        abort();
+    }
+
+    RLIST_REMOVE(&head, elm, next);
+    inherit_list_unlock();
+
+    mysignal = elm->mysignal;
+
+    free(elm);
+}
 
 static void _sigemptyset(sigset_t* set) {
     memset(set, 0, sizeof(sigset_t));
@@ -69,131 +183,9 @@ static const sigset_t* full_mask() {
     return &set;
 }
 
-static int install_generic_handler(int signum,
-                                   const struct k_sigaction* const act);
-
-#define mysignal_size (64)
-typedef struct MySignal MySignal;
-struct MySignal {
-    int staging_signum;
-    struct k_sigaction staging_signal;
-    struct k_sigaction mysignal[mysignal_size];
-};
-
-static RMap* map;
-static RobustMutex* mutex = nullptr;
-
-static void _signalmanager_clean_dead(Tls* tls) {
-    assert(mutex_locked(tls, mutex));
-
-    for (int i = 0; i < (int)map->alloc; i++) {
-        RMapEntry* entry = map->list + i;
-        if (entry->id && is_pid_dead(entry->id)) {
-            void* data = entry->data;
-            if (data) {
-                WRITE_ONCE(entry->data, nullptr);
-                __asm volatile("" ::: "memory");
-                free(data);
-            }
-            __asm volatile("" ::: "memory");
-            WRITE_ONCE(entry->id, 0);
-            __asm volatile("" ::: "memory");
-        }
-    }
-}
-
-void signalmanager_clean_dead(Tls* tls) {
-    mutex_lock(tls, mutex);
-    _signalmanager_clean_dead(tls);
-    mutex_unlock(tls, mutex);
-}
-
-static void recover_mysignal(MySignal* mysignal);
-static MySignal* _get_mysignal(Tls* tls) {
-    assert(mutex_locked(tls, mutex));
-
-    RMapEntry* entry;
-    for (int i = 0; i < 2; i++) {
-        entry = rmap_get(map, tls->pid);
-        if (!entry) {
-            _signalmanager_clean_dead(tls);
-            continue;
-        }
-        break;
-    }
-    assert(entry);
-    assert(entry->id == (uint32_t)tls->pid);
-
-    if (entry->data) {
-        recover_mysignal((MySignal*)entry->data);
-        return (MySignal*)entry->data;
-    }
-
-    MySignal* alloc = (MySignal*)malloc(sizeof(*alloc));
-
-    for (int i = 0; i < (int)map->size; i++) {
-        const RMapEntry* _parent_parent = map->list + i;
-        if (_parent_parent->id && _parent_parent->id < (uint32_t)tls->pid &&
-            _parent_parent->data) {
-            MySignal* parent_parent = (MySignal*)_parent_parent->data;
-            recover_mysignal(parent_parent);
-            memcpy(alloc->mysignal, parent_parent->mysignal,
-                   sizeof(parent_parent->mysignal));
-        }
-    }
-
-    const RMapEntry* _parent = rmap_get_noalloc(map, getppid());
-    if (_parent && _parent->data) {
-        MySignal* parent = (MySignal*)_parent->data;
-        recover_mysignal(parent);
-        memcpy(alloc->mysignal, parent->mysignal, sizeof(parent->mysignal));
-    }
-    __asm volatile("" ::: "memory");
-    WRITE_ONCE(entry->data, alloc);
-    __asm volatile("" ::: "memory");
-
-    _signalmanager_clean_dead(tls);
-
-    return alloc;
-}
-
-static struct k_sigaction* get_mysignal(MySignal* mysignal, int signum) {
-    assert(signum > 0);
-    return mysignal->mysignal + signum - 1;
-}
-
-static void recover_mysignal(MySignal* mysignal) {
-    int signum = mysignal->staging_signum;
-
-    if (signum) {
-        struct k_sigaction* mysig = get_mysignal(mysignal, signum);
-        *mysig = mysignal->staging_signal;
-        __asm volatile("" ::: "memory");
-        WRITE_ONCE(mysignal->staging_signum, 0);
-        __asm volatile("" ::: "memory");
-    }
-}
-
-static void update_mysignal(MySignal* mysignal,
-                            int signum,
-                            const struct k_sigaction* act) {
-    struct k_sigaction* mysig = get_mysignal(mysignal, signum);
-
-    mysignal->staging_signal = *act;
-    __asm volatile("" ::: "memory");
-    WRITE_ONCE(mysignal->staging_signum, signum);
-    __asm volatile("" ::: "memory");
-    *mysig = mysignal->staging_signal;
-    __asm volatile("" ::: "memory");
-    WRITE_ONCE(mysignal->staging_signum, 0);
-    __asm volatile("" ::: "memory");
-}
-
-// Get the chance to inherit signal dispositions
 void signalmanager_please_callback(Tls* tls) {
-    mutex_lock(tls, mutex);
-    _get_mysignal(tls);
-    mutex_unlock(tls, mutex);
+    (void)tls;
+    inherit_list_maybe_inherit();
 }
 
 static void raise_unmasked(int signum) {
@@ -257,15 +249,15 @@ static void generic_handler(int signum, siginfo_t* info, void* ucontext) {
         raise_unmasked(signum);
     }
 
-    mutex_lock(tls, mutex);
-    MySignal* mysignal = _get_mysignal(tls);
-    struct k_sigaction* ptr = get_mysignal(mysignal, signum);
+    inherit_list_maybe_inherit();
+    mysignal_lock();
+    struct k_sigaction* ptr = mysignal->mysignal + signum - 1;
     const struct k_sigaction copy = *ptr;
 
     if (ptr->flags & SA_RESETHAND) {
         ptr->handler = SIG_DFL;
     }
-    mutex_unlock(tls, mutex);
+    mysignal_unlock();
 
     void (*const handler)(int) = copy.handler;
     const myhandler_t _handler = (myhandler_t)handler;
@@ -379,11 +371,13 @@ out:
     return *_ret;
 }
 
+static int install_generic_handler(int signum,
+                                   const struct k_sigaction* const act);
+
 static int signalmanager_sigaction(Context* ctx,
                                    const This* sigmgmt,
                                    const CallSigaction* call) {
     int* _ret = call->ret;
-    MySignal* mysignal = nullptr;
     struct k_sigaction* mysig = nullptr;
 
     if (call->signum <= 0 || call->sigsetsize != _NSIG / 8) {
@@ -391,18 +385,16 @@ static int signalmanager_sigaction(Context* ctx,
         goto out;
     }
 
-    mutex_lock(ctx->tls, mutex);
-    mysignal = _get_mysignal(ctx->tls);
-    mysig = get_mysignal(mysignal, call->signum);
+    mysignal_lock();
+    mysig = mysignal->mysignal + call->signum - 1;
 
     if (call->oldact) {
         *call->oldact = *mysig;
     }
 
     if (call->act) {
-        update_mysignal(mysignal, call->signum, call->act);
+        mysignal->mysignal[call->signum - 1] = *call->act;
     }
-    mutex_unlock(ctx->tls, mutex);
 
     if (call->signum == SIGSYS) {
         *_ret = 0;
@@ -416,6 +408,7 @@ static int signalmanager_sigaction(Context* ctx,
     }
 
 out:
+    mysignal_unlock();
     return *_ret;
 }
 
@@ -528,10 +521,28 @@ static int signalmanager_clone(Context* ctx,
     }
 
     if (call->type == CLONETYPE_VFORK) {
+        InheritEntry* inherit = inherit_list_new();
+        if (!inherit) {
+            *_ret = -ENOMEM;
+            return *_ret;
+        }
+
         clone_trampo_arm(&data.trampo, ctx->ucontext);
         ctx->trampo_armed = 1;
+        data.trampo.set_tid_addr = (uintptr_t)&inherit->tid;
 
         data.trampo.vfork = 1;
+
+        MySignal* clone = mysignal_new();
+        if (!clone) {
+            abort();
+        }
+
+        mysignal_lock();
+        memcpy(clone->mysignal, mysignal->mysignal, sizeof(mysignal->mysignal));
+        mysignal_unlock();
+
+        inherit->mysignal = clone;
 
         *_ret = 0;
         return 0;
@@ -541,6 +552,11 @@ static int signalmanager_clone(Context* ctx,
     struct clone_args* args = call->args;
     struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
     sigset_t* uctx_set = &uctx->uc_sigmask;
+
+    if (args->flags & CLONE_SIGHAND && args->flags & CLONE_CLEAR_SIGHAND) {
+        *_ret = -EINVAL;
+        return *_ret;
+    }
 
     if (!(args->flags & CLONE_VM)) {
         unsigned int* shm;
@@ -610,12 +626,32 @@ static int signalmanager_clone(Context* ctx,
         return *_ret;
     }
 
+    InheritEntry* inherit = inherit_list_new();
+    if (!inherit) {
+        *_ret = -ENOMEM;
+        return *_ret;
+    }
+
     // trampo arm waits for the reference count to drop
     clone_trampo_arm(&data.trampo, ctx->ucontext);
     ctx->trampo_armed = 1;
+    data.trampo.set_tid_addr = (uintptr_t)&inherit->tid;
 
     if (args->flags & CLONE_VFORK) {
         data.trampo.vfork = 1;
+    }
+
+    if (!(args->flags & CLONE_SIGHAND)) {
+        MySignal* clone = mysignal_new();
+        if (!clone) {
+            abort();
+        }
+
+        mysignal_lock();
+        memcpy(clone->mysignal, mysignal->mysignal, sizeof(mysignal->mysignal));
+        mysignal_unlock();
+
+        inherit->mysignal = clone;
     }
 
     if (call->type == CLONETYPE_CLONE3 && (args->flags & CLONE_CLEAR_SIGHAND)) {
@@ -636,6 +672,19 @@ static int signalmanager_clone(Context* ctx,
 
         fill_sigsys_act(&data.sig_sys, sigsys_handler);
         data.trampo.sig_sys_addr = (uintptr_t)&data.sig_sys;
+
+        if (!inherit->mysignal) {
+            MySignal* clone = mysignal_new();
+            if (!clone) {
+                abort();
+            }
+            inherit->mysignal = clone;
+        }
+        memset(inherit->mysignal->mysignal, 0, sizeof(mysignal->mysignal));
+    }
+
+    if (!inherit->mysignal) {
+        inherit->mysignal = mysignal;
     }
 
     *_ret = 0;
@@ -659,23 +708,11 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
     sigmgmt.clone = signalmanager_clone;
     sigmgmt.clone_next = nullptr;
 
-    mutex = mutex_alloc();
-    map = rmap_alloc(64);
+    pthread_atfork(inherit_list_lock, inherit_list_unlock, inherit_list_unlock);
 
-    Tls* tls = tls_get();
-    mutex_lock(tls, mutex);
-    MySignal* mysignal = _get_mysignal(tls);
-
-    const struct k_sigaction dfl = {};
-    for (int signum = 1; signum <= mysignal_size; signum++) {
-        update_mysignal(mysignal, signum, &dfl);
-    }
-
-    sigset_t unblock = *full_mask();
-    signotset(&unblock, &unblock);
-    int ret = sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, nullptr);
-    if (ret < 0) {
-        exit_error("rt_sigprocmask(): %d", -ret);
+    mysignal = mysignal_new();
+    if (!mysignal) {
+        exit_error("mysignal_new()");
     }
 
     for (int signum = 1; signum <= mysignal_size; signum++) {
@@ -684,12 +721,20 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
         }
 
         int ret =
-            install_generic_handler(signum, get_mysignal(mysignal, signum));
+            install_generic_handler(signum, mysignal->mysignal + signum - 1);
         if (ret < 0) {
             exit_error("rt_sigaction(): %d", ret);
         }
     }
-    mutex_unlock(tls, mutex);
+
+    inherit_completed = 1;
+
+    sigset_t unblock = *full_mask();
+    signotset(&unblock, &unblock);
+    int ret = sys_rt_sigprocmask(SIG_UNBLOCK, &unblock, nullptr);
+    if (ret < 0) {
+        exit_error("rt_sigprocmask(): %d", -ret);
+    }
 
     return &sigmgmt;
 }
