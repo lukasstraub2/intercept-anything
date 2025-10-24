@@ -48,7 +48,7 @@ int __main_prepare_threaded();
 void one_run() {
     int ret;
     pthread_t threads[NUM_THREADS] = {0};
-    int tid_array[NUM_THREADS] = {0};
+    long tid_array[NUM_THREADS] = {0};
     global_cnt = 0;
 
     for (int i = 0; i < NUM_THREADS; i++) {
