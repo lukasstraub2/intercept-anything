@@ -7,7 +7,6 @@
 
 typedef void (*myhandler_t)(int sig, siginfo_t* info, void* ucontext);
 
-int self_is_vfork();
 void vfork_exit_callback();
 
 void signalmanager_clean_dead(Tls* tls);

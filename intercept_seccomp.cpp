@@ -1210,11 +1210,7 @@ static int handle_exit(Context* ctx, int status) {
 
     thread_exit(ctx->tls);
 
-    if (self_is_vfork()) {
-        sys_exit(status);
-    } else {
-        pthread_exit(NULL);
-    }
+    pthread_exit(NULL);
     return 0;
 }
 

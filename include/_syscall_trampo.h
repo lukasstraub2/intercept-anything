@@ -31,7 +31,7 @@ __asm__(
 ".set data.savedreg, 88\n"
 ".set data.refcnt1, 96\n"
 ".set data.refcnt2, 104\n"
-".set data.vfork, 112\n"
+".set data.vfork_idx_addr, 112\n"
 ".set data.set_tid_addr, 120\n"
 );
 
@@ -75,7 +75,11 @@ __asm__(
     "test %rax, %rax\n\t"
     "je child\n\t"
     "xor %rdi, %rdi\n\t"
-    "movq %rdi, data.vfork(%r12)\n\t"
+    "movq data.vfork_idx_addr(%r12), %rsi\n\t"
+    "test %rsi, %rsi\n\t"
+    "jz 1f\n\t"
+    "decq (%rsi)\n"
+"1:\n\t"
     "test %rax, %rax\n\t"
     "jg skip_sig_sys\n\t"
     "movq data.set_tid_addr(%r12), %rsi\n\t"

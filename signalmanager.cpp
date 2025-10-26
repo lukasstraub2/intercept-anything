@@ -31,7 +31,11 @@ struct MySignal {
 };
 typedef struct MySignal MySignal;
 
-static __thread MySignal* mysignal;
+#define VFORK_STACK_SIZE 5
+
+static __thread MySignal* _mysignal[VFORK_STACK_SIZE] = {};
+static __thread int vfork_idx = 0;
+
 static __thread int inherit_completed = 0;
 
 struct InheritEntry {
@@ -45,15 +49,23 @@ RLIST_HEAD(InheritHead, InheritEntry);
 static InheritHead head;
 static pthread_mutex_t inherit_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+static MySignal* mysignal() {
+    return _mysignal[vfork_idx];
+}
+
+static void set_mysignal(MySignal* mysignal) {
+    _mysignal[vfork_idx] = mysignal;
+}
+
 static void mysignal_lock() {
-    int ret = pthread_mutex_lock(&mysignal->mutex);
+    int ret = pthread_mutex_lock(&mysignal()->mutex);
     if (ret) {
         abort();
     }
 }
 
 static void mysignal_unlock() {
-    int ret = pthread_mutex_unlock(&mysignal->mutex);
+    int ret = pthread_mutex_unlock(&mysignal()->mutex);
     if (ret) {
         abort();
     }
@@ -131,7 +143,7 @@ static void inherit_list_maybe_inherit() {
     RLIST_REMOVE(&head, elm, next);
     inherit_list_unlock();
 
-    mysignal = elm->mysignal;
+    set_mysignal(elm->mysignal);
 
     free(elm);
 }
@@ -251,7 +263,7 @@ static void generic_handler(int signum, siginfo_t* info, void* ucontext) {
 
     inherit_list_maybe_inherit();
     mysignal_lock();
-    struct k_sigaction* ptr = mysignal->mysignal + signum - 1;
+    struct k_sigaction* ptr = mysignal()->mysignal + signum - 1;
     const struct k_sigaction copy = *ptr;
 
     if (ptr->flags & SA_RESETHAND) {
@@ -386,14 +398,14 @@ static int signalmanager_sigaction(Context* ctx,
     }
 
     mysignal_lock();
-    mysig = mysignal->mysignal + call->signum - 1;
+    mysig = mysignal()->mysignal + call->signum - 1;
 
     if (call->oldact) {
         *call->oldact = *mysig;
     }
 
     if (call->act) {
-        mysignal->mysignal[call->signum - 1] = *call->act;
+        mysignal()->mysignal[call->signum - 1] = *call->act;
     }
 
     if (call->signum == SIGSYS) {
@@ -497,10 +509,6 @@ typedef struct sigmgmt_trampo_data sigmgmt_trampo_data;
 static __thread sigmgmt_trampo_data data = {};
 static unsigned int* vfork_shm = nullptr;
 
-int self_is_vfork() {
-    return data.trampo.vfork;
-}
-
 void vfork_exit_callback() {
     if (vfork_shm) {
         __atomic_store_n(vfork_shm, 1, __ATOMIC_RELAXED);
@@ -521,17 +529,15 @@ static int signalmanager_clone(Context* ctx,
     }
 
     if (call->type == CLONETYPE_VFORK) {
-        InheritEntry* inherit = inherit_list_new();
-        if (!inherit) {
+        if (vfork_idx + 1 >= VFORK_STACK_SIZE) {
             *_ret = -ENOMEM;
             return *_ret;
         }
 
         clone_trampo_arm(&data.trampo, ctx->ucontext);
         ctx->trampo_armed = 1;
-        data.trampo.set_tid_addr = (uintptr_t)&inherit->tid;
 
-        data.trampo.vfork = 1;
+        data.trampo.vfork_idx_addr = (uintptr_t)&vfork_idx;
 
         MySignal* clone = mysignal_new();
         if (!clone) {
@@ -539,10 +545,13 @@ static int signalmanager_clone(Context* ctx,
         }
 
         mysignal_lock();
-        memcpy(clone->mysignal, mysignal->mysignal, sizeof(mysignal->mysignal));
+        memcpy(clone->mysignal, mysignal()->mysignal,
+               sizeof(mysignal()->mysignal));
         mysignal_unlock();
 
-        inherit->mysignal = clone;
+        vfork_idx++;
+        free(mysignal());
+        set_mysignal(clone);
 
         *_ret = 0;
         return 0;
@@ -609,14 +618,14 @@ static int signalmanager_clone(Context* ctx,
 
             if (call->type == CLONETYPE_CLONE3 &&
                 (args->flags & CLONE_CLEAR_SIGHAND)) {
-                memset(mysignal->mysignal, 0, sizeof(mysignal->mysignal));
+                memset(mysignal()->mysignal, 0, sizeof(mysignal()->mysignal));
                 for (int signum = 1; signum <= mysignal_size; signum++) {
                     if (signum == SIGKILL || signum == SIGSTOP) {
                         continue;
                     }
 
                     int ret = install_generic_handler(
-                        signum, mysignal->mysignal + signum - 1);
+                        signum, mysignal()->mysignal + signum - 1);
                     if (ret < 0) {
                         exit_error("rt_sigaction(): %d", ret);
                     }
@@ -624,6 +633,13 @@ static int signalmanager_clone(Context* ctx,
             }
         }
         return *_ret;
+    }
+
+    if (args->flags & CLONE_VFORK) {
+        if (vfork_idx + 1 >= VFORK_STACK_SIZE) {
+            *_ret = -ENOMEM;
+            return *_ret;
+        }
     }
 
     InheritEntry* inherit = inherit_list_new();
@@ -637,10 +653,6 @@ static int signalmanager_clone(Context* ctx,
     ctx->trampo_armed = 1;
     data.trampo.set_tid_addr = (uintptr_t)&inherit->tid;
 
-    if (args->flags & CLONE_VFORK) {
-        data.trampo.vfork = 1;
-    }
-
     if (!(args->flags & CLONE_SIGHAND)) {
         MySignal* clone = mysignal_new();
         if (!clone) {
@@ -648,7 +660,8 @@ static int signalmanager_clone(Context* ctx,
         }
 
         mysignal_lock();
-        memcpy(clone->mysignal, mysignal->mysignal, sizeof(mysignal->mysignal));
+        memcpy(clone->mysignal, mysignal()->mysignal,
+               sizeof(mysignal()->mysignal));
         mysignal_unlock();
 
         inherit->mysignal = clone;
@@ -680,11 +693,25 @@ static int signalmanager_clone(Context* ctx,
             }
             inherit->mysignal = clone;
         }
-        memset(inherit->mysignal->mysignal, 0, sizeof(mysignal->mysignal));
+        memset(inherit->mysignal->mysignal, 0, sizeof(mysignal()->mysignal));
     }
 
     if (!inherit->mysignal) {
-        inherit->mysignal = mysignal;
+        inherit->mysignal = mysignal();
+    }
+
+    if (args->flags & CLONE_VFORK) {
+        data.trampo.vfork_idx_addr = (uintptr_t)&vfork_idx;
+        data.trampo.set_tid_addr = 0;
+
+        vfork_idx++;
+        free(mysignal());
+        set_mysignal(inherit->mysignal);
+
+        inherit_list_lock();
+        RLIST_REMOVE(&head, inherit, next);
+        inherit_list_unlock();
+        free(inherit);
     }
 
     *_ret = 0;
@@ -710,8 +737,8 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
 
     pthread_atfork(inherit_list_lock, inherit_list_unlock, inherit_list_unlock);
 
-    mysignal = mysignal_new();
-    if (!mysignal) {
+    set_mysignal(mysignal_new());
+    if (!mysignal()) {
         exit_error("mysignal_new()");
     }
 
@@ -721,7 +748,7 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
         }
 
         int ret =
-            install_generic_handler(signum, mysignal->mysignal + signum - 1);
+            install_generic_handler(signum, mysignal()->mysignal + signum - 1);
         if (ret < 0) {
             exit_error("rt_sigaction(): %d", ret);
         }
