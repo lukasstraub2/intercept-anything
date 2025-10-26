@@ -62,8 +62,6 @@ static void handler(int sig, siginfo_t* info, void* ucontext) {
 
     (void)sig;
 
-    signalmanager_please_callback(tls);
-
     if (info->si_errno) {
         exit_error("Invalid arch, terminating");
     }

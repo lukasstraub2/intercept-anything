@@ -33,21 +33,10 @@ typedef struct MySignal MySignal;
 
 #define VFORK_STACK_SIZE 5
 
-static __thread MySignal* _mysignal[VFORK_STACK_SIZE] = {};
+static MySignal global_mysignal = {.mutex = PTHREAD_MUTEX_INITIALIZER,
+                                   .mysignal = {}};
+static __thread MySignal* _mysignal[VFORK_STACK_SIZE] = {&global_mysignal};
 static __thread int vfork_idx = 0;
-
-static __thread int inherit_completed = 0;
-
-struct InheritEntry {
-    RLIST_ENTRY(InheritEntry) next;
-    MySignal* mysignal;
-    long tid;
-};
-typedef struct InheritEntry InheritEntry;
-
-RLIST_HEAD(InheritHead, InheritEntry);
-static InheritHead head;
-static pthread_mutex_t inherit_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static MySignal* mysignal() {
     return _mysignal[vfork_idx];
@@ -81,71 +70,12 @@ static MySignal* mysignal_new() {
     return signal;
 }
 
-static void inherit_list_lock() {
-    int ret = pthread_mutex_lock(&inherit_list_mutex);
-    if (ret) {
-        abort();
-    }
-}
-
-static void inherit_list_unlock() {
-    int ret = pthread_mutex_unlock(&inherit_list_mutex);
-    if (ret) {
-        abort();
-    }
-}
-
-static InheritEntry* inherit_list_new() {
-    InheritEntry* entry;
-    entry = (InheritEntry*)calloc(1, sizeof(InheritEntry));
-    if (!entry) {
-        return nullptr;
-    }
-
-    entry->tid = -1;
-
-    inherit_list_lock();
-    RLIST_INSERT_HEAD(&head, entry, next);
-    inherit_list_unlock();
-
-    return entry;
-}
-
-static void inherit_list_maybe_inherit() {
-    if (inherit_completed) {
-        return;
-    }
-    inherit_completed = 1;
-
-    long tid = gettid();
-
-    inherit_list_lock();
-    int found = 0;
-    InheritEntry *elm, *temp;
-    RLIST_FOREACH(elm, &head, next, temp) {
-        long elm_tid = __atomic_load_n(&elm->tid, __ATOMIC_RELAXED);
-
-        if (!elm_tid) {
-            RLIST_REMOVE(&head, elm, next);
-            free(elm);
-        }
-
-        if (elm_tid == tid) {
-            found = 1;
-            break;
-        }
-    }
-
-    if (!found) {
-        abort();
-    }
-
-    RLIST_REMOVE(&head, elm, next);
-    inherit_list_unlock();
-
-    set_mysignal(elm->mysignal);
-
-    free(elm);
+static void vfork_stack_push(struct syscall_trampo_data* data,
+                             MySignal* _mysignal) {
+    data->vfork_idx_addr = (uintptr_t)&vfork_idx;
+    vfork_idx++;
+    free(mysignal());
+    set_mysignal(_mysignal);
 }
 
 static void _sigemptyset(sigset_t* set) {
@@ -193,11 +123,6 @@ static const sigset_t* full_mask() {
     init = 1;
 
     return &set;
-}
-
-void signalmanager_please_callback(Tls* tls) {
-    (void)tls;
-    inherit_list_maybe_inherit();
 }
 
 static void raise_unmasked(int signum) {
@@ -261,7 +186,6 @@ static void generic_handler(int signum, siginfo_t* info, void* ucontext) {
         raise_unmasked(signum);
     }
 
-    inherit_list_maybe_inherit();
     mysignal_lock();
     struct k_sigaction* ptr = mysignal()->mysignal + signum - 1;
     const struct k_sigaction copy = *ptr;
@@ -534,24 +458,21 @@ static int signalmanager_clone(Context* ctx,
             return *_ret;
         }
 
-        clone_trampo_arm(&data.trampo, ctx->ucontext);
-        ctx->trampo_armed = 1;
-
-        data.trampo.vfork_idx_addr = (uintptr_t)&vfork_idx;
-
         MySignal* clone = mysignal_new();
         if (!clone) {
-            abort();
+            *_ret = -ENOMEM;
+            return *_ret;
         }
+
+        clone_trampo_arm(&data.trampo, ctx->ucontext);
+        ctx->trampo_armed = 1;
 
         mysignal_lock();
         memcpy(clone->mysignal, mysignal()->mysignal,
                sizeof(mysignal()->mysignal));
         mysignal_unlock();
 
-        vfork_idx++;
-        free(mysignal());
-        set_mysignal(clone);
+        vfork_stack_push(&data.trampo, clone);
 
         *_ret = 0;
         return 0;
@@ -635,6 +556,18 @@ static int signalmanager_clone(Context* ctx,
         return *_ret;
     }
 
+    // Only support thread or vfork with shared address space for now
+    if (!(args->flags & CLONE_VFORK) && !(args->flags & CLONE_THREAD)) {
+        *_ret = -EINVAL;
+        return *_ret;
+    }
+
+    if (args->flags & CLONE_THREAD &&
+        (!(args->flags & CLONE_VM) || !(args->flags & CLONE_SIGHAND))) {
+        *_ret = -EINVAL;
+        return *_ret;
+    }
+
     if (args->flags & CLONE_VFORK) {
         if (vfork_idx + 1 >= VFORK_STACK_SIZE) {
             *_ret = -ENOMEM;
@@ -642,76 +575,54 @@ static int signalmanager_clone(Context* ctx,
         }
     }
 
-    InheritEntry* inherit = inherit_list_new();
-    if (!inherit) {
-        *_ret = -ENOMEM;
-        return *_ret;
-    }
-
     // trampo arm waits for the reference count to drop
     clone_trampo_arm(&data.trampo, ctx->ucontext);
     ctx->trampo_armed = 1;
-    data.trampo.set_tid_addr = (uintptr_t)&inherit->tid;
-
-    if (!(args->flags & CLONE_SIGHAND)) {
-        MySignal* clone = mysignal_new();
-        if (!clone) {
-            abort();
-        }
-
-        mysignal_lock();
-        memcpy(clone->mysignal, mysignal()->mysignal,
-               sizeof(mysignal()->mysignal));
-        mysignal_unlock();
-
-        inherit->mysignal = clone;
-    }
-
-    if (call->type == CLONETYPE_CLONE3 && (args->flags & CLONE_CLEAR_SIGHAND)) {
-        sigset_t full;
-        _sigfillset(&full);
-
-        memcpy(&data.sig_mask, uctx_set, _NSIG / 8);
-        memcpy(uctx_set, &full, _NSIG / 8);
-        data.trampo.sig_mask = (uintptr_t)&data.sig_mask;
-
-        // the trampoline restores the signals in reverse order
-        const struct k_sigaction dfl = {};
-        for (int idx = 1; idx <= mysignal_size; idx++) {
-            int signum = mysignal_size + 1 - idx;
-            fill_generic_handler(signum, data.sig_dfl_act + idx - 1, &dfl);
-        }
-        data.trampo.sig_dfl_addr = (uintptr_t)&data.sig_dfl_act;
-
-        fill_sigsys_act(&data.sig_sys, sigsys_handler);
-        data.trampo.sig_sys_addr = (uintptr_t)&data.sig_sys;
-
-        if (!inherit->mysignal) {
-            MySignal* clone = mysignal_new();
-            if (!clone) {
-                abort();
-            }
-            inherit->mysignal = clone;
-        }
-        memset(inherit->mysignal->mysignal, 0, sizeof(mysignal()->mysignal));
-    }
-
-    if (!inherit->mysignal) {
-        inherit->mysignal = mysignal();
-    }
 
     if (args->flags & CLONE_VFORK) {
-        data.trampo.vfork_idx_addr = (uintptr_t)&vfork_idx;
-        data.trampo.set_tid_addr = 0;
+        MySignal* inherit_mysignal;
+        if (call->type == CLONETYPE_CLONE3 &&
+            (args->flags & CLONE_CLEAR_SIGHAND)) {
+            sigset_t full;
+            _sigfillset(&full);
 
-        vfork_idx++;
-        free(mysignal());
-        set_mysignal(inherit->mysignal);
+            memcpy(&data.sig_mask, uctx_set, _NSIG / 8);
+            memcpy(uctx_set, &full, _NSIG / 8);
+            data.trampo.sig_mask = (uintptr_t)&data.sig_mask;
 
-        inherit_list_lock();
-        RLIST_REMOVE(&head, inherit, next);
-        inherit_list_unlock();
-        free(inherit);
+            // the trampoline restores the signals in reverse order
+            const struct k_sigaction dfl = {};
+            for (int idx = 1; idx <= mysignal_size; idx++) {
+                int signum = mysignal_size + 1 - idx;
+                fill_generic_handler(signum, data.sig_dfl_act + idx - 1, &dfl);
+            }
+            data.trampo.sig_dfl_addr = (uintptr_t)&data.sig_dfl_act;
+
+            fill_sigsys_act(&data.sig_sys, sigsys_handler);
+            data.trampo.sig_sys_addr = (uintptr_t)&data.sig_sys;
+
+            inherit_mysignal = mysignal_new();
+            if (!inherit_mysignal) {
+                abort();
+            }
+            memset(inherit_mysignal->mysignal, 0, sizeof(mysignal()->mysignal));
+
+        } else if (!(args->flags & CLONE_SIGHAND)) {
+            inherit_mysignal = mysignal_new();
+            if (!inherit_mysignal) {
+                abort();
+            }
+
+            mysignal_lock();
+            memcpy(inherit_mysignal->mysignal, mysignal()->mysignal,
+                   sizeof(mysignal()->mysignal));
+            mysignal_unlock();
+
+        } else {
+            inherit_mysignal = mysignal();
+        }
+
+        vfork_stack_push(&data.trampo, inherit_mysignal);
     }
 
     *_ret = 0;
@@ -735,13 +646,6 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
     sigmgmt.clone = signalmanager_clone;
     sigmgmt.clone_next = nullptr;
 
-    pthread_atfork(inherit_list_lock, inherit_list_unlock, inherit_list_unlock);
-
-    set_mysignal(mysignal_new());
-    if (!mysignal()) {
-        exit_error("mysignal_new()");
-    }
-
     for (int signum = 1; signum <= mysignal_size; signum++) {
         if (signum == SIGKILL || signum == SIGSTOP) {
             continue;
@@ -753,8 +657,6 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
             exit_error("rt_sigaction(): %d", ret);
         }
     }
-
-    inherit_completed = 1;
 
     sigset_t unblock = *full_mask();
     signotset(&unblock, &unblock);
