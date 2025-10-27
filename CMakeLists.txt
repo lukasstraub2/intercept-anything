@@ -115,7 +115,7 @@ target_link_libraries(execve_here_test PRIVATE ${TOOLS_OBJS} stubs)
 add_executable(execve_thread_test execve_thread_test.cpp)
 target_link_libraries(execve_thread_test PRIVATE execve_thread)
 
-add_executable(signal_tests signal_tests.cpp)
+add_executable(signal_tests signal_tests.c)
 
 add_executable(libc_tls_test libc_tls_test.c libc_tls_test2.c)
 target_link_libraries(libc_tls_test PRIVATE c -static-pie crt_pie)
@@ -128,7 +128,7 @@ target_link_libraries(libc_external_thread_test PRIVATE c -static-pie crt_pie)
 
 add_executable(tls_stresstest tls_stresstest.c)
 
-add_executable(tls_thread_join_test tls_thread_join_test.cpp)
+add_executable(tls_thread_join_test tls_thread_join_test.c)
 
 enable_testing()
 add_test(NAME mylock_test COMMAND mylock_test)

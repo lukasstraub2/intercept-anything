@@ -8,13 +8,28 @@
 #include <string.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <syscall.h>
+#include <stdint.h>
 #include "arch.h"
 #include "pagesize.h"
 
-#define DEBUG_ENV "DEBUG"
-#include "debug.h"
-
 extern char** environ;
+
+static void exit_error(const char* format, ...)
+    __attribute__((format(printf, 1, 2)));
+
+__attribute__((noreturn)) static void exit_error(const char* format, ...) {
+    va_list ap;
+
+    va_start(ap, format);
+    vfprintf(stderr, format, ap);
+    va_end(ap);
+    fputc('\n', stderr);
+
+    my_syscall1(__NR_exit_group, 1);
+}
 
 void clear_all() {
     sigset_t set;
@@ -24,7 +39,7 @@ void clear_all() {
     sa.sa_mask = set;
     sa.sa_handler = SIG_DFL;
 
-    int ret = sigprocmask(SIG_SETMASK, &set, nullptr);
+    int ret = sigprocmask(SIG_SETMASK, &set, NULL);
     if (ret < 0) {
         exit_error("sigprocmask(): %s", strerror(errno));
     }
@@ -33,14 +48,14 @@ void clear_all() {
         if (sig == SIGKILL || sig == SIGSTOP) {
             continue;
         }
-        ret = sigaction(sig, &sa, nullptr);
+        ret = sigaction(sig, &sa, NULL);
         if (ret < 0) {
             exit_error("sigaction(%u): %s", sig, strerror(errno));
         }
     }
 
     for (int sig = SIGRTMIN; sig <= SIGRTMAX; sig++) {
-        ret = sigaction(sig, &sa, nullptr);
+        ret = sigaction(sig, &sa, NULL);
         if (ret < 0) {
             exit_error("sigaction(%u): %s", sig, strerror(errno));
         }
@@ -51,7 +66,7 @@ void preserve_sigprocmask_child() {
     sigset_t oldset;
     int ret;
 
-    ret = sigprocmask(0, nullptr, &oldset);
+    ret = sigprocmask(0, NULL, &oldset);
     assert(!sigismember(&oldset, SIGINT));
 }
 
@@ -62,7 +77,7 @@ void test_preserve_sigprocmask() {
 
     assert(!sigismember(&set, SIGINT));
 
-    int ret = sigprocmask(0, nullptr, &oldset);
+    int ret = sigprocmask(0, NULL, &oldset);
 
     assert(!sigismember(&oldset, SIGINT));
 
@@ -82,11 +97,11 @@ void test_preserve_sigprocmask() {
         }
     } else {
         // child
-        ret = sigprocmask(0, nullptr, &oldset);
+        ret = sigprocmask(0, NULL, &oldset);
         assert(!sigismember(&oldset, SIGINT));
         char* const argv[] = {(char* const)"/proc/self/exe",
                               (char* const)"--preserve_sigprocmask_child",
-                              nullptr};
+                              NULL};
         ret = execve("/proc/self/exe", argv, environ);
         if (ret < 0) {
             exit_error("execve(): %s", strerror(errno));
@@ -153,7 +168,7 @@ static void clear_sighand_child() {
         if (sig == SIGKILL || sig == SIGSTOP) {
             continue;
         }
-        ret = sigaction(sig, nullptr, &act);
+        ret = sigaction(sig, NULL, &act);
         if (ret < 0) {
             exit_error("sigaction(%u): %s", sig, strerror(errno));
         }
@@ -164,7 +179,7 @@ static void clear_sighand_child() {
     }
 
     for (int sig = SIGRTMIN; sig <= SIGRTMAX; sig++) {
-        ret = sigaction(sig, nullptr, &act);
+        ret = sigaction(sig, NULL, &act);
         if (ret < 0) {
             exit_error("sigaction(%u): %s", sig, strerror(errno));
         }
@@ -186,7 +201,7 @@ void test_clear_sighand() {
     struct sigaction sa = {};
     sa.sa_mask = set;
     sa.sa_handler = SIG_IGN;
-    ret = sigaction(SIGWINCH, &sa, nullptr);
+    ret = sigaction(SIGWINCH, &sa, NULL);
 
     ret = myclone(clear_sighand_child);
     if (ret < 0) {

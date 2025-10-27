@@ -11,7 +11,7 @@ int main(void) {
     int ret;
     pthread_t thread;
 
-    ret = pthread_create(&thread, nullptr, thread_start, &ptr);
+    ret = pthread_create(&thread, NULL, thread_start, &ptr);
     if (ret < 0) {
         abort();
     }
