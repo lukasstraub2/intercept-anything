@@ -43,7 +43,7 @@ const char* self_exe = _self_exe;
 static unsigned long handle_syscall(Context* ctx, SysArgs* args);
 static void start_text_init();
 
-static __thread Tls _tls = {};
+__thread Tls _tls = {};
 static void handler(int sig, siginfo_t* info, void* ucontext) {
     int reti = __external_thread_register_maybe();
     if (reti < 0) {
@@ -51,7 +51,6 @@ static void handler(int sig, siginfo_t* info, void* ucontext) {
     }
 
     __asm volatile("" ::: "memory");
-
     Tls* tls = &_tls;
     if (!tls->pid) {
         tls->pid = getpid();

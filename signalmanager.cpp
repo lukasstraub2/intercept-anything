@@ -175,15 +175,16 @@ static void handle_default(int signum) {
 static void generic_handler(int signum, siginfo_t* info, void* ucontext) {
     struct ucontext* uctx = (struct ucontext*)ucontext;
     sigset_t* uctx_set = &uctx->uc_sigmask;
-    Tls* tls = tls_get();
-    mutex_recover(tls);
-
-    if (workarounds_rethrow_signal(tls, signum)) {
-        return;
-    }
 
     if (pc_in_our_code(ucontext) && !sigismember(full_mask(), signum)) {
         raise_unmasked(signum);
+    }
+
+    __asm volatile("" ::: "memory");
+    Tls* tls = &_tls;
+
+    if (workarounds_rethrow_signal(tls, signum)) {
+        return;
     }
 
     mysignal_lock();
