@@ -45,12 +45,14 @@ static void start_text_init();
 
 static __thread Tls _tls = {};
 static void handler(int sig, siginfo_t* info, void* ucontext) {
-    Tls* tls = &_tls;
     int reti = __external_thread_register_maybe();
     if (reti < 0) {
         abort();
     }
 
+    __asm volatile("" ::: "memory");
+
+    Tls* tls = &_tls;
     if (!tls->pid) {
         tls->pid = getpid();
         tls->tid = gettid();

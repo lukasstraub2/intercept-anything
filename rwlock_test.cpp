@@ -62,6 +62,11 @@ static pid_t thread_new(void (*fn)()) {
     sys_mmap(nullptr, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #ifdef stack_grows_down
     stack += stack_size;
+    // compilers call fn() with 8 byte stack alignement, but we need 16 byte
+    // alignement
+    stack -= 8;
+#else
+    stack += 8;
 #endif
     pid_t tid = _thread_new(fn, stack);
 
