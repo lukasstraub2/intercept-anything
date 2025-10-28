@@ -6,6 +6,7 @@ typedef struct RMap RMap;
 typedef struct Cache Cache;
 typedef struct TlsList TlsList;
 typedef struct Tls Tls;
+typedef struct Context Context;
 
 typedef struct RobustMutex RobustMutex;
 typedef struct RobustMutexHead RobustMutexHead;
@@ -14,3 +15,4 @@ typedef struct RwLock RwLock;
 typedef struct RwLockHolder RwLockHolder;
 typedef struct RwLockHead RwLockHead;
 typedef struct RwLockList RwLockList;
+typedef struct This This;

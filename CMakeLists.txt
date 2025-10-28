@@ -56,7 +56,7 @@ add_compile_definitions(_GNU_SOURCE)
 add_compile_options(-g -O1 -pipe -fPIE -Wno-shift-op-parentheses)
 
 add_library(freestanding OBJECT
-    loader.cpp mylock.cpp rmap.cpp tls.cpp intercept_seccomp.cpp util.cpp signalmanager.cpp workarounds.cpp execve_here.cpp syscall_trampo.cpp)
+    loader.cpp mylock.cpp rmap.cpp tls.cpp intercept_seccomp.cpp syscalls_a.cpp syscalls_b.cpp syscalls_c.cpp syscalls_exec.cpp util.cpp signalmanager.cpp workarounds.cpp execve_here.cpp syscall_trampo.cpp)
 target_link_libraries(freestanding PRIVATE c)
 target_include_directories(freestanding PUBLIC "include/linux-headers/${ARCH}/include")
 

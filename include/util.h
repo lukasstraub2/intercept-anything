@@ -24,6 +24,14 @@
 
 #define alloca __builtin_alloca
 
+__attribute__((unused)) static const char* or_null(const char* str) {
+    if (str) {
+        return str;
+    } else {
+        return "nullptr";
+    }
+}
+
 void randchar6(char* buf);
 int mkostemp(char* templ, int flags, mode_t mode);
 

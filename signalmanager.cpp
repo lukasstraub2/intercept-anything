@@ -13,6 +13,7 @@
 #include "mysys.h"
 #include "util.h"
 #include "mylist.h"
+#include "linux/sched.h"
 
 #define DEBUG_ENV "DEBUG_SIGNAL"
 #include "debug.h"

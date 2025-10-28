@@ -3,6 +3,7 @@
 #include "workarounds.h"
 #include "intercept.h"
 #include "linux/ptrace.h"
+#include "tls.h"
 
 #include <string.h>
 #include <stdlib.h>
