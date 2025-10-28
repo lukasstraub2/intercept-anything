@@ -38,9 +38,9 @@
 #define ALIGN (PAGE_SIZE - 1)
 #define ROUND_PG(x) (((x) + (ALIGN)) & ~(ALIGN))
 #define TRUNC_PG(x) ((x) & ~(ALIGN))
-#define PFLAGS(x)                                                   \
-    ((((x)&PF_R) ? PROT_READ : 0) | (((x)&PF_W) ? PROT_WRITE : 0) | \
-     (((x)&PF_X) ? PROT_EXEC : 0))
+#define PFLAGS(x)                                                       \
+    ((((x) & PF_R) ? PROT_READ : 0) | (((x) & PF_W) ? PROT_WRITE : 0) | \
+     (((x) & PF_X) ? PROT_EXEC : 0))
 #define LOAD_ERR ((unsigned long)-1)
 
 int check_ehdr(Elf_Ehdr* ehdr) {
