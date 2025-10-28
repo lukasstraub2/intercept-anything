@@ -1,4 +1,3 @@
-
 #include "mysignal.h"
 #include "myseccomp.h"
 #include "mysys.h"
@@ -403,10 +402,10 @@ static const char* or_null(const char* str) {
     }
 }
 
-__attribute__((unused)) static int handle_open(Context* ctx,
-                                               const char* path,
-                                               int flags,
-                                               mode_t mode) {
+__attribute__((unused)) static int handle_open(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    int flags = args->arg2;
+    mode_t mode = args->arg3;
     trace("open(%s)\n", or_null(path));
 
     int ret = {0};
@@ -418,11 +417,11 @@ __attribute__((unused)) static int handle_open(Context* ctx,
     return ret;
 }
 
-static int handle_openat(Context* ctx,
-                         int dirfd,
-                         const char* path,
-                         int flags,
-                         mode_t mode) {
+static int handle_openat(Context* ctx, SysArgs* args) {
+    int dirfd = args->arg1;
+    const char* path = (const char*)args->arg2;
+    int flags = args->arg3;
+    mode_t mode = args->arg4;
     trace("openat(%s)\n", or_null(path));
 
     int ret = {0};
@@ -450,12 +449,17 @@ int loader_open(const char* path, int flags, mode_t mode) {
     }
 
     Context ctx = {tls, nullptr, 0};
-    return handle_openat(&ctx, AT_FDCWD, path, flags, mode);
+    SysArgs args = {};
+    args.arg1 = AT_FDCWD;
+    args.arg2 = (long)path;
+    args.arg3 = flags;
+    args.arg4 = mode;
+    return handle_openat(&ctx, &args);
 }
 
-__attribute__((unused)) static int handle_stat(Context* ctx,
-                                               const char* path,
-                                               void* statbuf) {
+__attribute__((unused)) static int handle_stat(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    void* statbuf = (void*)args->arg2;
     trace("stat(%s)\n", or_null(path));
 
     if (!path) {
@@ -471,7 +475,9 @@ __attribute__((unused)) static int handle_stat(Context* ctx,
     return ret;
 }
 
-static int handle_fstat(Context* ctx, int fd, void* statbuf) {
+static int handle_fstat(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    void* statbuf = (void*)args->arg2;
     trace("fstat()\n");
 
     int ret = {0};
@@ -483,9 +489,9 @@ static int handle_fstat(Context* ctx, int fd, void* statbuf) {
     return ret;
 }
 
-__attribute__((unused)) static int handle_lstat(Context* ctx,
-                                                const char* path,
-                                                void* statbuf) {
+__attribute__((unused)) static int handle_lstat(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    void* statbuf = (void*)args->arg2;
     trace("lstat(%s)\n", or_null(path));
 
     if (!path) {
@@ -501,11 +507,11 @@ __attribute__((unused)) static int handle_lstat(Context* ctx,
     return ret;
 }
 
-static int handle_newfstatat(Context* ctx,
-                             int dirfd,
-                             const char* path,
-                             void* statbuf,
-                             int flags) {
+static int handle_newfstatat(Context* ctx, SysArgs* args) {
+    int dirfd = args->arg1;
+    const char* path = (const char*)args->arg2;
+    void* statbuf = (void*)args->arg3;
+    int flags = args->arg4;
     trace("newfstatat(%s)\n", or_null(path));
 
     if (!path) {
@@ -525,12 +531,12 @@ static int handle_newfstatat(Context* ctx,
     return ret;
 }
 
-static int handle_statx(Context* ctx,
-                        int dirfd,
-                        const char* path,
-                        int flags,
-                        unsigned int mask,
-                        void* statbuf) {
+static int handle_statx(Context* ctx, SysArgs* args) {
+    int dirfd = args->arg1;
+    const char* path = (const char*)args->arg2;
+    int flags = args->arg3;
+    unsigned int mask = args->arg4;
+    void* statbuf = (void*)args->arg5;
     trace("statx(%s)\n", or_null(path));
 
     if (!path) {
@@ -552,9 +558,10 @@ static int handle_statx(Context* ctx,
 }
 
 __attribute__((unused)) static ssize_t handle_readlink(Context* ctx,
-                                                       const char* path,
-                                                       char* buf,
-                                                       size_t bufsiz) {
+                                                       SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    char* buf = (char*)args->arg2;
+    size_t bufsiz = args->arg3;
     trace("readlink(%s)\n", or_null(path));
 
     if (!bufsiz) {
@@ -574,11 +581,11 @@ __attribute__((unused)) static ssize_t handle_readlink(Context* ctx,
     return ret;
 }
 
-static ssize_t handle_readlinkat(Context* ctx,
-                                 int dirfd,
-                                 const char* path,
-                                 char* buf,
-                                 size_t bufsiz) {
+static ssize_t handle_readlinkat(Context* ctx, SysArgs* args) {
+    int dirfd = args->arg1;
+    const char* path = (const char*)args->arg2;
+    char* buf = (char*)args->arg3;
+    size_t bufsiz = args->arg4;
     trace("readlinkat(%s)\n", or_null(path));
 
     if (!bufsiz) {
@@ -600,9 +607,9 @@ static ssize_t handle_readlinkat(Context* ctx,
     return ret;
 }
 
-__attribute__((unused)) static int handle_access(Context* ctx,
-                                                 const char* path,
-                                                 int mode) {
+__attribute__((unused)) static int handle_access(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    int mode = args->arg2;
     trace("access(%s)\n", or_null(path));
 
     if (!path) {
@@ -617,10 +624,10 @@ __attribute__((unused)) static int handle_access(Context* ctx,
     return ret;
 }
 
-static int handle_faccessat(Context* ctx,
-                            int dirfd,
-                            const char* path,
-                            int mode) {
+static int handle_faccessat(Context* ctx, SysArgs* args) {
+    int dirfd = args->arg1;
+    const char* path = (const char*)args->arg2;
+    int mode = args->arg3;
     trace("accessat(%s)\n", or_null(path));
 
     if (!path) {
@@ -636,10 +643,10 @@ static int handle_faccessat(Context* ctx,
     return ret;
 }
 
-static int handle_execve(Context* ctx,
-                         const char* path,
-                         char* const argv[],
-                         char* const envp[]) {
+static int handle_execve(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    char* const* argv = (char* const*)args->arg2;
+    char* const* envp = (char* const*)args->arg3;
     trace("execve(%s)\n", or_null(path));
 
     if (!path) {
@@ -655,12 +662,12 @@ static int handle_execve(Context* ctx,
     return ret;
 }
 
-static int handle_execveat(Context* ctx,
-                           int dirfd,
-                           const char* path,
-                           char* const argv[],
-                           char* const envp[],
-                           int flags) {
+static int handle_execveat(Context* ctx, SysArgs* args) {
+    int dirfd = args->arg1;
+    const char* path = (const char*)args->arg2;
+    char* const* argv = (char* const*)args->arg3;
+    char* const* envp = (char* const*)args->arg4;
+    int flags = args->arg5;
     trace("exeveat(%s)\n", or_null(path));
 
     if (!path) {
@@ -681,11 +688,11 @@ static int handle_execveat(Context* ctx,
     return ret;
 }
 
-static int handle_rt_sigprocmask(Context* ctx,
-                                 int how,
-                                 const sigset_t* set,
-                                 sigset_t* oldset,
-                                 size_t sigsetsize) {
+static int handle_rt_sigprocmask(Context* ctx, SysArgs* args) {
+    int how = args->arg1;
+    const sigset_t* set = (const sigset_t*)args->arg2;
+    sigset_t* oldset = (sigset_t*)args->arg3;
+    size_t sigsetsize = args->arg4;
     trace("rt_sigprocmask()\n");
 
     int ret = {0};
@@ -700,11 +707,11 @@ static int handle_rt_sigprocmask(Context* ctx,
     return ret;
 }
 
-static int handle_rt_sigaction(Context* ctx,
-                               int signum,
-                               const struct k_sigaction* act,
-                               struct k_sigaction* oldact,
-                               size_t sigsetsize) {
+static int handle_rt_sigaction(Context* ctx, SysArgs* args) {
+    int signum = args->arg1;
+    const struct k_sigaction* act = (const struct k_sigaction*)args->arg2;
+    struct k_sigaction* oldact = (struct k_sigaction*)args->arg3;
+    size_t sigsetsize = args->arg4;
     trace("rt_sigaction(%d)\n", signum);
 
     int ret = {0};
@@ -719,9 +726,9 @@ static int handle_rt_sigaction(Context* ctx,
     return ret;
 }
 
-__attribute__((unused)) static int handle_link(Context* ctx,
-                                               const char* oldpath,
-                                               const char* newpath) {
+__attribute__((unused)) static int handle_link(Context* ctx, SysArgs* args) {
+    const char* oldpath = (const char*)args->arg1;
+    const char* newpath = (const char*)args->arg2;
     trace("link(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
@@ -737,12 +744,12 @@ __attribute__((unused)) static int handle_link(Context* ctx,
     return ret;
 }
 
-static int handle_linkat(Context* ctx,
-                         int olddirfd,
-                         const char* oldpath,
-                         int newdirfd,
-                         const char* newpath,
-                         int flags) {
+static int handle_linkat(Context* ctx, SysArgs* args) {
+    int olddirfd = args->arg1;
+    const char* oldpath = (const char*)args->arg2;
+    int newdirfd = args->arg3;
+    const char* newpath = (const char*)args->arg4;
+    int flags = args->arg5;
     trace("linkat(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
@@ -763,9 +770,9 @@ static int handle_linkat(Context* ctx,
     return ret;
 }
 
-__attribute__((unused)) static int handle_symlink(Context* ctx,
-                                                  const char* oldpath,
-                                                  const char* newpath) {
+__attribute__((unused)) static int handle_symlink(Context* ctx, SysArgs* args) {
+    const char* oldpath = (const char*)args->arg1;
+    const char* newpath = (const char*)args->arg2;
     trace("symlink(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
@@ -781,10 +788,10 @@ __attribute__((unused)) static int handle_symlink(Context* ctx,
     return ret;
 }
 
-static int handle_symlinkat(Context* ctx,
-                            const char* oldpath,
-                            int newdirfd,
-                            const char* newpath) {
+static int handle_symlinkat(Context* ctx, SysArgs* args) {
+    const char* oldpath = (const char*)args->arg1;
+    int newdirfd = args->arg2;
+    const char* newpath = (const char*)args->arg3;
     trace("symlinkat(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
@@ -803,8 +810,8 @@ static int handle_symlinkat(Context* ctx,
     return ret;
 }
 
-__attribute__((unused)) static int handle_unlink(Context* ctx,
-                                                 const char* pathname) {
+__attribute__((unused)) static int handle_unlink(Context* ctx, SysArgs* args) {
+    const char* pathname = (const char*)args->arg1;
     trace("unlink(%s)\n", or_null(pathname));
 
     if (!pathname) {
@@ -819,10 +826,10 @@ __attribute__((unused)) static int handle_unlink(Context* ctx,
     return ret;
 }
 
-static int handle_unlinkat(Context* ctx,
-                           int dirfd,
-                           const char* pathname,
-                           int flags) {
+static int handle_unlinkat(Context* ctx, SysArgs* args) {
+    int dirfd = args->arg1;
+    const char* pathname = (const char*)args->arg2;
+    int flags = args->arg3;
     trace("unlinkat(%s)\n", or_null(pathname));
 
     if (!pathname) {
@@ -838,12 +845,12 @@ static int handle_unlinkat(Context* ctx,
     return ret;
 }
 
-static int handle_setxattr(Context* ctx,
-                           const char* path,
-                           const char* name,
-                           const void* value,
-                           size_t size,
-                           int flags) {
+static int handle_setxattr(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    const char* name = (const char*)args->arg2;
+    const void* value = (const void*)args->arg3;
+    size_t size = args->arg4;
+    int flags = args->arg5;
     trace("setxattr(%s)\n", or_null(path));
 
     if (!path) {
@@ -865,12 +872,12 @@ static int handle_setxattr(Context* ctx,
     return ret;
 }
 
-static int handle_lsetxattr(Context* ctx,
-                            const char* path,
-                            const char* name,
-                            const void* value,
-                            size_t size,
-                            int flags) {
+static int handle_lsetxattr(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    const char* name = (const char*)args->arg2;
+    const void* value = (const void*)args->arg3;
+    size_t size = args->arg4;
+    int flags = args->arg5;
     trace("lsetxattr(%s)\n", or_null(path));
 
     if (!path) {
@@ -892,12 +899,12 @@ static int handle_lsetxattr(Context* ctx,
     return ret;
 }
 
-static int handle_fsetxattr(Context* ctx,
-                            int fd,
-                            const char* name,
-                            const void* value,
-                            size_t size,
-                            int flags) {
+static int handle_fsetxattr(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    const char* name = (const char*)args->arg2;
+    const void* value = (const void*)args->arg3;
+    size_t size = args->arg4;
+    int flags = args->arg5;
     trace("fsetxattr(%d)\n", fd);
 
     ssize_t ret = {0};
@@ -915,11 +922,11 @@ static int handle_fsetxattr(Context* ctx,
     return ret;
 }
 
-static ssize_t handle_getxattr(Context* ctx,
-                               const char* path,
-                               const char* name,
-                               void* value,
-                               size_t size) {
+static ssize_t handle_getxattr(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    const char* name = (const char*)args->arg2;
+    void* value = (void*)args->arg3;
+    size_t size = args->arg4;
     trace("getxattr(%s)\n", or_null(path));
 
     if (!path) {
@@ -940,11 +947,11 @@ static ssize_t handle_getxattr(Context* ctx,
     return ret;
 }
 
-static ssize_t handle_lgetxattr(Context* ctx,
-                                const char* path,
-                                const char* name,
-                                void* value,
-                                size_t size) {
+static ssize_t handle_lgetxattr(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    const char* name = (const char*)args->arg2;
+    void* value = (void*)args->arg3;
+    size_t size = args->arg4;
     trace("lgetxattr(%s)\n", or_null(path));
 
     if (!path) {
@@ -965,11 +972,11 @@ static ssize_t handle_lgetxattr(Context* ctx,
     return ret;
 }
 
-static ssize_t handle_fgetxattr(Context* ctx,
-                                int fd,
-                                const char* name,
-                                void* value,
-                                size_t size) {
+static ssize_t handle_fgetxattr(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    const char* name = (const char*)args->arg2;
+    void* value = (void*)args->arg3;
+    size_t size = args->arg4;
     trace("fgetxattr(%d)\n", fd);
 
     ssize_t ret = {0};
@@ -986,10 +993,10 @@ static ssize_t handle_fgetxattr(Context* ctx,
     return ret;
 }
 
-static ssize_t handle_listxattr(Context* ctx,
-                                const char* path,
-                                char* list,
-                                size_t size) {
+static ssize_t handle_listxattr(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    char* list = (char*)args->arg2;
+    size_t size = args->arg3;
     trace("listxattr(%s)\n", or_null(path));
 
     if (!path) {
@@ -1009,10 +1016,10 @@ static ssize_t handle_listxattr(Context* ctx,
     return ret;
 }
 
-static ssize_t handle_llistxattr(Context* ctx,
-                                 const char* path,
-                                 char* list,
-                                 size_t size) {
+static ssize_t handle_llistxattr(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    char* list = (char*)args->arg2;
+    size_t size = args->arg3;
     trace("llistxattr(%s)\n", or_null(path));
 
     if (!path) {
@@ -1032,10 +1039,10 @@ static ssize_t handle_llistxattr(Context* ctx,
     return ret;
 }
 
-static ssize_t handle_flistxattr(Context* ctx,
-                                 int fd,
-                                 char* list,
-                                 size_t size) {
+static ssize_t handle_flistxattr(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    char* list = (char*)args->arg2;
+    size_t size = args->arg3;
     trace("flistxattr(%d)\n", fd);
 
     ssize_t ret = {0};
@@ -1051,9 +1058,9 @@ static ssize_t handle_flistxattr(Context* ctx,
     return ret;
 }
 
-static int handle_removexattr(Context* ctx,
-                              const char* path,
-                              const char* name) {
+static int handle_removexattr(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    const char* name = (const char*)args->arg2;
     trace("removexattr(%s)\n", or_null(path));
 
     if (!path) {
@@ -1072,9 +1079,9 @@ static int handle_removexattr(Context* ctx,
     return ret;
 }
 
-static int handle_lremovexattr(Context* ctx,
-                               const char* path,
-                               const char* name) {
+static int handle_lremovexattr(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    const char* name = (const char*)args->arg2;
     trace("lremovexattr(%s)\n", or_null(path));
 
     if (!path) {
@@ -1093,7 +1100,9 @@ static int handle_lremovexattr(Context* ctx,
     return ret;
 }
 
-static int handle_fremovexattr(Context* ctx, int fd, const char* name) {
+static int handle_fremovexattr(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    const char* name = (const char*)args->arg2;
     trace("fremovexattr(%d)\n", fd);
 
     ssize_t ret = {0};
@@ -1108,9 +1117,9 @@ static int handle_fremovexattr(Context* ctx, int fd, const char* name) {
     return ret;
 }
 
-__attribute__((unused)) static int handle_rename(Context* ctx,
-                                                 const char* oldpath,
-                                                 const char* newpath) {
+__attribute__((unused)) static int handle_rename(Context* ctx, SysArgs* args) {
+    const char* oldpath = (const char*)args->arg1;
+    const char* newpath = (const char*)args->arg2;
     trace("rename(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
@@ -1128,11 +1137,11 @@ __attribute__((unused)) static int handle_rename(Context* ctx,
     return ret;
 }
 
-static int handle_renameat(Context* ctx,
-                           int olddirfd,
-                           const char* oldpath,
-                           int newdirfd,
-                           const char* newpath) {
+static int handle_renameat(Context* ctx, SysArgs* args) {
+    int olddirfd = args->arg1;
+    const char* oldpath = (const char*)args->arg2;
+    int newdirfd = args->arg3;
+    const char* newpath = (const char*)args->arg4;
     trace("renameat(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
@@ -1152,12 +1161,12 @@ static int handle_renameat(Context* ctx,
     return ret;
 }
 
-static int handle_renameat2(Context* ctx,
-                            int olddirfd,
-                            const char* oldpath,
-                            int newdirfd,
-                            const char* newpath,
-                            unsigned int flags) {
+static int handle_renameat2(Context* ctx, SysArgs* args) {
+    int olddirfd = args->arg1;
+    const char* oldpath = (const char*)args->arg2;
+    int newdirfd = args->arg3;
+    const char* newpath = (const char*)args->arg4;
+    unsigned int flags = args->arg5;
     trace("renameat2(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
@@ -1178,7 +1187,8 @@ static int handle_renameat2(Context* ctx,
     return ret;
 }
 
-static int handle_chdir(Context* ctx, const char* path) {
+static int handle_chdir(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
     trace("chdir(%s)\n", or_null(path));
 
     if (!path) {
@@ -1193,7 +1203,8 @@ static int handle_chdir(Context* ctx, const char* path) {
     return ret;
 }
 
-static int handle_fchdir(Context* ctx, int fd) {
+static int handle_fchdir(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
     trace("fchdir(%d)\n", fd);
 
     int ret = {0};
@@ -1204,7 +1215,8 @@ static int handle_fchdir(Context* ctx, int fd) {
     return ret;
 }
 
-static int handle_exit(Context* ctx, int status) {
+static int handle_exit(Context* ctx, SysArgs* args) {
+    int status = args->arg1;
     trace("exit(%u)\n", status);
 
     thread_exit(ctx->tls);
@@ -1213,7 +1225,8 @@ static int handle_exit(Context* ctx, int status) {
     return 0;
 }
 
-static int handle_exit_group(Context* ctx, int status) {
+static int handle_exit_group(Context* ctx, SysArgs* args) {
+    int status = args->arg1;
     trace("exit_group(%u)\n", status);
 
     thread_exit(ctx->tls);
@@ -1222,9 +1235,9 @@ static int handle_exit_group(Context* ctx, int status) {
     return 0;
 }
 
-__attribute__((unused)) static int handle_chmod(Context* ctx,
-                                                const char* path,
-                                                mode_t mode) {
+__attribute__((unused)) static int handle_chmod(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    mode_t mode = args->arg2;
     trace("chmod(%s)\n", or_null(path));
 
     if (!path) {
@@ -1240,7 +1253,9 @@ __attribute__((unused)) static int handle_chmod(Context* ctx,
     return ret;
 }
 
-static int handle_fchmod(Context* ctx, int fd, mode_t mode) {
+static int handle_fchmod(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    mode_t mode = args->arg2;
     trace("fchmod(%d)\n", fd);
 
     int ret = {0};
@@ -1251,10 +1266,10 @@ static int handle_fchmod(Context* ctx, int fd, mode_t mode) {
     return ret;
 }
 
-static int handle_fchmodat(Context* ctx,
-                           int dirfd,
-                           const char* path,
-                           mode_t mode) {
+static int handle_fchmodat(Context* ctx, SysArgs* args) {
+    int dirfd = args->arg1;
+    const char* path = (const char*)args->arg2;
+    mode_t mode = args->arg3;
     trace("fchmodat(%s)\n", or_null(path));
 
     if (!path) {
@@ -1273,7 +1288,9 @@ static int handle_fchmodat(Context* ctx,
     return ret;
 }
 
-static int handle_truncate(Context* ctx, const char* path, off_t length) {
+static int handle_truncate(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    off_t length = args->arg2;
     trace("truncate(%s)\n", or_null(path));
 
     if (!path) {
@@ -1288,7 +1305,9 @@ static int handle_truncate(Context* ctx, const char* path, off_t length) {
     return ret;
 }
 
-static int handle_ftruncate(Context* ctx, int fd, off_t length) {
+static int handle_ftruncate(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    off_t length = args->arg2;
     trace("ftruncate(%d)\n", fd);
 
     int ret = {0};
@@ -1299,9 +1318,9 @@ static int handle_ftruncate(Context* ctx, int fd, off_t length) {
     return ret;
 }
 
-__attribute__((unused)) static int handle_mkdir(Context* ctx,
-                                                const char* path,
-                                                mode_t mode) {
+__attribute__((unused)) static int handle_mkdir(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    mode_t mode = args->arg2;
     trace("mkdir(%s)\n", or_null(path));
 
     if (!path) {
@@ -1316,10 +1335,10 @@ __attribute__((unused)) static int handle_mkdir(Context* ctx,
     return ret;
 }
 
-static int handle_mkdirat(Context* ctx,
-                          int dirfd,
-                          const char* path,
-                          mode_t mode) {
+static int handle_mkdirat(Context* ctx, SysArgs* args) {
+    int dirfd = args->arg1;
+    const char* path = (const char*)args->arg2;
+    mode_t mode = args->arg3;
     trace("mkdirat(%s)\n", or_null(path));
 
     if (!path) {
@@ -1336,9 +1355,10 @@ static int handle_mkdirat(Context* ctx,
 }
 
 __attribute__((unused)) static ssize_t handle_getdents(Context* ctx,
-                                                       int fd,
-                                                       void* dirp,
-                                                       size_t count) {
+                                                       SysArgs* args) {
+    int fd = args->arg1;
+    void* dirp = (void*)args->arg2;
+    size_t count = args->arg3;
     trace("getdents(%d)\n", fd);
 
     ssize_t ret = {0};
@@ -1350,10 +1370,10 @@ __attribute__((unused)) static ssize_t handle_getdents(Context* ctx,
     return ret;
 }
 
-static ssize_t handle_getdents64(Context* ctx,
-                                 int fd,
-                                 void* dirp,
-                                 size_t count) {
+static ssize_t handle_getdents64(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    void* dirp = (void*)args->arg2;
+    size_t count = args->arg3;
     trace("getdents64(%d)\n", fd);
 
     ssize_t ret = {0};
@@ -1365,10 +1385,10 @@ static ssize_t handle_getdents64(Context* ctx,
     return ret;
 }
 
-__attribute__((unused)) static int handle_mknod(Context* ctx,
-                                                const char* path,
-                                                mode_t mode,
-                                                unsigned int dev) {
+__attribute__((unused)) static int handle_mknod(Context* ctx, SysArgs* args) {
+    const char* path = (const char*)args->arg1;
+    mode_t mode = args->arg2;
+    unsigned int dev = args->arg3;
     trace("mknod(%s)\n", or_null(path));
 
     if (!path) {
@@ -1384,11 +1404,11 @@ __attribute__((unused)) static int handle_mknod(Context* ctx,
     return ret;
 }
 
-static int handle_mknodat(Context* ctx,
-                          int dirfd,
-                          const char* path,
-                          mode_t mode,
-                          unsigned int dev) {
+static int handle_mknodat(Context* ctx, SysArgs* args) {
+    int dirfd = args->arg1;
+    const char* path = (const char*)args->arg2;
+    mode_t mode = args->arg3;
+    unsigned int dev = args->arg4;
     trace("mknodat(%s)\n", or_null(path));
 
     if (!path) {
@@ -1408,7 +1428,10 @@ static int handle_mknodat(Context* ctx,
     return ret;
 }
 
-static int handle_accept(Context* ctx, int fd, void* addr, int* addrlen) {
+static int handle_accept(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    void* addr = (void*)args->arg2;
+    int* addrlen = (int*)args->arg3;
     trace("accept()\n");
 
     int ret = {0};
@@ -1420,11 +1443,11 @@ static int handle_accept(Context* ctx, int fd, void* addr, int* addrlen) {
     return ret;
 }
 
-static int handle_accept4(Context* ctx,
-                          int fd,
-                          void* addr,
-                          int* addrlen,
-                          int flags) {
+static int handle_accept4(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    void* addr = (void*)args->arg2;
+    int* addrlen = (int*)args->arg3;
+    int flags = args->arg4;
     trace("accept4()\n");
 
     int ret = {0};
@@ -1440,7 +1463,10 @@ static int handle_accept4(Context* ctx,
     return ret;
 }
 
-static int handle_bind(Context* ctx, int fd, void* addr, int addrlen) {
+static int handle_bind(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    void* addr = (void*)args->arg2;
+    int addrlen = args->arg3;
     trace("bind()\n");
 
     int ret = {0};
@@ -1452,7 +1478,10 @@ static int handle_bind(Context* ctx, int fd, void* addr, int addrlen) {
     return ret;
 }
 
-static int handle_connect(Context* ctx, int fd, void* addr, int addrlen) {
+static int handle_connect(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    void* addr = (void*)args->arg2;
+    int addrlen = args->arg3;
     trace("connect()\n");
 
     int ret = {0};
@@ -1464,12 +1493,12 @@ static int handle_connect(Context* ctx, int fd, void* addr, int addrlen) {
     return ret;
 }
 
-static int handle_fanotify_mark(Context* ctx,
-                                int fanotify_fd,
-                                unsigned int flags,
-                                __u64 mask,
-                                int dfd,
-                                const char* pathname) {
+static int handle_fanotify_mark(Context* ctx, SysArgs* args) {
+    int fanotify_fd = args->arg1;
+    unsigned int flags = args->arg2;
+    __u64 mask = args->arg3;
+    int dfd = args->arg4;
+    const char* pathname = (const char*)args->arg5;
     trace("fanotify_mark(%s)\n", or_null(pathname));
 
     if (!pathname) {
@@ -1489,10 +1518,10 @@ static int handle_fanotify_mark(Context* ctx,
     return ret;
 }
 
-static int handle_inotify_add_watch(Context* ctx,
-                                    int fd,
-                                    const char* pathname,
-                                    __u32 mask) {
+static int handle_inotify_add_watch(Context* ctx, SysArgs* args) {
+    int fd = args->arg1;
+    const char* pathname = (const char*)args->arg2;
+    __u32 mask = args->arg3;
     trace("inotify_add_watch(%s)\n", or_null(pathname));
 
     if (!pathname) {
@@ -1508,9 +1537,9 @@ static int handle_inotify_add_watch(Context* ctx,
     return ret;
 }
 
-static int handle_getrlimit(Context* ctx,
-                            unsigned int resource,
-                            void* old_rlim) {
+static int handle_getrlimit(Context* ctx, SysArgs* args) {
+    unsigned int resource = args->arg1;
+    void* old_rlim = (void*)args->arg2;
     trace("getrlimit()\n");
 
     int ret = {0};
@@ -1524,9 +1553,9 @@ static int handle_getrlimit(Context* ctx,
     return ret;
 }
 
-static int handle_setrlimit(Context* ctx,
-                            unsigned int resource,
-                            const void* new_rlim) {
+static int handle_setrlimit(Context* ctx, SysArgs* args) {
+    unsigned int resource = args->arg1;
+    const void* new_rlim = (const void*)args->arg2;
     trace("setrlimit()\n");
 
     int ret = {0};
@@ -1540,11 +1569,11 @@ static int handle_setrlimit(Context* ctx,
     return ret;
 }
 
-static int handle_prlimit64(Context* ctx,
-                            pid_t pid,
-                            unsigned int resource,
-                            const void* new_rlim,
-                            void* old_rlim) {
+static int handle_prlimit64(Context* ctx, SysArgs* args) {
+    pid_t pid = args->arg1;
+    unsigned int resource = args->arg2;
+    const void* new_rlim = (const void*)args->arg3;
+    void* old_rlim = (void*)args->arg4;
     trace("prlimit64()\n");
 
     int ret = {0};
@@ -1560,11 +1589,11 @@ static int handle_prlimit64(Context* ctx,
     return ret;
 }
 
-static long handle_ptrace(Context* ctx,
-                          long request,
-                          long pid,
-                          void* addr,
-                          void* data) {
+static long handle_ptrace(Context* ctx, SysArgs* args) {
+    long request = args->arg1;
+    long pid = args->arg2;
+    void* addr = (void*)args->arg3;
+    void* data = (void*)args->arg4;
     trace("ptrace()\n");
 
     long ret = {0};
@@ -1579,7 +1608,9 @@ static long handle_ptrace(Context* ctx,
     return ret;
 }
 
-static int handle_kill(Context* ctx, pid_t pid, int sig) {
+static int handle_kill(Context* ctx, SysArgs* args) {
+    pid_t pid = args->arg1;
+    int sig = args->arg2;
     trace("kill()\n");
 
     int ret = {0};
@@ -1590,7 +1621,8 @@ static int handle_kill(Context* ctx, pid_t pid, int sig) {
     return ret;
 }
 
-static int handle_close(Context* ctx, unsigned int fd) {
+static int handle_close(Context* ctx, SysArgs* args) {
+    unsigned int fd = args->arg1;
     trace("close(%u)\n", fd);
 
     int ret = {0};
@@ -1602,9 +1634,10 @@ static int handle_close(Context* ctx, unsigned int fd) {
 }
 
 __attribute__((unused)) static int handle_close_range(Context* ctx,
-                                                      unsigned int first,
-                                                      unsigned int last,
-                                                      unsigned int flags) {
+                                                      SysArgs* args) {
+    unsigned int first = args->arg1;
+    unsigned int last = args->arg2;
+    unsigned int flags = args->arg3;
     trace("close_range(%u, %u)\n", first, last);
 
     int ret = {0};
@@ -1630,13 +1663,13 @@ static unsigned long handle_misc(Context* ctx, SysArgs* args) {
     return ret;
 }
 
-static unsigned long handle_mmap(Context* ctx,
-                                 unsigned long addr,
-                                 unsigned long len,
-                                 unsigned long prot,
-                                 unsigned long flags,
-                                 unsigned long fd,
-                                 unsigned long off) {
+static unsigned long handle_mmap(Context* ctx, SysArgs* args) {
+    unsigned long addr = args->arg1;
+    unsigned long len = args->arg2;
+    unsigned long prot = args->arg3;
+    unsigned long flags = args->arg4;
+    unsigned long fd = args->arg5;
+    unsigned long off = args->arg6;
     trace("mmap()\n");
 
     unsigned long ret = {0};
@@ -1655,7 +1688,7 @@ static unsigned long handle_mmap(Context* ctx,
     return ret;
 }
 
-__attribute__((unused)) static int handle_fork(Context* ctx) {
+__attribute__((unused)) static int handle_fork(Context* ctx, SysArgs* args) {
     trace("fork()\n");
 
     int ret = 0;
@@ -1669,7 +1702,7 @@ __attribute__((unused)) static int handle_fork(Context* ctx) {
     return ret;
 }
 
-__attribute__((unused)) static int handle_vfork(Context* ctx) {
+__attribute__((unused)) static int handle_vfork(Context* ctx, SysArgs* args) {
     trace("vfork()\n");
 
     int ret = 0;
@@ -1683,25 +1716,32 @@ __attribute__((unused)) static int handle_vfork(Context* ctx) {
     return ret;
 }
 
-static int handle_clone(Context* ctx,
-                        unsigned long clone_flags,
-                        unsigned long newsp,
-                        int* parent_tidptr,
-                        unsigned long tls,
-                        int* child_tidptr) {
+static int handle_clone(Context* ctx, SysArgs* args) {
+    unsigned long clone_flags = args->arg1;
+    unsigned long newsp = args->arg2;
+#ifdef __x86_64__
+    int* parent_tidptr = (int*)args->arg3;
+    unsigned long tls = args->arg5;
+    int* child_tidptr = (int*)args->arg4;
+#else
+    int* parent_tidptr = (int*)args->arg3;
+    unsigned long tls = args->arg4;
+    int* child_tidptr = (int*)args->arg5;
+#endif
+
     trace("clone()\n");
 
-    struct clone_args args = {};
-    args.flags = clone_flags;
-    args.stack = newsp;
-    args.parent_tid = (unsigned long)parent_tidptr;
-    args.child_tid = (unsigned long)child_tidptr;
-    args.tls = tls;
+    struct clone_args cargs = {};
+    cargs.flags = clone_flags;
+    cargs.stack = newsp;
+    cargs.parent_tid = (unsigned long)parent_tidptr;
+    cargs.child_tid = (unsigned long)child_tidptr;
+    cargs.tls = tls;
 
     int ret = 0;
     CallClone call = {
         .type = CLONETYPE_CLONE,
-        .args = &args,
+        .args = &cargs,
         .size = 64,
         .ret = &ret,
     };
@@ -1711,7 +1751,9 @@ static int handle_clone(Context* ctx,
     return ret;
 }
 
-static int handle_clone3(Context* ctx, struct clone_args* uargs, size_t size) {
+static int handle_clone3(Context* ctx, SysArgs* args) {
+    struct clone_args* uargs = (struct clone_args*)args->arg1;
+    size_t size = args->arg2;
     trace("clone3()\n");
 
     int ret = 0;
@@ -1733,372 +1775,310 @@ static unsigned long handle_syscall(Context* ctx, SysArgs* args) {
     switch (args->num) {
 #ifdef __NR_open
         case __NR_open:
-            ret = handle_open(ctx, (const char*)args->arg1, args->arg2,
-                              args->arg3);
+            ret = handle_open(ctx, args);
             break;
 #endif
 
         case __NR_openat:
-            ret = handle_openat(ctx, args->arg1, (const char*)args->arg2,
-                                args->arg3, args->arg4);
+            ret = handle_openat(ctx, args);
             break;
 
 #ifdef __NR_stat
         case __NR_stat:
-            ret = handle_stat(ctx, (const char*)args->arg1, (void*)args->arg2);
+            ret = handle_stat(ctx, args);
             break;
 #endif
 
         case __NR_fstat:
-            ret = handle_fstat(ctx, args->arg1, (void*)args->arg2);
+            ret = handle_fstat(ctx, args);
             break;
 
 #ifdef __NR_lstat
         case __NR_lstat:
-            ret = handle_lstat(ctx, (const char*)args->arg1, (void*)args->arg2);
+            ret = handle_lstat(ctx, args);
             break;
 #endif
 
         case __NR_newfstatat:
-            ret = handle_newfstatat(ctx, args->arg1, (const char*)args->arg2,
-                                    (void*)args->arg3, args->arg4);
+            ret = handle_newfstatat(ctx, args);
             break;
 
         case __NR_statx:
-            ret = handle_statx(ctx, args->arg1, (const char*)args->arg2,
-                               args->arg3, args->arg4, (void*)args->arg5);
+            ret = handle_statx(ctx, args);
             break;
 
 #ifdef __NR_readlink
         case __NR_readlink:
-            ret = handle_readlink(ctx, (const char*)args->arg1,
-                                  (char*)args->arg2, args->arg3);
+            ret = handle_readlink(ctx, args);
             break;
 #endif
 
         case __NR_readlinkat:
-            ret = handle_readlinkat(ctx, args->arg1, (const char*)args->arg2,
-                                    (char*)args->arg3, args->arg4);
+            ret = handle_readlinkat(ctx, args);
             break;
 
 #ifdef __NR_access
         case __NR_access:
-            ret = handle_access(ctx, (const char*)args->arg1, args->arg2);
+            ret = handle_access(ctx, args);
             break;
 #endif
 
         case __NR_faccessat:
-            ret = handle_faccessat(ctx, args->arg1, (const char*)args->arg2,
-                                   args->arg3);
+            ret = handle_faccessat(ctx, args);
             break;
 
         case __NR_execve:
-            ret = handle_execve(ctx, (const char*)args->arg1,
-                                (char* const*)args->arg2,
-                                (char* const*)args->arg3);
+            ret = handle_execve(ctx, args);
             break;
 
         case __NR_execveat:
-            ret = handle_execveat(ctx, args->arg1, (const char*)args->arg2,
-                                  (char* const*)args->arg3,
-                                  (char* const*)args->arg4, args->arg5);
+            ret = handle_execveat(ctx, args);
             break;
 
         case __NR_rt_sigprocmask:
-            ret = handle_rt_sigprocmask(ctx, args->arg1,
-                                        (const sigset_t*)args->arg2,
-                                        (sigset_t*)args->arg3, args->arg4);
+            ret = handle_rt_sigprocmask(ctx, args);
             break;
 
         case __NR_rt_sigaction:
-            ret = handle_rt_sigaction(
-                ctx, args->arg1, (const struct k_sigaction*)args->arg2,
-                (struct k_sigaction*)args->arg3, args->arg4);
+            ret = handle_rt_sigaction(ctx, args);
             break;
 
 #ifdef __NR_link
         case __NR_link:
-            ret = handle_link(ctx, (const char*)args->arg1,
-                              (const char*)args->arg2);
+            ret = handle_link(ctx, args);
             break;
 #endif
 
         case __NR_linkat:
-            ret =
-                handle_linkat(ctx, args->arg1, (const char*)args->arg2,
-                              args->arg3, (const char*)args->arg4, args->arg5);
+            ret = handle_linkat(ctx, args);
             break;
 
 #ifdef __NR_symlink
         case __NR_symlink:
-            ret = handle_symlink(ctx, (const char*)args->arg1,
-                                 (const char*)args->arg2);
+            ret = handle_symlink(ctx, args);
             break;
 #endif
 
         case __NR_symlinkat:
-            ret = handle_symlinkat(ctx, (const char*)args->arg1, args->arg2,
-                                   (const char*)args->arg3);
+            ret = handle_symlinkat(ctx, args);
             break;
 
 #ifdef __NR_unlink
         case __NR_unlink:
-            ret = handle_unlink(ctx, (const char*)args->arg1);
+            ret = handle_unlink(ctx, args);
             break;
 #endif
 
         case __NR_unlinkat:
-            ret = handle_unlinkat(ctx, args->arg1, (const char*)args->arg2,
-                                  args->arg3);
+            ret = handle_unlinkat(ctx, args);
             break;
 
         case __NR_setxattr:
-            ret = handle_setxattr(
-                ctx, (const char*)args->arg1, (const char*)args->arg2,
-                (const void*)args->arg3, args->arg4, args->arg5);
+            ret = handle_setxattr(ctx, args);
             break;
 
         case __NR_lsetxattr:
-            ret = handle_lsetxattr(
-                ctx, (const char*)args->arg1, (const char*)args->arg2,
-                (const void*)args->arg3, args->arg4, args->arg5);
+            ret = handle_lsetxattr(ctx, args);
             break;
 
         case __NR_fsetxattr:
-            ret = handle_fsetxattr(ctx, args->arg1, (const char*)args->arg2,
-                                   (const void*)args->arg3, args->arg4,
-                                   args->arg5);
+            ret = handle_fsetxattr(ctx, args);
             break;
 
         case __NR_getxattr:
-            ret = handle_getxattr(ctx, (const char*)args->arg1,
-                                  (const char*)args->arg2, (void*)args->arg3,
-                                  args->arg4);
+            ret = handle_getxattr(ctx, args);
             break;
 
         case __NR_lgetxattr:
-            ret = handle_lgetxattr(ctx, (const char*)args->arg1,
-                                   (const char*)args->arg2, (void*)args->arg3,
-                                   args->arg4);
+            ret = handle_lgetxattr(ctx, args);
             break;
 
         case __NR_fgetxattr:
-            ret = handle_fgetxattr(ctx, args->arg1, (const char*)args->arg2,
-                                   (void*)args->arg3, args->arg4);
+            ret = handle_fgetxattr(ctx, args);
             break;
 
         case __NR_listxattr:
-            ret = handle_listxattr(ctx, (const char*)args->arg1,
-                                   (char*)args->arg2, args->arg3);
+            ret = handle_listxattr(ctx, args);
             break;
 
         case __NR_llistxattr:
-            ret = handle_llistxattr(ctx, (const char*)args->arg1,
-                                    (char*)args->arg2, args->arg3);
+            ret = handle_llistxattr(ctx, args);
             break;
 
         case __NR_flistxattr:
-            ret = handle_flistxattr(ctx, args->arg1, (char*)args->arg2,
-                                    args->arg3);
+            ret = handle_flistxattr(ctx, args);
             break;
 
         case __NR_removexattr:
-            ret = handle_removexattr(ctx, (const char*)args->arg1,
-                                     (const char*)args->arg2);
+            ret = handle_removexattr(ctx, args);
             break;
 
         case __NR_lremovexattr:
-            ret = handle_lremovexattr(ctx, (const char*)args->arg1,
-                                      (const char*)args->arg2);
+            ret = handle_lremovexattr(ctx, args);
             break;
 
         case __NR_fremovexattr:
-            ret = handle_fremovexattr(ctx, args->arg1, (const char*)args->arg2);
+            ret = handle_fremovexattr(ctx, args);
             break;
 
 #ifdef __NR_rename
         case __NR_rename:
-            ret = handle_rename(ctx, (const char*)args->arg1,
-                                (const char*)args->arg2);
+            ret = handle_rename(ctx, args);
             break;
 #endif
 
         case __NR_renameat:
-            ret = handle_renameat(ctx, args->arg1, (const char*)args->arg2,
-                                  args->arg3, (const char*)args->arg4);
+            ret = handle_renameat(ctx, args);
             break;
 
         case __NR_renameat2:
-            ret = handle_renameat2(ctx, args->arg1, (const char*)args->arg2,
-                                   args->arg3, (const char*)args->arg4,
-                                   args->arg5);
+            ret = handle_renameat2(ctx, args);
             break;
 
         case __NR_chdir:
-            ret = handle_chdir(ctx, (const char*)args->arg1);
+            ret = handle_chdir(ctx, args);
             break;
 
         case __NR_fchdir:
-            ret = handle_fchdir(ctx, args->arg1);
+            ret = handle_fchdir(ctx, args);
             break;
 
         case __NR_exit:
-            ret = handle_exit(ctx, args->arg1);
+            ret = handle_exit(ctx, args);
             break;
 
         case __NR_exit_group:
-            ret = handle_exit_group(ctx, args->arg1);
+            ret = handle_exit_group(ctx, args);
             break;
 
 #ifdef __NR_chmod
         case __NR_chmod:
-            ret = handle_chmod(ctx, (const char*)args->arg1, args->arg2);
+            ret = handle_chmod(ctx, args);
             break;
 #endif
 
         case __NR_fchmod:
-            ret = handle_fchmod(ctx, args->arg1, args->arg2);
+            ret = handle_fchmod(ctx, args);
             break;
 
         case __NR_fchmodat:
-            ret = handle_fchmodat(ctx, args->arg1, (const char*)args->arg2,
-                                  args->arg3);
+            ret = handle_fchmodat(ctx, args);
             break;
 
         case __NR_truncate:
-            ret = handle_truncate(ctx, (const char*)args->arg1, args->arg2);
+            ret = handle_truncate(ctx, args);
             break;
 
         case __NR_ftruncate:
-            ret = handle_ftruncate(ctx, args->arg1, args->arg2);
+            ret = handle_ftruncate(ctx, args);
             break;
 
 #ifdef __NR_mkdir
         case __NR_mkdir:
-            ret = handle_mkdir(ctx, (const char*)args->arg1, args->arg2);
+            ret = handle_mkdir(ctx, args);
             break;
 #endif
 
         case __NR_mkdirat:
-            ret = handle_mkdirat(ctx, args->arg1, (const char*)args->arg2,
-                                 args->arg3);
+            ret = handle_mkdirat(ctx, args);
             break;
 
 #ifdef __NR_getdents
         case __NR_getdents:
-            ret =
-                handle_getdents(ctx, args->arg1, (void*)args->arg2, args->arg3);
+            ret = handle_getdents(ctx, args);
             break;
 #endif
 
         case __NR_getdents64:
-            ret = handle_getdents64(ctx, args->arg1, (void*)args->arg2,
-                                    args->arg3);
+            ret = handle_getdents64(ctx, args);
             break;
 
 #ifdef __NR_mknod
         case __NR_mknod:
-            ret = handle_mknod(ctx, (const char*)args->arg1, args->arg2,
-                               args->arg3);
+            ret = handle_mknod(ctx, args);
             break;
 #endif
 
         case __NR_mknodat:
-            ret = handle_mknodat(ctx, args->arg1, (const char*)args->arg2,
-                                 args->arg3, args->arg4);
+            ret = handle_mknodat(ctx, args);
             break;
 
         case __NR_accept:
-            ret = handle_accept(ctx, args->arg1, (void*)args->arg2,
-                                (int*)args->arg3);
+            ret = handle_accept(ctx, args);
             break;
 
         case __NR_accept4:
-            ret = handle_accept4(ctx, args->arg1, (void*)args->arg2,
-                                 (int*)args->arg3, args->arg4);
+            ret = handle_accept4(ctx, args);
             break;
 
         case __NR_bind:
-            ret = handle_bind(ctx, args->arg1, (void*)args->arg2, args->arg3);
+            ret = handle_bind(ctx, args);
             break;
 
         case __NR_connect:
-            ret =
-                handle_connect(ctx, args->arg1, (void*)args->arg2, args->arg3);
+            ret = handle_connect(ctx, args);
             break;
 
         case __NR_fanotify_mark:
-            ret = handle_fanotify_mark(ctx, args->arg1, args->arg2, args->arg3,
-                                       args->arg4, (const char*)args->arg5);
+            ret = handle_fanotify_mark(ctx, args);
             break;
 
         case __NR_inotify_add_watch:
-            ret = handle_inotify_add_watch(ctx, args->arg1,
-                                           (const char*)args->arg2, args->arg3);
+            ret = handle_inotify_add_watch(ctx, args);
             break;
 
         case __NR_getrlimit:
-            ret = handle_getrlimit(ctx, args->arg1, (void*)args->arg2);
+            ret = handle_getrlimit(ctx, args);
             break;
 
         case __NR_setrlimit:
-            ret = handle_setrlimit(ctx, args->arg1, (const void*)args->arg2);
+            ret = handle_setrlimit(ctx, args);
             break;
 
         case __NR_prlimit64:
-            ret = handle_prlimit64(ctx, args->arg1, args->arg2,
-                                   (const void*)args->arg3, (void*)args->arg4);
+            ret = handle_prlimit64(ctx, args);
             break;
 
         case __NR_ptrace:
-            ret = handle_ptrace(ctx, args->arg1, args->arg2, (void*)args->arg3,
-                                (void*)args->arg4);
+            ret = handle_ptrace(ctx, args);
             break;
 
         case __NR_kill:
-            ret = handle_kill(ctx, args->arg1, args->arg2);
+            ret = handle_kill(ctx, args);
             break;
 
         case __NR_close:
-            ret = handle_close(ctx, args->arg1);
+            ret = handle_close(ctx, args);
             break;
 
 #ifdef __NR_close_range
         case __NR_close_range:
-            ret = handle_close_range(ctx, args->arg1, args->arg2, args->arg3);
+            ret = handle_close_range(ctx, args);
             break;
 #endif
 
         case __NR_mmap:
-            ret = handle_mmap(ctx, args->arg1, args->arg2, args->arg3,
-                              args->arg4, args->arg5, args->arg6);
+            ret = handle_mmap(ctx, args);
             break;
 
 #ifdef __NR_fork
         case __NR_fork:
-            ret = handle_fork(ctx);
+            ret = handle_fork(ctx, args);
             break;
 #endif
 
 #ifdef __NR_vfork
         case __NR_vfork:
-            ret = handle_vfork(ctx);
+            ret = handle_vfork(ctx, args);
             break;
 #endif
 
         case __NR_clone:
-#ifdef __x86_64__
-            ret = handle_clone(ctx, args->arg1, args->arg2, (int*)args->arg3,
-                               args->arg5, (int*)args->arg4);
-#else
-            ret = handle_clone(ctx, args->arg1, args->arg2, (int*)args->arg3,
-                               args->arg4, (int*)args->arg5);
-#endif
+            ret = handle_clone(ctx, args);
             break;
 
         case __NR_clone3:
-            ret =
-                handle_clone3(ctx, (struct clone_args*)args->arg1, args->arg2);
+            ret = handle_clone3(ctx, args);
             break;
 
         default:
