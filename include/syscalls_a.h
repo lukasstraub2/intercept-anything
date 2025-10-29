@@ -274,3 +274,5 @@ unsigned long handle_getdents(Context* ctx, SysArgs* args);
 unsigned long handle_getdents64(Context* ctx, SysArgs* args);
 unsigned long handle_close(Context* ctx, SysArgs* args);
 unsigned long handle_close_range(Context* ctx, SysArgs* args);
+
+void syscalls_a_fill_bottom(CallHandler* bottom);

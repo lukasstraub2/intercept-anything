@@ -207,3 +207,5 @@ unsigned long handle_mkdir(Context* ctx, SysArgs* args);
 unsigned long handle_mkdirat(Context* ctx, SysArgs* args);
 unsigned long handle_mknod(Context* ctx, SysArgs* args);
 unsigned long handle_mknodat(Context* ctx, SysArgs* args);
+
+void syscalls_b_fill_bottom(CallHandler* bottom);

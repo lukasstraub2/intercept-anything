@@ -1,6 +1,7 @@
 #include "intercept.h"
 #include "syscalls_a.h"
 #include "util.h"
+#include "signalmanager.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
@@ -587,4 +588,295 @@ unsigned long handle_close_range(Context* ctx, SysArgs* args) {
     _next->close(ctx, _next->close_next, &call);
 
     return ret;
+}
+
+static int bottom_open(Context* ctx, const This* data, const CallOpen* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->at) {
+        ret = sys_openat(call->dirfd, call->path, call->flags, call->mode);
+    } else {
+        ret = sys_open(call->path, call->flags, call->mode);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_stat(Context* ctx, const This* data, const CallStat* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    switch (call->type) {
+        case STATTYPE_PLAIN:
+            ret = sys_stat(call->path, call->statbuf);
+            break;
+
+        case STATTYPE_F:
+            ret = sys_fstat(call->dirfd, call->statbuf);
+            break;
+
+        case STATTYPE_L:
+            ret = sys_lstat(call->path, call->statbuf);
+            break;
+
+        case STATTYPE_AT:
+            ret = sys_newfstatat(call->dirfd, call->path, call->statbuf,
+                                 call->flags);
+            break;
+
+        case STATTYPE_X:
+            ret = sys_statx(call->dirfd, call->path, call->flags, call->mask,
+                            (struct statx*)call->statbuf);
+            break;
+
+        default:
+            abort();
+            break;
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static ssize_t bottom_readlink(Context* ctx,
+                               const This* data,
+                               const CallReadlink* call) {
+    ssize_t ret;
+    ssize_t* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->at) {
+        ret = sys_readlinkat(call->dirfd, call->path, call->buf, call->bufsiz);
+    } else {
+        ret = sys_readlink(call->path, call->buf, call->bufsiz);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_access(Context* ctx,
+                         const This* data,
+                         const CallAccess* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->at) {
+        ret = sys_faccessat(call->dirfd, call->path, call->mode);
+    } else {
+        ret = sys_access(call->path, call->mode);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_setxattr(Context* ctx,
+                           const This* data,
+                           const CallXattr* call) {
+    int ret;
+
+    switch (call->type2) {
+        case XATTRTYPE_PLAIN:
+            ret = sys_setxattr(call->path, call->name, call->value, call->size,
+                               call->flags);
+            break;
+
+        case XATTRTYPE_L:
+            ret = sys_lsetxattr(call->path, call->name, call->value, call->size,
+                                call->flags);
+            break;
+
+        case XATTRTYPE_F:
+            ret = sys_fsetxattr(call->fd, call->name, call->value, call->size,
+                                call->flags);
+            break;
+
+        default:
+            abort();
+            break;
+    }
+
+    *call->ret = ret;
+    return ret;
+}
+
+static ssize_t bottom_getxattr(Context* ctx,
+                               const This* data,
+                               const CallXattr* call) {
+    ssize_t ret;
+
+    switch (call->type2) {
+        case XATTRTYPE_PLAIN:
+            ret = sys_getxattr(call->path, call->name, call->value, call->size);
+            break;
+
+        case XATTRTYPE_L:
+            ret =
+                sys_lgetxattr(call->path, call->name, call->value, call->size);
+            break;
+
+        case XATTRTYPE_F:
+            ret = sys_fgetxattr(call->fd, call->name, call->value, call->size);
+            break;
+
+        default:
+            abort();
+            break;
+    }
+
+    *call->ret = ret;
+    return ret;
+}
+
+static ssize_t bottom_listxattr(Context* ctx,
+                                const This* data,
+                                const CallXattr* call) {
+    ssize_t ret;
+
+    switch (call->type2) {
+        case XATTRTYPE_PLAIN:
+            ret = sys_listxattr(call->path, call->list, call->size);
+            break;
+
+        case XATTRTYPE_L:
+            ret = sys_llistxattr(call->path, call->list, call->size);
+            break;
+
+        case XATTRTYPE_F:
+            ret = sys_flistxattr(call->fd, call->list, call->size);
+            break;
+
+        default:
+            abort();
+            break;
+    }
+
+    *call->ret = ret;
+    return ret;
+}
+
+static int bottom_removexattr(Context* ctx,
+                              const This* data,
+                              const CallXattr* call) {
+    int ret;
+
+    switch (call->type2) {
+        case XATTRTYPE_PLAIN:
+            ret = sys_removexattr(call->path, call->name);
+            break;
+
+        case XATTRTYPE_L:
+            ret = sys_lremovexattr(call->path, call->name);
+            break;
+
+        case XATTRTYPE_F:
+            ret = sys_fremovexattr(call->fd, call->name);
+            break;
+
+        default:
+            abort();
+            break;
+    }
+
+    *call->ret = ret;
+    return ret;
+}
+
+static ssize_t bottom_xattr(Context* ctx,
+                            const This* data,
+                            const CallXattr* call) {
+    signalmanager_enable_signals(ctx);
+    switch (call->type) {
+        case XATTRTYPE_SET:
+            return bottom_setxattr(ctx, data, call);
+            break;
+
+        case XATTRTYPE_GET:
+            return bottom_getxattr(ctx, data, call);
+            break;
+
+        case XATTRTYPE_LIST:
+            return bottom_listxattr(ctx, data, call);
+            break;
+
+        case XATTRTYPE_REMOVE:
+            return bottom_removexattr(ctx, data, call);
+            break;
+
+        default:
+            abort();
+            break;
+    }
+    signalmanager_disable_signals(ctx);
+}
+
+static int bottom_chdir(Context* ctx, const This* data, const CallChdir* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->f) {
+        ret = sys_fchdir(call->fd);
+    } else {
+        ret = sys_chdir(call->path);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static ssize_t bottom_getdents(Context* ctx,
+                               const This* data,
+                               const CallGetdents* call) {
+    ssize_t ret;
+    ssize_t* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->is64) {
+        ret =
+            sys_getdents64(call->fd, (linux_dirent64*)call->dirp, call->count);
+    } else {
+        ret = sys_getdents(call->fd, call->dirp, call->count);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_close(Context* ctx, const This* data, const CallClose* call) {
+    int ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->is_range) {
+        ret = sys_close_range(call->fd, call->max_fd, call->flags);
+    } else {
+        ret = sys_close(call->fd);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *call->ret = ret;
+    return ret;
+}
+
+void syscalls_a_fill_bottom(CallHandler* bottom) {
+    bottom->open = bottom_open;
+    bottom->stat = bottom_stat;
+    bottom->readlink = bottom_readlink;
+    bottom->access = bottom_access;
+    bottom->xattr = bottom_xattr;
+    bottom->chdir = bottom_chdir;
+    bottom->getdents = bottom_getdents;
+    bottom->close = bottom_close;
 }

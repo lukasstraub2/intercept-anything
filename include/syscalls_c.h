@@ -240,3 +240,5 @@ unsigned long handle_fork(Context* ctx, SysArgs* args);
 unsigned long handle_vfork(Context* ctx, SysArgs* args);
 unsigned long handle_clone(Context* ctx, SysArgs* args);
 unsigned long handle_clone3(Context* ctx, SysArgs* args);
+
+void syscalls_c_fill_bottom(CallHandler* bottom);

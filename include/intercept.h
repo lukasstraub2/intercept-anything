@@ -78,8 +78,6 @@ struct CallHandler {
 };
 // clang-format on
 
-typedef struct CallHandler CallHandler;
-
 extern const char* self_exe;
 extern __thread Tls _tls;
 extern const CallHandler* _next;

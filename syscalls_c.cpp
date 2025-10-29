@@ -2,6 +2,7 @@
 #include "syscalls_c.h"
 #include "util.h"
 #include "linux/sched.h"
+#include "signalmanager.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
@@ -352,4 +353,163 @@ unsigned long handle_clone3(Context* ctx, SysArgs* args) {
     _next->clone(ctx, _next->clone_next, &call);
 
     return ret;
+}
+
+static int bottom_accept(Context* ctx,
+                         const This* data,
+                         const CallAccept* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->is4) {
+        ret = sys_accept4(call->fd, call->addr, call->addrlen, call->flags);
+    } else {
+        ret = sys_accept(call->fd, call->addr, call->addrlen);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_connect(Context* ctx,
+                          const This* data,
+                          const CallConnect* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->is_bind) {
+        ret = sys_bind(call->fd, call->addr, call->addrlen);
+    } else {
+        ret = sys_connect(call->fd, call->addr, call->addrlen);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_fanotify_mark(Context* ctx,
+                                const This* data,
+                                const CallFanotifyMark* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = sys_fanotify_mark(call->fd, call->flags, call->mask, call->dirfd,
+                            call->path);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_inotify_add_watch(Context* ctx,
+                                    const This* data,
+                                    const CallInotifyAddWatch* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = sys_inotify_add_watch(call->fd, call->path, call->mask);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_rlimit(Context* ctx,
+                         const This* data,
+                         const CallRlimit* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    switch (call->type) {
+        case RLIMITTYPE_GET:
+            ret = sys_getrlimit(call->resource, call->old_rlim);
+            break;
+
+        case RLIMITTYPE_SET:
+            ret = sys_setrlimit(call->resource, call->new_rlim);
+            break;
+
+        case RLIMITTYPE_PR:
+            ret = sys_prlimit64(call->pid, call->resource,
+                                (const rlimit64*)call->new_rlim,
+                                (rlimit64*)call->old_rlim);
+            break;
+
+        default:
+            abort();
+            break;
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static long bottom_ptrace(Context* ctx,
+                          const This* data,
+                          const CallPtrace* call) {
+    long ret;
+    long* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = sys_ptrace(call->request, call->pid, call->addr, call->data);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_kill(Context* ctx, const This* data, const CallKill* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = sys_kill(call->pid, call->sig);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static unsigned long bottom_misc(Context* ctx,
+                                 const This* data,
+                                 const CallMisc* call) {
+    debug("Unhandled syscall no. %lu\n", call->args.num);
+
+    *call->ret = -ENOSYS;
+    return *call->ret;
+}
+
+static unsigned long bottom_mmap(Context* ctx,
+                                 const This* data,
+                                 const CallMmap* call) {
+    unsigned long ret;
+    unsigned long* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = (unsigned long)sys_mmap((void*)call->addr, call->len, call->prot,
+                                  call->flags, call->fd, call->off);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+void syscalls_c_fill_bottom(CallHandler* bottom) {
+    bottom->accept = bottom_accept;
+    bottom->connect = bottom_connect;
+    bottom->fanotify_mark = bottom_fanotify_mark;
+    bottom->inotify_add_watch = bottom_inotify_add_watch;
+    bottom->rlimit = bottom_rlimit;
+    bottom->ptrace = bottom_ptrace;
+    bottom->kill = bottom_kill;
+    bottom->misc = bottom_misc;
+    bottom->mmap = bottom_mmap;
 }

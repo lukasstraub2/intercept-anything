@@ -1,6 +1,7 @@
 #include "intercept.h"
 #include "syscalls_b.h"
 #include "util.h"
+#include "signalmanager.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
@@ -350,4 +351,175 @@ unsigned long handle_mknodat(Context* ctx, SysArgs* args) {
     _next->mknod(ctx, _next->mknod_next, &call);
 
     return ret;
+}
+
+static int bottom_link(Context* ctx, const This* data, const CallLink* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->at) {
+        ret = sys_linkat(call->olddirfd, call->oldpath, call->newdirfd,
+                         call->newpath, call->flags);
+    } else {
+        ret = sys_link(call->oldpath, call->newpath);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_symlink(Context* ctx,
+                          const This* data,
+                          const CallLink* call) {
+    int ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->at) {
+        ret = sys_symlinkat(call->oldpath, call->newdirfd, call->newpath);
+    } else {
+        ret = sys_symlink(call->oldpath, call->newpath);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *call->ret = ret;
+    return ret;
+}
+
+static int bottom_unlink(Context* ctx,
+                         const This* data,
+                         const CallUnlink* call) {
+    int ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->at) {
+        ret = sys_unlinkat(call->dirfd, call->path, call->flags);
+    } else {
+        ret = sys_unlink(call->path);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *call->ret = ret;
+    return ret;
+}
+
+static int bottom_rename(Context* ctx,
+                         const This* data,
+                         const CallRename* call) {
+    int ret;
+
+    signalmanager_enable_signals(ctx);
+    switch (call->type) {
+        case RENAMETYPE_PLAIN:
+            ret = sys_rename(call->oldpath, call->newpath);
+            break;
+
+        case RENAMETYPE_AT:
+            ret = sys_renameat(call->olddirfd, call->oldpath, call->newdirfd,
+                               call->newpath);
+            break;
+
+        case RENAMETYPE_AT2:
+            ret = sys_renameat2(call->olddirfd, call->oldpath, call->newdirfd,
+                                call->newpath, call->flags);
+            break;
+
+        default:
+            abort();
+            break;
+    }
+    signalmanager_disable_signals(ctx);
+
+    *call->ret = ret;
+    return ret;
+}
+
+static int bottom_chmod(Context* ctx, const This* data, const CallChmod* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    switch (call->type) {
+        case CHMODTYPE_PLAIN:
+            ret = sys_chmod(call->path, call->mode);
+            break;
+
+        case CHMODTYPE_F:
+            ret = sys_fchmod(call->fd, call->mode);
+            break;
+
+        case CHMODTYPE_AT:
+            ret = sys_fchmodat(call->dirfd, call->path, call->mode);
+            break;
+
+        default:
+            abort();
+            break;
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_truncate(Context* ctx,
+                           const This* data,
+                           const CallTruncate* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->f) {
+        ret = sys_ftruncate(call->fd, call->length);
+    } else {
+        ret = sys_truncate(call->path, call->length);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_mkdir(Context* ctx, const This* data, const CallMkdir* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->at) {
+        ret = sys_mkdirat(call->dirfd, call->path, call->mode);
+    } else {
+        ret = sys_mkdir(call->path, call->mode);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+static int bottom_mknod(Context* ctx, const This* data, const CallMknod* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    if (call->at) {
+        ret = sys_mknodat(call->dirfd, call->path, call->mode, call->dev);
+    } else {
+        ret = sys_mknod(call->path, call->mode, call->dev);
+    }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+    return ret;
+}
+
+void syscalls_b_fill_bottom(CallHandler* bottom) {
+    bottom->link = bottom_link;
+    bottom->symlink = bottom_symlink;
+    bottom->unlink = bottom_unlink;
+    bottom->rename = bottom_rename;
+    bottom->chmod = bottom_chmod;
+    bottom->truncate = bottom_truncate;
+    bottom->mkdir = bottom_mkdir;
+    bottom->mknod = bottom_mknod;
 }

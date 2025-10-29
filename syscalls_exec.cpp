@@ -377,3 +377,7 @@ int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
 
     return *_ret;
 }
+
+void syscalls_exec_fill_bottom(CallHandler* bottom) {
+    bottom->exec = bottom_exec;
+}
