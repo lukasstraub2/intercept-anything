@@ -13,7 +13,7 @@ void signalmanager_clean_dead(Tls* tls);
 void signalmanager_install_sigsys(myhandler_t handler);
 void signalmanager_enable_signals(Context* ctx);
 void signalmanager_disable_signals(Context* ctx);
-const CallHandler* signalmanager_init(const CallHandler* next);
+CallHandler* signalmanager_init(CallHandler* const next);
 
 enum DefaultAction {
     ACTION_CONT,

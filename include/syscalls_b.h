@@ -31,6 +31,30 @@ __attribute__((unused)) static void calllink_copy(CallLink* dst,
     dst->ret = call->ret;
 }
 
+struct CallSymlink {
+    int at;
+    const char* oldpath;
+    int newdirfd;
+    const char* newpath;
+    int flags;
+    int* ret;
+};
+typedef struct CallSymlink CallSymlink;
+
+__attribute__((unused)) static void calllink_copy(CallSymlink* dst,
+                                                  const CallSymlink* call) {
+    dst->at = call->at;
+
+    if (dst->at) {
+        dst->newdirfd = call->newdirfd;
+        dst->flags = call->flags;
+    }
+
+    dst->oldpath = call->oldpath;
+    dst->newpath = call->newpath;
+    dst->ret = call->ret;
+}
+
 struct CallUnlink {
     int at;
     int dirfd;
@@ -207,5 +231,3 @@ unsigned long handle_mkdir(Context* ctx, SysArgs* args);
 unsigned long handle_mkdirat(Context* ctx, SysArgs* args);
 unsigned long handle_mknod(Context* ctx, SysArgs* args);
 unsigned long handle_mknodat(Context* ctx, SysArgs* args);
-
-void syscalls_b_fill_bottom(CallHandler* bottom);

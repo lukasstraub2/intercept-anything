@@ -4,6 +4,7 @@
 #include "myelf.h"
 #include "loader.h"
 #include "signalmanager.h"
+#include "bottomhandler.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
@@ -24,7 +25,7 @@ unsigned long handle_execve(Context* ctx, SysArgs* args) {
     CallExec call = {
         .at = 0, .path = path, .argv = argv, .envp = envp, .ret = &ret};
 
-    _next->exec(ctx, _next->exec_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -50,7 +51,7 @@ unsigned long handle_execveat(Context* ctx, SysArgs* args) {
                      .flags = flags,
                      .ret = &ret};
 
-    _next->exec(ctx, _next->exec_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -151,7 +152,7 @@ static ssize_t read_full(int fd, char* buf, size_t count) {
     return total;
 }
 
-static int _bottom_exec(Context* ctx, const This* data, CallExec* call) {
+static int _bottom_exec(Context* ctx, CallExec* call) {
     ssize_t ret;
     int64_t argc;
     int dirfd = (call->at ? call->dirfd : AT_FDCWD);
@@ -296,7 +297,7 @@ static int open_fullpath_execveat(Context* ctx, const CallExec* call) {
     return ret;
 }
 
-int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
+void BottomHandler::next(Context* ctx, const CallExec* call) {
     int fd;
     ssize_t ret, size;
     int* _ret = call->ret;
@@ -304,25 +305,21 @@ int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
     CallExec _call;
     callexec_copy(&_call, call);
 
-    if (0) {
-    out:
-        return *_ret;
-    }
-
     if (call->final) {
-        return _bottom_exec(ctx, data, &_call);
+        *_ret = _bottom_exec(ctx, &_call);
+        return;
     }
 
     exec_argc = array_len(call->argv);
     if (exec_argc < 0) {
         *_ret = -E2BIG;
-        goto out;
+        return;
     }
 
     ret = open_fullpath_execveat(ctx, call);
     if (ret < 0) {
         *_ret = ret;
-        goto out;
+        return;
     }
     fd = ret;
 
@@ -330,7 +327,7 @@ int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
     if (ret < 0) {
         *_ret = ret;
         sys_close(fd);
-        goto out;
+        return;
     }
     size = ret;
 
@@ -339,7 +336,7 @@ int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
     if (ret < 0) {
         *_ret = ret;
         sys_close(fd);
-        goto out;
+        return;
     }
     sys_close(fd);
 
@@ -347,7 +344,7 @@ int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
         int sh_argc = cmdline_argc(header, size);
         if (sh_argc == 0) {
             *_ret = -ENOEXEC;
-            goto out;
+            return;
         }
 
         int64_t argc = exec_argc + sh_argc;
@@ -364,20 +361,14 @@ int bottom_exec(Context* ctx, const This* data, const CallExec* call) {
         _call.path = pathname;
         _call.argv = argv;
 
-        return _next->exec(ctx, _next->exec_next, &_call);
+        intercept_entrypoint->next(ctx, &_call);
     }
 
     if ((size_t)size < sizeof(Elf_Ehdr) || !check_ehdr((Elf_Ehdr*)header)) {
         *_ret = -ENOEXEC;
-        goto out;
+        return;
     }
 
     _call.final = 1;
-    _next->exec(ctx, _next->exec_next, &_call);
-
-    return *_ret;
-}
-
-void syscalls_exec_fill_bottom(CallHandler* bottom) {
-    bottom->exec = bottom_exec;
+    intercept_entrypoint->next(ctx, &_call);
 }

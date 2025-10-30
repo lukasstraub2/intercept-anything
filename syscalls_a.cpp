@@ -2,6 +2,7 @@
 #include "syscalls_a.h"
 #include "util.h"
 #include "signalmanager.h"
+#include "bottomhandler.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
@@ -16,7 +17,7 @@ unsigned long handle_open(Context* ctx, SysArgs* args) {
     CallOpen call = {
         .at = 0, .path = path, .flags = flags, .mode = mode, .ret = &ret};
 
-    _next->open(ctx, _next->open_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -36,7 +37,7 @@ unsigned long handle_openat(Context* ctx, SysArgs* args) {
                      .mode = mode,
                      .ret = &ret};
 
-    _next->open(ctx, _next->open_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -54,7 +55,7 @@ unsigned long handle_stat(Context* ctx, SysArgs* args) {
     CallStat call = {
         .type = STATTYPE_PLAIN, .path = path, .statbuf = statbuf, .ret = &ret};
 
-    _next->stat(ctx, _next->stat_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -68,7 +69,7 @@ unsigned long handle_fstat(Context* ctx, SysArgs* args) {
     CallStat call = {
         .type = STATTYPE_F, .dirfd = fd, .statbuf = statbuf, .ret = &ret};
 
-    _next->stat(ctx, _next->stat_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -86,7 +87,7 @@ unsigned long handle_lstat(Context* ctx, SysArgs* args) {
     CallStat call = {
         .type = STATTYPE_L, .path = path, .statbuf = statbuf, .ret = &ret};
 
-    _next->stat(ctx, _next->stat_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -110,7 +111,7 @@ unsigned long handle_newfstatat(Context* ctx, SysArgs* args) {
                      .statbuf = statbuf,
                      .ret = &ret};
 
-    _next->stat(ctx, _next->stat_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -136,7 +137,7 @@ unsigned long handle_statx(Context* ctx, SysArgs* args) {
                      .statbuf = statbuf,
                      .ret = &ret};
 
-    _next->stat(ctx, _next->stat_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -159,7 +160,7 @@ unsigned long handle_readlink(Context* ctx, SysArgs* args) {
     CallReadlink call = {
         .at = 0, .path = path, .buf = buf, .bufsiz = bufsiz, .ret = &ret};
 
-    _next->readlink(ctx, _next->readlink_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -185,7 +186,7 @@ unsigned long handle_readlinkat(Context* ctx, SysArgs* args) {
                          .bufsiz = bufsiz,
                          .ret = &ret};
 
-    _next->readlink(ctx, _next->readlink_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -202,7 +203,7 @@ unsigned long handle_access(Context* ctx, SysArgs* args) {
     int ret = {0};
     CallAccess call = {.at = 0, .path = path, .mode = mode, .ret = &ret};
 
-    _next->access(ctx, _next->access_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -221,7 +222,7 @@ unsigned long handle_faccessat(Context* ctx, SysArgs* args) {
     CallAccess call = {
         .at = 1, .dirfd = dirfd, .path = path, .mode = mode, .ret = &ret};
 
-    _next->access(ctx, _next->access_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -248,7 +249,7 @@ unsigned long handle_setxattr(Context* ctx, SysArgs* args) {
                       .flags = flags,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -275,7 +276,7 @@ unsigned long handle_lsetxattr(Context* ctx, SysArgs* args) {
                       .flags = flags,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -298,7 +299,7 @@ unsigned long handle_fsetxattr(Context* ctx, SysArgs* args) {
                       .flags = flags,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -323,7 +324,7 @@ unsigned long handle_getxattr(Context* ctx, SysArgs* args) {
                       .size = size,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -348,7 +349,7 @@ unsigned long handle_lgetxattr(Context* ctx, SysArgs* args) {
                       .size = size,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -369,7 +370,7 @@ unsigned long handle_fgetxattr(Context* ctx, SysArgs* args) {
                       .size = size,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -392,7 +393,7 @@ unsigned long handle_listxattr(Context* ctx, SysArgs* args) {
                       .size = size,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -415,7 +416,7 @@ unsigned long handle_llistxattr(Context* ctx, SysArgs* args) {
                       .size = size,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -434,7 +435,7 @@ unsigned long handle_flistxattr(Context* ctx, SysArgs* args) {
                       .size = size,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -455,7 +456,7 @@ unsigned long handle_removexattr(Context* ctx, SysArgs* args) {
                       .name = name,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -476,7 +477,7 @@ unsigned long handle_lremovexattr(Context* ctx, SysArgs* args) {
                       .name = name,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -493,7 +494,7 @@ unsigned long handle_fremovexattr(Context* ctx, SysArgs* args) {
                       .name = name,
                       .ret = &ret};
 
-    _next->xattr(ctx, _next->xattr_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -513,7 +514,7 @@ unsigned long handle_rename(Context* ctx, SysArgs* args) {
                        .newpath = newpath,
                        .ret = &ret};
 
-    _next->rename(ctx, _next->rename_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -525,7 +526,7 @@ unsigned long handle_fchdir(Context* ctx, SysArgs* args) {
     int ret = {0};
     CallChdir call = {.f = 1, .fd = fd, .ret = &ret};
 
-    _next->chdir(ctx, _next->chdir_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -540,7 +541,7 @@ unsigned long handle_getdents(Context* ctx, SysArgs* args) {
     CallGetdents call = {
         .is64 = 0, .fd = fd, .dirp = dirp, .count = count, .ret = &ret};
 
-    _next->getdents(ctx, _next->getdents_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -555,7 +556,7 @@ unsigned long handle_getdents64(Context* ctx, SysArgs* args) {
     CallGetdents call = {
         .is64 = 1, .fd = fd, .dirp = dirp, .count = count, .ret = &ret};
 
-    _next->getdents(ctx, _next->getdents_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -567,7 +568,7 @@ unsigned long handle_close(Context* ctx, SysArgs* args) {
     int ret = {0};
     CallClose call = {.is_range = 0, .fd = fd, .ret = &ret};
 
-    _next->close(ctx, _next->close_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -585,12 +586,12 @@ unsigned long handle_close_range(Context* ctx, SysArgs* args) {
                       .flags = flags,
                       .ret = &ret};
 
-    _next->close(ctx, _next->close_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
 
-static int bottom_open(Context* ctx, const This* data, const CallOpen* call) {
+void BottomHandler::next(Context* ctx, const CallOpen* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -603,10 +604,9 @@ static int bottom_open(Context* ctx, const This* data, const CallOpen* call) {
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_stat(Context* ctx, const This* data, const CallStat* call) {
+void BottomHandler::next(Context* ctx, const CallStat* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -641,12 +641,9 @@ static int bottom_stat(Context* ctx, const This* data, const CallStat* call) {
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static ssize_t bottom_readlink(Context* ctx,
-                               const This* data,
-                               const CallReadlink* call) {
+void BottomHandler::next(Context* ctx, const CallReadlink* call) {
     ssize_t ret;
     ssize_t* _ret = call->ret;
 
@@ -659,12 +656,9 @@ static ssize_t bottom_readlink(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_access(Context* ctx,
-                         const This* data,
-                         const CallAccess* call) {
+void BottomHandler::next(Context* ctx, const CallAccess* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -677,12 +671,9 @@ static int bottom_access(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_setxattr(Context* ctx,
-                           const This* data,
-                           const CallXattr* call) {
+static void bottom_setxattr(Context* ctx, const CallXattr* call) {
     int ret;
 
     switch (call->type2) {
@@ -707,12 +698,9 @@ static int bottom_setxattr(Context* ctx,
     }
 
     *call->ret = ret;
-    return ret;
 }
 
-static ssize_t bottom_getxattr(Context* ctx,
-                               const This* data,
-                               const CallXattr* call) {
+static void bottom_getxattr(Context* ctx, const CallXattr* call) {
     ssize_t ret;
 
     switch (call->type2) {
@@ -735,12 +723,9 @@ static ssize_t bottom_getxattr(Context* ctx,
     }
 
     *call->ret = ret;
-    return ret;
 }
 
-static ssize_t bottom_listxattr(Context* ctx,
-                                const This* data,
-                                const CallXattr* call) {
+static void bottom_listxattr(Context* ctx, const CallXattr* call) {
     ssize_t ret;
 
     switch (call->type2) {
@@ -762,12 +747,9 @@ static ssize_t bottom_listxattr(Context* ctx,
     }
 
     *call->ret = ret;
-    return ret;
 }
 
-static int bottom_removexattr(Context* ctx,
-                              const This* data,
-                              const CallXattr* call) {
+static void bottom_removexattr(Context* ctx, const CallXattr* call) {
     int ret;
 
     switch (call->type2) {
@@ -789,28 +771,25 @@ static int bottom_removexattr(Context* ctx,
     }
 
     *call->ret = ret;
-    return ret;
 }
 
-static ssize_t bottom_xattr(Context* ctx,
-                            const This* data,
-                            const CallXattr* call) {
+void BottomHandler::next(Context* ctx, const CallXattr* call) {
     signalmanager_enable_signals(ctx);
     switch (call->type) {
         case XATTRTYPE_SET:
-            return bottom_setxattr(ctx, data, call);
+            return bottom_setxattr(ctx, call);
             break;
 
         case XATTRTYPE_GET:
-            return bottom_getxattr(ctx, data, call);
+            return bottom_getxattr(ctx, call);
             break;
 
         case XATTRTYPE_LIST:
-            return bottom_listxattr(ctx, data, call);
+            return bottom_listxattr(ctx, call);
             break;
 
         case XATTRTYPE_REMOVE:
-            return bottom_removexattr(ctx, data, call);
+            return bottom_removexattr(ctx, call);
             break;
 
         default:
@@ -820,7 +799,7 @@ static ssize_t bottom_xattr(Context* ctx,
     signalmanager_disable_signals(ctx);
 }
 
-static int bottom_chdir(Context* ctx, const This* data, const CallChdir* call) {
+void BottomHandler::next(Context* ctx, const CallChdir* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -833,12 +812,9 @@ static int bottom_chdir(Context* ctx, const This* data, const CallChdir* call) {
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static ssize_t bottom_getdents(Context* ctx,
-                               const This* data,
-                               const CallGetdents* call) {
+void BottomHandler::next(Context* ctx, const CallGetdents* call) {
     ssize_t ret;
     ssize_t* _ret = call->ret;
 
@@ -852,10 +828,9 @@ static ssize_t bottom_getdents(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_close(Context* ctx, const This* data, const CallClose* call) {
+void BottomHandler::next(Context* ctx, const CallClose* call) {
     int ret;
 
     signalmanager_enable_signals(ctx);
@@ -867,16 +842,4 @@ static int bottom_close(Context* ctx, const This* data, const CallClose* call) {
     signalmanager_disable_signals(ctx);
 
     *call->ret = ret;
-    return ret;
-}
-
-void syscalls_a_fill_bottom(CallHandler* bottom) {
-    bottom->open = bottom_open;
-    bottom->stat = bottom_stat;
-    bottom->readlink = bottom_readlink;
-    bottom->access = bottom_access;
-    bottom->xattr = bottom_xattr;
-    bottom->chdir = bottom_chdir;
-    bottom->getdents = bottom_getdents;
-    bottom->close = bottom_close;
 }

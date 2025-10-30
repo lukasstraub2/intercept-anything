@@ -10,6 +10,7 @@
 #include "pagesize.h"
 #include "syscall_trampo.h"
 #include "syscalls.h"
+#include "bottomhandler.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
@@ -35,7 +36,7 @@ int __external_thread_register_maybe();
 
 static int initialized = 0;
 
-const CallHandler* _next = nullptr;
+CallHandler* intercept_entrypoint = nullptr;
 
 static char _self_exe[SCRATCH_SIZE];
 const char* self_exe = _self_exe;
@@ -338,8 +339,6 @@ static int handle_exit_group(Context* ctx, SysArgs* args) {
     return 0;
 }
 
-static CallHandler bottom;
-
 void intercept_init(int recursing, const char* exe) {
     size_t exe_len = strlen(exe) + 1;
 
@@ -362,13 +361,9 @@ void intercept_init(int recursing, const char* exe) {
     mutex_init();
     start_text_init();
 
-    syscalls_a_fill_bottom(&bottom);
-    syscalls_b_fill_bottom(&bottom);
-    syscalls_c_fill_bottom(&bottom);
-    syscalls_exec_fill_bottom(&bottom);
-
-    const CallHandler* signalmanager = signalmanager_init(&bottom);
-    _next = main_init(signalmanager, recursing);
+    CallHandler* const bottom = new BottomHandler();
+    CallHandler* const signalmanager = signalmanager_init(bottom);
+    intercept_entrypoint = main_init(signalmanager, recursing);
 
     signalmanager_install_sigsys(handler);
 

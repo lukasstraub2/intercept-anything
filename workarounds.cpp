@@ -4,13 +4,17 @@
 #include "intercept.h"
 #include "linux/ptrace.h"
 #include "tls.h"
+#include "callhandler.h"
 
 #include <string.h>
 #include <stdlib.h>
 
-struct This {
-    CallHandler waround;
-    const CallHandler* next;
+struct Workarounds : public CallHandler {
+    public:
+    Workarounds(CallHandler* next) : CallHandler(next) {}
+    void next(Context* ctx, const CallExec* call);
+    void next(Context* ctx, const CallPtrace* call);
+    void next(Context* ctx, const CallKill* call);
 };
 
 static void rectify_traceme(Tls* tls) {
@@ -43,74 +47,51 @@ int workarounds_rethrow_signal(Tls* tls, int signum) {
     return 0;
 }
 
-static int workarounds_exec(Context* ctx,
-                            const This* waround,
-                            const CallExec* call) {
+void Workarounds::next(Context* ctx, const CallExec* call) {
     if (call->final) {
         maybe_recitfy_traceme(ctx->tls);
     }
 
     if (call->at && call->path[0] != '/') {
-        return waround->next->exec(ctx, waround->next->exec_next, call);
+        _next->next(ctx, call);
     }
 
     if (!strcmp(call->path, "/proc/self/exe")) {
         if (call->at && call->flags & AT_SYMLINK_NOFOLLOW) {
             *call->ret = -ELOOP;
-            return -ELOOP;
+            return;
         }
 
         CallExec copy;
         callexec_copy(&copy, call);
         copy.path = self_exe;
-        return waround->next->exec(ctx, waround->next->exec_next, &copy);
+        _next->next(ctx, &copy);
     }
 
-    return waround->next->exec(ctx, waround->next->exec_next, call);
+    return _next->next(ctx, call);
 }
 
 // Workaround for gdb when using vfork:
 // Delay PTRACE_TRACEME until just before the exec()
-static long workarounds_ptrace(Context* ctx,
-                               const This* waround,
-                               const CallPtrace* call) {
+void Workarounds::next(Context* ctx, const CallPtrace* call) {
     const char* basename = strrchr(self_exe, '/') + 1;
 
     if (!strcmp(basename, "gdb") && call->request == PTRACE_TRACEME) {
         WRITE_ONCE(ctx->tls->workarounds_traceme, 1);
         __asm volatile("" ::: "memory");
-        return 0;
+        *call->ret = 0;
+        return;
     }
 
-    return waround->next->ptrace(ctx, waround->next->ptrace_next, call);
+    return _next->next(ctx, call);
 }
 
-static int workarounds_kill(Context* ctx,
-                            const This* waround,
-                            const CallKill* call) {
+void Workarounds::next(Context* ctx, const CallKill* call) {
     maybe_recitfy_traceme(ctx->tls);
 
-    return waround->next->kill(ctx, waround->next->kill_next, call);
+    return _next->next(ctx, call);
 }
 
-const CallHandler* workarounds_init(const CallHandler* next) {
-    static int initialized = 0;
-    static This waround;
-
-    if (initialized) {
-        return nullptr;
-    }
-    initialized = 1;
-
-    waround.next = next;
-    waround.waround = *next;
-
-    waround.waround.exec = workarounds_exec;
-    waround.waround.exec_next = &waround;
-    waround.waround.ptrace = workarounds_ptrace;
-    waround.waround.ptrace_next = &waround;
-    waround.waround.kill = workarounds_kill;
-    waround.waround.kill_next = &waround;
-
-    return &waround.waround;
+CallHandler* workarounds_init(CallHandler* next) {
+    return new Workarounds(next);
 }

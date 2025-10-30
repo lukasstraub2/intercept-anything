@@ -3,6 +3,7 @@
 #include "util.h"
 #include "linux/sched.h"
 #include "signalmanager.h"
+#include "bottomhandler.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
@@ -21,7 +22,7 @@ unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args) {
                             .sigsetsize = sigsetsize,
                             .ret = &ret};
 
-    _next->sigprocmask(ctx, _next->sigprocmask_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -40,7 +41,7 @@ unsigned long handle_rt_sigaction(Context* ctx, SysArgs* args) {
                           .sigsetsize = sigsetsize,
                           .ret = &ret};
 
-    _next->sigaction(ctx, _next->sigaction_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -55,7 +56,7 @@ unsigned long handle_accept(Context* ctx, SysArgs* args) {
     CallAccept call = {
         .is4 = 0, .fd = fd, .addr = addr, .addrlen = addrlen, .ret = &ret};
 
-    _next->accept(ctx, _next->accept_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -75,7 +76,7 @@ unsigned long handle_accept4(Context* ctx, SysArgs* args) {
                        .flags = flags,
                        .ret = &ret};
 
-    _next->accept(ctx, _next->accept_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -90,7 +91,7 @@ unsigned long handle_bind(Context* ctx, SysArgs* args) {
     CallConnect call = {
         .is_bind = 1, .fd = fd, .addr = addr, .addrlen = addrlen, .ret = &ret};
 
-    _next->connect(ctx, _next->connect_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -105,7 +106,7 @@ unsigned long handle_connect(Context* ctx, SysArgs* args) {
     CallConnect call = {
         .is_bind = 0, .fd = fd, .addr = addr, .addrlen = addrlen, .ret = &ret};
 
-    _next->connect(ctx, _next->connect_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -130,7 +131,7 @@ unsigned long handle_fanotify_mark(Context* ctx, SysArgs* args) {
                              .path = pathname,
                              .ret = &ret};
 
-    _next->fanotify_mark(ctx, _next->fanotify_mark_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -149,7 +150,7 @@ unsigned long handle_inotify_add_watch(Context* ctx, SysArgs* args) {
     CallInotifyAddWatch call = {
         .fd = fd, .path = pathname, .mask = mask, .ret = &ret};
 
-    _next->inotify_add_watch(ctx, _next->inotify_add_watch_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -165,7 +166,7 @@ unsigned long handle_getrlimit(Context* ctx, SysArgs* args) {
                        .old_rlim = old_rlim,
                        .ret = &ret};
 
-    _next->rlimit(ctx, _next->rlimit_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -181,7 +182,7 @@ unsigned long handle_setrlimit(Context* ctx, SysArgs* args) {
                        .new_rlim = new_rlim,
                        .ret = &ret};
 
-    _next->rlimit(ctx, _next->rlimit_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -201,7 +202,7 @@ unsigned long handle_prlimit64(Context* ctx, SysArgs* args) {
                        .old_rlim = old_rlim,
                        .ret = &ret};
 
-    _next->rlimit(ctx, _next->rlimit_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -220,7 +221,7 @@ unsigned long handle_ptrace(Context* ctx, SysArgs* args) {
                        .data = data,
                        .ret = &ret};
 
-    _next->ptrace(ctx, _next->ptrace_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -233,7 +234,7 @@ unsigned long handle_kill(Context* ctx, SysArgs* args) {
     int ret = {0};
     CallKill call = {.pid = pid, .sig = sig, .ret = &ret};
 
-    _next->kill(ctx, _next->kill_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -244,7 +245,7 @@ unsigned long handle_misc(Context* ctx, SysArgs* args) {
     unsigned long ret = {0};
     CallMisc call = {.args = *args, .ret = &ret};
 
-    _next->misc(ctx, _next->misc_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -269,7 +270,7 @@ unsigned long handle_mmap(Context* ctx, SysArgs* args) {
         .ret = &ret,
     };
 
-    _next->mmap(ctx, _next->mmap_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -283,7 +284,7 @@ unsigned long handle_fork(Context* ctx, SysArgs* args) {
         .ret = &ret,
     };
 
-    _next->clone(ctx, _next->clone_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -297,7 +298,7 @@ unsigned long handle_vfork(Context* ctx, SysArgs* args) {
         .ret = &ret,
     };
 
-    _next->clone(ctx, _next->clone_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -332,7 +333,7 @@ unsigned long handle_clone(Context* ctx, SysArgs* args) {
         .ret = &ret,
     };
 
-    _next->clone(ctx, _next->clone_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -350,14 +351,12 @@ unsigned long handle_clone3(Context* ctx, SysArgs* args) {
         .ret = &ret,
     };
 
-    _next->clone(ctx, _next->clone_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
 
-static int bottom_accept(Context* ctx,
-                         const This* data,
-                         const CallAccept* call) {
+void BottomHandler::next(Context* ctx, const CallAccept* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -370,12 +369,9 @@ static int bottom_accept(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_connect(Context* ctx,
-                          const This* data,
-                          const CallConnect* call) {
+void BottomHandler::next(Context* ctx, const CallConnect* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -388,12 +384,9 @@ static int bottom_connect(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_fanotify_mark(Context* ctx,
-                                const This* data,
-                                const CallFanotifyMark* call) {
+void BottomHandler::next(Context* ctx, const CallFanotifyMark* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -403,12 +396,9 @@ static int bottom_fanotify_mark(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_inotify_add_watch(Context* ctx,
-                                    const This* data,
-                                    const CallInotifyAddWatch* call) {
+void BottomHandler::next(Context* ctx, const CallInotifyAddWatch* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -417,12 +407,9 @@ static int bottom_inotify_add_watch(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_rlimit(Context* ctx,
-                         const This* data,
-                         const CallRlimit* call) {
+void BottomHandler::next(Context* ctx, const CallRlimit* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -449,12 +436,9 @@ static int bottom_rlimit(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static long bottom_ptrace(Context* ctx,
-                          const This* data,
-                          const CallPtrace* call) {
+void BottomHandler::next(Context* ctx, const CallPtrace* call) {
     long ret;
     long* _ret = call->ret;
 
@@ -463,10 +447,9 @@ static long bottom_ptrace(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_kill(Context* ctx, const This* data, const CallKill* call) {
+void BottomHandler::next(Context* ctx, const CallKill* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -475,21 +458,15 @@ static int bottom_kill(Context* ctx, const This* data, const CallKill* call) {
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static unsigned long bottom_misc(Context* ctx,
-                                 const This* data,
-                                 const CallMisc* call) {
+void BottomHandler::next(Context* ctx, const CallMisc* call) {
     debug("Unhandled syscall no. %lu\n", call->args.num);
 
     *call->ret = -ENOSYS;
-    return *call->ret;
 }
 
-static unsigned long bottom_mmap(Context* ctx,
-                                 const This* data,
-                                 const CallMmap* call) {
+void BottomHandler::next(Context* ctx, const CallMmap* call) {
     unsigned long ret;
     unsigned long* _ret = call->ret;
 
@@ -499,17 +476,4 @@ static unsigned long bottom_mmap(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
-}
-
-void syscalls_c_fill_bottom(CallHandler* bottom) {
-    bottom->accept = bottom_accept;
-    bottom->connect = bottom_connect;
-    bottom->fanotify_mark = bottom_fanotify_mark;
-    bottom->inotify_add_watch = bottom_inotify_add_watch;
-    bottom->rlimit = bottom_rlimit;
-    bottom->ptrace = bottom_ptrace;
-    bottom->kill = bottom_kill;
-    bottom->misc = bottom_misc;
-    bottom->mmap = bottom_mmap;
 }

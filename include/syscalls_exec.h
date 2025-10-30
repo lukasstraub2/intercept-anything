@@ -33,5 +33,3 @@ __attribute__((unused)) static void callexec_copy(CallExec* dst,
 
 unsigned long handle_execve(Context* ctx, SysArgs* args);
 unsigned long handle_execveat(Context* ctx, SysArgs* args);
-
-void syscalls_exec_fill_bottom(CallHandler* bottom);

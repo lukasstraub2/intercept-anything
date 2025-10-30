@@ -4,8 +4,15 @@
 #include "signalmanager.h"
 #include "util.h"
 #include "mysys.h"
+#include "callhandler.h"
 
 #include <sys/mman.h>
+
+class EmulateSwap : public CallHandler {
+    public:
+    EmulateSwap(CallHandler* next) : CallHandler(next) {}
+    void next(Context* ctx, const CallMmap* call);
+};
 
 static int mktemp(unsigned long size) {
     char filename[] = "/var/tmp/.swap-XXXXXX";
@@ -31,9 +38,7 @@ static int mktemp(unsigned long size) {
     return fd;
 }
 
-static unsigned long emulate_swap_mmap(Context* ctx,
-                                       const This* swap,
-                                       const CallMmap* call) {
+void EmulateSwap::next(Context* ctx, const CallMmap* call) {
     unsigned long ret;
     unsigned long* _ret = call->ret;
 
@@ -57,21 +62,8 @@ static unsigned long emulate_swap_mmap(Context* ctx,
     }
 
     *_ret = ret;
-    return ret;
 }
 
-const CallHandler* emulate_swap_init(const CallHandler* next) {
-    static int initialized = 0;
-    static CallHandler swap;
-
-    if (initialized) {
-        return nullptr;
-    }
-    initialized = 1;
-
-    swap = *next;
-    swap.mmap = emulate_swap_mmap;
-    swap.mmap_next = (This*)&swap;
-
-    return &swap;
+CallHandler* emulate_swap_init(CallHandler* const next) {
+    return new EmulateSwap(next);
 }

@@ -9,8 +9,8 @@ __attribute__((weak)) char __etext;
 __attribute__((weak)) char __start_signal_entry;
 __attribute__((weak)) char __stop_signal_entry;
 
-__attribute__((weak)) const CallHandler* main_init(const CallHandler* bottom,
-                                                   int recursing) {
+__attribute__((weak)) CallHandler* main_init(CallHandler* bottom,
+                                             int recursing) {
     abort();
     return nullptr;
 }

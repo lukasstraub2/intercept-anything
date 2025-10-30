@@ -14,6 +14,7 @@
 #include "util.h"
 #include "mylist.h"
 #include "linux/sched.h"
+#include "callhandler.h"
 
 #define DEBUG_ENV "DEBUG_SIGNAL"
 #include "debug.h"
@@ -24,6 +25,14 @@
 #include <assert.h>
 #include <sys/mman.h>
 #include <pthread.h>
+
+class SignalManager : public CallHandler {
+    public:
+    SignalManager(CallHandler* next) : CallHandler(next){};
+    void next(Context* ctx, const CallSigprocmask* call);
+    void next(Context* ctx, const CallSigaction* call);
+    void next(Context* ctx, const CallClone* call);
+};
 
 #define mysignal_size (64)
 struct MySignal {
@@ -257,9 +266,7 @@ void signalmanager_enable_signals(Context* ctx) {
     }
 }
 
-static int signalmanager_sigprocmask(Context* ctx,
-                                     const This* sigmgmt,
-                                     const CallSigprocmask* call) {
+void SignalManager::next(Context* ctx, const CallSigprocmask* call) {
     int* _ret = call->ret;
     struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
     sigset_t* uctx_set = &uctx->uc_sigmask;
@@ -267,7 +274,7 @@ static int signalmanager_sigprocmask(Context* ctx,
 
     if (call->sigsetsize > _NSIG / 8) {
         *_ret = -EINVAL;
-        goto out;
+        return;
     }
 
     if (call->oldset) {
@@ -276,7 +283,7 @@ static int signalmanager_sigprocmask(Context* ctx,
 
     if (!call->set) {
         *_ret = 0;
-        goto out;
+        return;
     }
 
     memcpy(&set, call->set, call->sigsetsize);
@@ -304,17 +311,12 @@ static int signalmanager_sigprocmask(Context* ctx,
             *_ret = -EINVAL;
             break;
     }
-
-out:
-    return *_ret;
 }
 
 static int install_generic_handler(int signum,
                                    const struct k_sigaction* const act);
 
-static int signalmanager_sigaction(Context* ctx,
-                                   const This* sigmgmt,
-                                   const CallSigaction* call) {
+void SignalManager::next(Context* ctx, const CallSigaction* call) {
     int* _ret = call->ret;
     struct k_sigaction* mysig = nullptr;
 
@@ -347,7 +349,6 @@ static int signalmanager_sigaction(Context* ctx,
 
 out:
     mysignal_unlock();
-    return *_ret;
 }
 
 static void fill_sigsys_act(struct k_sigaction* act, myhandler_t handler) {
@@ -444,26 +445,24 @@ void vfork_exit_callback() {
     }
 }
 
-static int signalmanager_clone(Context* ctx,
-                               const This* sigmgmt,
-                               const CallClone* call) {
+void SignalManager::next(Context* ctx, const CallClone* call) {
     int* _ret = call->ret;
 
     if (call->type == CLONETYPE_FORK) {
         *_ret = fork();
-        return *_ret;
+        return;
     }
 
     if (call->type == CLONETYPE_VFORK) {
         if (vfork_idx + 1 >= VFORK_STACK_SIZE) {
             *_ret = -ENOMEM;
-            return *_ret;
+            return;
         }
 
         MySignal* clone = mysignal_new();
         if (!clone) {
             *_ret = -ENOMEM;
-            return *_ret;
+            return;
         }
 
         clone_trampo_arm(&data.trampo, ctx->ucontext);
@@ -477,7 +476,7 @@ static int signalmanager_clone(Context* ctx,
         vfork_stack_push(&data.trampo, clone);
 
         *_ret = 0;
-        return 0;
+        return;
     }
 
     assert(call->type == CLONETYPE_CLONE || call->type == CLONETYPE_CLONE3);
@@ -487,7 +486,7 @@ static int signalmanager_clone(Context* ctx,
 
     if (args->flags & CLONE_SIGHAND && args->flags & CLONE_CLEAR_SIGHAND) {
         *_ret = -EINVAL;
-        return *_ret;
+        return;
     }
 
     if (!(args->flags & CLONE_VM)) {
@@ -497,7 +496,7 @@ static int signalmanager_clone(Context* ctx,
                                           MAP_ANON | MAP_SHARED, -1, 0);
             if ((unsigned long)shm >= -4095UL) {
                 *_ret = -ENOMEM;
-                return *_ret;
+                return;
             }
         }
 
@@ -505,7 +504,7 @@ static int signalmanager_clone(Context* ctx,
         if (*_ret) {
             if (*_ret < 0) {
                 *_ret = -errno;
-                return *_ret;
+                return;
             }
 
             if (args->flags & CLONE_PARENT_SETTID) {
@@ -555,25 +554,25 @@ static int signalmanager_clone(Context* ctx,
                 }
             }
         }
-        return *_ret;
+        return;
     }
 
     // Only support thread or vfork with shared address space for now
     if (!(args->flags & CLONE_VFORK) && !(args->flags & CLONE_THREAD)) {
         *_ret = -EINVAL;
-        return *_ret;
+        return;
     }
 
     if (args->flags & CLONE_THREAD &&
         (!(args->flags & CLONE_VM) || !(args->flags & CLONE_SIGHAND))) {
         *_ret = -EINVAL;
-        return *_ret;
+        return;
     }
 
     if (args->flags & CLONE_VFORK) {
         if (vfork_idx + 1 >= VFORK_STACK_SIZE) {
             *_ret = -ENOMEM;
-            return *_ret;
+            return;
         }
     }
 
@@ -628,25 +627,15 @@ static int signalmanager_clone(Context* ctx,
     }
 
     *_ret = 0;
-    return 0;
+    return;
 }
 
-const CallHandler* signalmanager_init(const CallHandler* next) {
+CallHandler* signalmanager_init(CallHandler* const next) {
     static int initialized = 0;
-    static CallHandler sigmgmt;
-
     if (initialized) {
         return nullptr;
     }
     initialized = 1;
-
-    sigmgmt = *next;
-    sigmgmt.sigprocmask = signalmanager_sigprocmask;
-    sigmgmt.sigprocmask_next = nullptr;
-    sigmgmt.sigaction = signalmanager_sigaction;
-    sigmgmt.sigaction_next = nullptr;
-    sigmgmt.clone = signalmanager_clone;
-    sigmgmt.clone_next = nullptr;
 
     for (int signum = 1; signum <= mysignal_size; signum++) {
         if (signum == SIGKILL || signum == SIGSTOP) {
@@ -667,5 +656,5 @@ const CallHandler* signalmanager_init(const CallHandler* next) {
         exit_error("rt_sigprocmask(): %d", -ret);
     }
 
-    return &sigmgmt;
+    return new SignalManager(next);
 }

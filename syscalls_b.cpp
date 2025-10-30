@@ -2,6 +2,7 @@
 #include "syscalls_b.h"
 #include "util.h"
 #include "signalmanager.h"
+#include "bottomhandler.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
@@ -19,7 +20,7 @@ unsigned long handle_link(Context* ctx, SysArgs* args) {
     CallLink call = {
         .at = 0, .oldpath = oldpath, .newpath = newpath, .ret = &ret};
 
-    _next->link(ctx, _next->link_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -45,7 +46,7 @@ unsigned long handle_linkat(Context* ctx, SysArgs* args) {
                      .flags = flags,
                      .ret = &ret};
 
-    _next->link(ctx, _next->link_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -60,10 +61,10 @@ unsigned long handle_symlink(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallLink call = {
+    CallSymlink call = {
         .at = 0, .oldpath = oldpath, .newpath = newpath, .ret = &ret};
 
-    _next->symlink(ctx, _next->symlink_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -79,13 +80,13 @@ unsigned long handle_symlinkat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallLink call = {.at = 1,
-                     .oldpath = oldpath,
-                     .newdirfd = newdirfd,
-                     .newpath = newpath,
-                     .ret = &ret};
+    CallSymlink call = {.at = 1,
+                        .oldpath = oldpath,
+                        .newdirfd = newdirfd,
+                        .newpath = newpath,
+                        .ret = &ret};
 
-    _next->symlink(ctx, _next->symlink_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -101,7 +102,7 @@ unsigned long handle_unlink(Context* ctx, SysArgs* args) {
     int ret = {0};
     CallUnlink call = {.at = 0, .path = pathname, .ret = &ret};
 
-    _next->unlink(ctx, _next->unlink_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -120,7 +121,7 @@ unsigned long handle_unlinkat(Context* ctx, SysArgs* args) {
     CallUnlink call = {
         .at = 1, .dirfd = dirfd, .path = pathname, .flags = flags, .ret = &ret};
 
-    _next->unlink(ctx, _next->unlink_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -144,7 +145,7 @@ unsigned long handle_renameat(Context* ctx, SysArgs* args) {
                        .newpath = newpath,
                        .ret = &ret};
 
-    _next->rename(ctx, _next->rename_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -170,7 +171,7 @@ unsigned long handle_renameat2(Context* ctx, SysArgs* args) {
                        .flags = flags,
                        .ret = &ret};
 
-    _next->rename(ctx, _next->rename_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -186,7 +187,7 @@ unsigned long handle_chdir(Context* ctx, SysArgs* args) {
     int ret = {0};
     CallChdir call = {.f = 0, .path = path, .ret = &ret};
 
-    _next->chdir(ctx, _next->chdir_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -204,7 +205,7 @@ unsigned long handle_chmod(Context* ctx, SysArgs* args) {
     CallChmod call = {
         .type = CHMODTYPE_PLAIN, .path = path, .mode = mode, .ret = &ret};
 
-    _next->chmod(ctx, _next->chmod_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -217,7 +218,7 @@ unsigned long handle_fchmod(Context* ctx, SysArgs* args) {
     int ret = {0};
     CallChmod call = {.type = CHMODTYPE_F, .fd = fd, .mode = mode, .ret = &ret};
 
-    _next->chmod(ctx, _next->chmod_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -239,7 +240,7 @@ unsigned long handle_fchmodat(Context* ctx, SysArgs* args) {
                       .mode = mode,
                       .ret = &ret};
 
-    _next->chmod(ctx, _next->chmod_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -256,7 +257,7 @@ unsigned long handle_truncate(Context* ctx, SysArgs* args) {
     int ret = {0};
     CallTruncate call = {.f = 0, .path = path, .length = length, .ret = &ret};
 
-    _next->truncate(ctx, _next->truncate_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -269,7 +270,7 @@ unsigned long handle_ftruncate(Context* ctx, SysArgs* args) {
     int ret = {0};
     CallTruncate call = {.f = 1, .fd = fd, .length = length, .ret = &ret};
 
-    _next->truncate(ctx, _next->truncate_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -286,7 +287,7 @@ unsigned long handle_mkdir(Context* ctx, SysArgs* args) {
     int ret = {0};
     CallMkdir call = {.at = 0, .path = path, .mode = mode, .ret = &ret};
 
-    _next->mkdir(ctx, _next->mkdir_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -305,7 +306,7 @@ unsigned long handle_mkdirat(Context* ctx, SysArgs* args) {
     CallMkdir call = {
         .at = 1, .dirfd = dirfd, .path = path, .mode = mode, .ret = &ret};
 
-    _next->mkdir(ctx, _next->mkdir_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -324,7 +325,7 @@ unsigned long handle_mknod(Context* ctx, SysArgs* args) {
     CallMknod call = {
         .at = 0, .path = path, .mode = mode, .dev = dev, .ret = &ret};
 
-    _next->mknod(ctx, _next->mknod_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
@@ -348,12 +349,12 @@ unsigned long handle_mknodat(Context* ctx, SysArgs* args) {
                       .dev = dev,
                       .ret = &ret};
 
-    _next->mknod(ctx, _next->mknod_next, &call);
+    intercept_entrypoint->next(ctx, &call);
 
     return ret;
 }
 
-static int bottom_link(Context* ctx, const This* data, const CallLink* call) {
+void BottomHandler::next(Context* ctx, const CallLink* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -367,12 +368,9 @@ static int bottom_link(Context* ctx, const This* data, const CallLink* call) {
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_symlink(Context* ctx,
-                          const This* data,
-                          const CallLink* call) {
+void BottomHandler::next(Context* ctx, const CallSymlink* call) {
     int ret;
 
     signalmanager_enable_signals(ctx);
@@ -384,12 +382,9 @@ static int bottom_symlink(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *call->ret = ret;
-    return ret;
 }
 
-static int bottom_unlink(Context* ctx,
-                         const This* data,
-                         const CallUnlink* call) {
+void BottomHandler::next(Context* ctx, const CallUnlink* call) {
     int ret;
 
     signalmanager_enable_signals(ctx);
@@ -401,12 +396,9 @@ static int bottom_unlink(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *call->ret = ret;
-    return ret;
 }
 
-static int bottom_rename(Context* ctx,
-                         const This* data,
-                         const CallRename* call) {
+void BottomHandler::next(Context* ctx, const CallRename* call) {
     int ret;
 
     signalmanager_enable_signals(ctx);
@@ -432,10 +424,9 @@ static int bottom_rename(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *call->ret = ret;
-    return ret;
 }
 
-static int bottom_chmod(Context* ctx, const This* data, const CallChmod* call) {
+void BottomHandler::next(Context* ctx, const CallChmod* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -460,12 +451,9 @@ static int bottom_chmod(Context* ctx, const This* data, const CallChmod* call) {
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_truncate(Context* ctx,
-                           const This* data,
-                           const CallTruncate* call) {
+void BottomHandler::next(Context* ctx, const CallTruncate* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -478,10 +466,9 @@ static int bottom_truncate(Context* ctx,
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_mkdir(Context* ctx, const This* data, const CallMkdir* call) {
+void BottomHandler::next(Context* ctx, const CallMkdir* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -494,10 +481,9 @@ static int bottom_mkdir(Context* ctx, const This* data, const CallMkdir* call) {
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
 }
 
-static int bottom_mknod(Context* ctx, const This* data, const CallMknod* call) {
+void BottomHandler::next(Context* ctx, const CallMknod* call) {
     int ret;
     int* _ret = call->ret;
 
@@ -510,16 +496,4 @@ static int bottom_mknod(Context* ctx, const This* data, const CallMknod* call) {
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
-    return ret;
-}
-
-void syscalls_b_fill_bottom(CallHandler* bottom) {
-    bottom->link = bottom_link;
-    bottom->symlink = bottom_symlink;
-    bottom->unlink = bottom_unlink;
-    bottom->rename = bottom_rename;
-    bottom->chmod = bottom_chmod;
-    bottom->truncate = bottom_truncate;
-    bottom->mkdir = bottom_mkdir;
-    bottom->mknod = bottom_mknod;
 }
