@@ -4,9 +4,9 @@
 #include "androidislinux.h"
 #include "workarounds.h"
 
-const CallHandler* main_init(const CallHandler* bottom, int recursing) {
-    const CallHandler* noxattrs = noxattrs_init(bottom);
-    const CallHandler* androidislinux = androidislinux_init(noxattrs);
-    const CallHandler* workarounds = workarounds_init(androidislinux);
+CallHandler* main_init(CallHandler* bottom, int recursing) {
+    CallHandler* noxattrs = noxattrs_init(bottom);
+    CallHandler* androidislinux = androidislinux_init(noxattrs);
+    CallHandler* workarounds = workarounds_init(androidislinux);
     return workarounds;
 }

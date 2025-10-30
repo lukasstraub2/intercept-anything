@@ -2,4 +2,4 @@
 
 #include "intercept.h"
 
-const CallHandler* rootshim_init(const CallHandler* next);
+CallHandler* rootshim_init(CallHandler* next);

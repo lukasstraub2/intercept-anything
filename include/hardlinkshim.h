@@ -2,6 +2,6 @@
 
 #include "intercept.h"
 
-const CallHandler* hardlinkshim_init(const CallHandler* next,
-                                     const CallHandler* bottom,
-                                     int recursing);
+CallHandler* hardlinkshim_init(CallHandler* next,
+                               CallHandler* bottom,
+                               int recursing);

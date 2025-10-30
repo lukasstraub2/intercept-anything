@@ -2,4 +2,4 @@
 
 #include "intercept.h"
 
-const CallHandler* androidislinux_init(const CallHandler* next);
+CallHandler* androidislinux_init(CallHandler* next);
