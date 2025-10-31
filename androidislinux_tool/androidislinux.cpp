@@ -6,7 +6,7 @@
 class AndroidIsLinux : public CallHandler {
     public:
     AndroidIsLinux(CallHandler* next) : CallHandler(next) {}
-    void next(Context* ctx, const CallAccept* call);
+    void next(Context* ctx, const CallAccept* call) override;
 };
 
 void AndroidIsLinux::next(Context* ctx, const CallAccept* call) {

@@ -17,24 +17,24 @@ class Rootlink : public CallHandler {
     public:
     Rootlink(CallHandler* next) : CallHandler(next) {}
 
-    void next(Context* ctx, const CallOpen* call);
-    void next(Context* ctx, const CallStat* call);
-    void next(Context* ctx, const CallReadlink* call);
-    void next(Context* ctx, const CallAccess* call);
-    void next(Context* ctx, const CallXattr* call);
-    void next(Context* ctx, const CallChdir* call);
-    void next(Context* ctx, const CallLink* call);
-    void next(Context* ctx, const CallSymlink* call);
-    void next(Context* ctx, const CallUnlink* call);
-    void next(Context* ctx, const CallRename* call);
-    void next(Context* ctx, const CallChmod* call);
-    void next(Context* ctx, const CallTruncate* call);
-    void next(Context* ctx, const CallMkdir* call);
-    void next(Context* ctx, const CallMknod* call);
-    void next(Context* ctx, const CallConnect* call);
-    void next(Context* ctx, const CallFanotifyMark* call);
-    void next(Context* ctx, const CallInotifyAddWatch* call);
-    void next(Context* ctx, const CallExec* call);
+    void next(Context* ctx, const CallOpen* call) override;
+    void next(Context* ctx, const CallStat* call) override;
+    void next(Context* ctx, const CallReadlink* call) override;
+    void next(Context* ctx, const CallAccess* call) override;
+    void next(Context* ctx, const CallXattr* call) override;
+    void next(Context* ctx, const CallChdir* call) override;
+    void next(Context* ctx, const CallLink* call) override;
+    void next(Context* ctx, const CallSymlink* call) override;
+    void next(Context* ctx, const CallUnlink* call) override;
+    void next(Context* ctx, const CallRename* call) override;
+    void next(Context* ctx, const CallChmod* call) override;
+    void next(Context* ctx, const CallTruncate* call) override;
+    void next(Context* ctx, const CallMkdir* call) override;
+    void next(Context* ctx, const CallMknod* call) override;
+    void next(Context* ctx, const CallConnect* call) override;
+    void next(Context* ctx, const CallFanotifyMark* call) override;
+    void next(Context* ctx, const CallInotifyAddWatch* call) override;
+    void next(Context* ctx, const CallExec* call) override;
 };
 
 static int handle_path(const char* path) {

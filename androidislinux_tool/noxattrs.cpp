@@ -8,7 +8,7 @@
 class NoXattrs : public CallHandler {
     public:
     NoXattrs(CallHandler* next) : CallHandler(next) {}
-    void next(Context* ctx, const CallXattr* call);
+    void next(Context* ctx, const CallXattr* call) override;
 };
 
 void NoXattrs::next(Context* ctx, const CallXattr* call) {

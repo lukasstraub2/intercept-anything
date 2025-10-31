@@ -11,7 +11,7 @@
 class EmulateSwap : public CallHandler {
     public:
     EmulateSwap(CallHandler* next) : CallHandler(next) {}
-    void next(Context* ctx, const CallMmap* call);
+    void next(Context* ctx, const CallMmap* call) override;
 };
 
 static int mktemp(unsigned long size) {

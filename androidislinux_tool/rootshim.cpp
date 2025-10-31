@@ -13,11 +13,11 @@
 class RootShim : public CallHandler {
     public:
     RootShim(CallHandler* next) : CallHandler(next) {}
-    void next(Context* ctx, const CallOpen* call);
-    void next(Context* ctx, const CallStat* call);
-    void next(Context* ctx, const CallReadlink* call);
-    void next(Context* ctx, const CallAccess* call);
-    void next(Context* ctx, const CallXattr* call);
+    void next(Context* ctx, const CallOpen* call) override;
+    void next(Context* ctx, const CallStat* call) override;
+    void next(Context* ctx, const CallReadlink* call) override;
+    void next(Context* ctx, const CallAccess* call) override;
+    void next(Context* ctx, const CallXattr* call) override;
 };
 
 typedef struct Shim Shim;

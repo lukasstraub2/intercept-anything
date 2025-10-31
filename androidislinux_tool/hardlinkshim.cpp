@@ -47,17 +47,17 @@ class HardlinkShim : public CallHandler {
 
     public:
     HardlinkShim(CallHandler* next, CallHandler* bottom, int recursing);
-    void next(Context* ctx, const CallOpen* call);
-    void next(Context* ctx, const CallStat* call);
-    void next(Context* ctx, const CallReadlink* call);
-    void next(Context* ctx, const CallAccess* call);
-    void next(Context* ctx, const CallExec* call);
-    void next(Context* ctx, const CallLink* call);
-    void next(Context* ctx, const CallSymlink* call);
-    void next(Context* ctx, const CallUnlink* call);
-    void next(Context* ctx, const CallXattr* call);
-    void next(Context* ctx, const CallRename* call);
-    void next(Context* ctx, const CallGetdents* call);
+    void next(Context* ctx, const CallOpen* call) override;
+    void next(Context* ctx, const CallStat* call) override;
+    void next(Context* ctx, const CallReadlink* call) override;
+    void next(Context* ctx, const CallAccess* call) override;
+    void next(Context* ctx, const CallExec* call) override;
+    void next(Context* ctx, const CallLink* call) override;
+    void next(Context* ctx, const CallSymlink* call) override;
+    void next(Context* ctx, const CallUnlink* call) override;
+    void next(Context* ctx, const CallXattr* call) override;
+    void next(Context* ctx, const CallRename* call) override;
+    void next(Context* ctx, const CallGetdents* call) override;
 };
 
 void HardlinkShim::lock_read(Tls* tls) {

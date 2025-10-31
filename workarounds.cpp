@@ -12,9 +12,9 @@
 struct Workarounds : public CallHandler {
     public:
     Workarounds(CallHandler* next) : CallHandler(next) {}
-    void next(Context* ctx, const CallExec* call);
-    void next(Context* ctx, const CallPtrace* call);
-    void next(Context* ctx, const CallKill* call);
+    void next(Context* ctx, const CallExec* call) override;
+    void next(Context* ctx, const CallPtrace* call) override;
+    void next(Context* ctx, const CallKill* call) override;
 };
 
 static void rectify_traceme(Tls* tls) {
