@@ -51,6 +51,14 @@ else()
     set(TEXT_SEGMENT -Wl,--image-base,0xA0000000)
 endif()
 
+include(CheckLinkerFlag)
+check_linker_flag(C "-static;-lgcc" USE_LIBGCC)
+if(USE_LIBGCC)
+    set(LIBGCC -lgcc)
+else()
+    set(LIBGCC -lcompiler_rt)
+endif()
+
 check_linker_flag(CXX "-lgcc_eh" USE_LIBGCC_UNWIND)
 if(USE_LIBGCC_UNWIND)
     set(LIBUNWIND -lgcc_eh)
@@ -65,14 +73,29 @@ else()
     set(LIBSUPCXX -lc++abi)
 endif()
 
-target_link_libraries(c INTERFACE -Wl,-z,muldefs "$<LINK_GROUP:RESCAN,libc,${LIBUNWIND}>")
+target_link_libraries(c INTERFACE -Wl,-z,muldefs "$<LINK_GROUP:RESCAN,libc,${LIBUNWIND},${LIBGCC}>")
 
 include_directories(include include/nolibc)
 add_compile_definitions(_GNU_SOURCE)
 add_compile_options(-g -O1 -pipe -fPIE -Wno-shift-op-parentheses -fno-exceptions)
 
 add_library(freestanding OBJECT
-    loader.cpp mylock.cpp rmap.cpp tls.cpp intercept_seccomp.cpp syscalls_a.cpp syscalls_b.cpp syscalls_c.cpp syscalls_exec.cpp util.cpp signalmanager.cpp workarounds.cpp execve_here.cpp syscall_trampo.cpp cxxcompat.c)
+    loader.cpp
+    mylock.cpp
+    rmap.cpp
+    tls.cpp
+    intercept_seccomp.cpp
+    syscalls_a.cpp
+    syscalls_b.cpp
+    syscalls_c.cpp
+    syscalls_exec.cpp
+    util.cpp
+    signalmanager.cpp
+    workarounds.cpp
+    execve_here.cpp
+    syscall_trampo.cpp
+    cxxcompat.c
+    cxxcompat.cpp)
 target_link_libraries(freestanding PRIVATE c)
 target_include_directories(freestanding PUBLIC "include/linux-headers/${ARCH}/include")
 
