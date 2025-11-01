@@ -2,198 +2,189 @@
 
 #include "base_types.h"
 #include "myseccomp.h"
+#include "syscalls.h"
 
 #include <sys/types.h>
+#include <fcntl.h>
+#include <stdlib.h>
 
-struct CallSigprocmask {
-    int how;
-    const sigset_t* set;
-    sigset_t* oldset;
-    size_t sigsetsize;
-    int* ret;
+class CallSigprocmask {
+    public:
+    int how{};
+    const sigset_t* set{};
+    sigset_t* oldset{};
+    size_t sigsetsize{};
+    int* ret{};
 };
-typedef struct CallSigprocmask CallSigprocmask;
 
-struct CallSigaction {
-    int signum;
-    const struct k_sigaction* act;
-    struct k_sigaction* oldact;
-    size_t sigsetsize;
-    int* ret;
+class CallSigaction {
+    public:
+    int signum{};
+    const struct k_sigaction* act{};
+    struct k_sigaction* oldact{};
+    size_t sigsetsize{};
+    int* ret{};
 };
-typedef struct CallSigaction CallSigaction;
 
-struct CallAccept {
-    int is4;
-    int fd;
-    void* addr;
-    int* addrlen;
-    int flags;
-    int* ret;
-};
-typedef struct CallAccept CallAccept;
+class CallAccept {
+    public:
+    int is4{};
+    int fd{};
+    void* addr{};
+    int* addrlen{};
+    int flags{};
+    int* ret{};
 
-__attribute__((unused)) static void callaccept_copy(CallAccept* dst,
-                                                    const CallAccept* call) {
-    dst->is4 = call->is4;
-    dst->fd = call->fd;
-    dst->addr = call->addr;
-    dst->addrlen = call->addrlen;
-    if (call->is4) {
-        dst->flags = call->flags;
+    CallAccept() = default;
+
+    CallAccept(const CallAccept* call) {
+        this->is4 = call->is4;
+        this->fd = call->fd;
+        this->addr = call->addr;
+        this->addrlen = call->addrlen;
+        if (call->is4) {
+            this->flags = call->flags;
+        }
+        this->ret = call->ret;
     }
-    dst->ret = call->ret;
-}
-
-struct CallConnect {
-    int is_bind;
-    int fd;
-    void* addr;
-    int addrlen;
-    int* ret;
 };
-typedef struct CallConnect CallConnect;
 
-__attribute__((unused)) static void callconnect_copy(CallConnect* dst,
-                                                     const CallConnect* call) {
-    dst->is_bind = call->is_bind;
-    dst->fd = call->fd;
-    dst->addr = call->addr;
-    dst->addrlen = call->addrlen;
-    dst->ret = call->ret;
-}
+class CallConnect : public ICallPathConnect {
+    public:
+    int is_bind{};
+    int fd{};
+    MyBlob addr{};
+    int addrlen{};
+    int* ret{};
 
-struct CallFanotifyMark {
-    int fd;
-    unsigned int flags;
-    uint64_t mask;
-    int dirfd;
-    const char* path;
-    int* ret;
+    sa_family_t get_family() const override {
+        return *(sa_family_t*)(void*)this->addr;
+    }
+
+    void* get_addr() const override { return this->addr; }
+
+    void set_addr(void* addr, size_t size) override {
+        this->addr.dup(addr, size);
+    }
 };
-typedef struct CallFanotifyMark CallFanotifyMark;
 
-__attribute__((unused)) static void callfanotify_mark_copy(
-    CallFanotifyMark* dst,
-    const CallFanotifyMark* call) {
-    dst->fd = call->fd;
-    dst->flags = call->flags;
-    dst->mask = call->mask;
-    dst->dirfd = call->dirfd;
-    dst->path = call->path;
-    dst->ret = call->ret;
-}
+class CallFanotifyMark : public ICallPathFanotify {
+    public:
+    int fd{};
+    unsigned int flags{};
+    uint64_t mask{};
+    int dirfd{};
+    MyString path{};
+    int* ret{};
 
-struct CallInotifyAddWatch {
-    int fd;
-    const char* path;
-    uint64_t mask;
-    int* ret;
+    int get_dirfd() const override { return this->dirfd; }
+
+    const char* get_path() const override { return this->path; }
+
+    unsigned int get_flags() const override { return this->flags; }
+
+    void set_dirfd(int dirfd) override { this->dirfd = dirfd; }
+
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(unsigned int flags) override { this->flags = flags; }
 };
-typedef struct CallInotifyAddWatch CallInotifyAddWatch;
 
-__attribute__((unused)) static void callinotify_add_watch_copy(
-    CallInotifyAddWatch* dst,
-    const CallInotifyAddWatch* call) {
-    dst->fd = call->fd;
-    dst->path = call->path;
-    dst->mask = call->mask;
-    dst->ret = call->ret;
-}
+class CallInotifyAddWatch : public ICallPath {
+    public:
+    int fd{};
+    MyString path{};
+    uint64_t mask{};
+    int* ret{};
+
+    int is_l() const override { return 0; }
+
+    int get_dirfd() const override { return 0; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return 0; }
+
+    void clear_l() override {}
+
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            abort();
+        }
+    }
+
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(int flags) override {}
+};
 
 enum RlimitType { RLIMITTYPE_GET, RLIMITTYPE_SET, RLIMITTYPE_PR };
 typedef enum RlimitType RlimitType;
 
-struct CallRlimit {
-    RlimitType type;
-    pid_t pid;
-    unsigned int resource;
-    const void* new_rlim;
-    void* old_rlim;
-    int* ret;
-};
-typedef struct CallRlimit CallRlimit;
+class CallRlimit {
+    public:
+    RlimitType type{};
+    pid_t pid{};
+    unsigned int resource{};
+    const void* new_rlim{};
+    void* old_rlim{};
+    int* ret{};
 
-__attribute__((unused)) static void callrlimit_copy(CallRlimit* dst,
-                                                    const CallRlimit* call) {
-    dst->type = call->type;
+    CallRlimit() = default;
 
-    if (call->type == RLIMITTYPE_PR) {
-        dst->pid = call->pid;
+    CallRlimit(const CallRlimit* call) {
+        this->type = call->type;
+
+        if (call->type == RLIMITTYPE_PR) {
+            this->pid = call->pid;
+        }
+
+        this->resource = call->resource;
+
+        if (call->type == RLIMITTYPE_PR || call->type == RLIMITTYPE_SET) {
+            this->new_rlim = call->new_rlim;
+        }
+
+        if (call->type == RLIMITTYPE_PR || call->type == RLIMITTYPE_GET) {
+            this->old_rlim = call->old_rlim;
+        }
+
+        this->ret = call->ret;
     }
-
-    dst->resource = call->resource;
-
-    if (call->type == RLIMITTYPE_PR || call->type == RLIMITTYPE_SET) {
-        dst->new_rlim = call->new_rlim;
-    }
-
-    if (call->type == RLIMITTYPE_PR || call->type == RLIMITTYPE_GET) {
-        dst->old_rlim = call->old_rlim;
-    }
-
-    dst->ret = call->ret;
-}
-
-struct CallPtrace {
-    long request;
-    long pid;
-    void* addr;
-    void* data;
-    long* ret;
 };
-typedef struct CallPtrace CallPtrace;
 
-__attribute__((unused)) static void callptrace_copy(CallPtrace* dst,
-                                                    const CallPtrace* call) {
-    dst->request = call->request;
-    dst->pid = call->pid;
-    dst->addr = call->addr;
-    dst->data = call->data;
-    dst->ret = call->ret;
-}
-
-struct CallKill {
-    pid_t pid;
-    int sig;
-    int* ret;
+class CallPtrace {
+    public:
+    long request{};
+    long pid{};
+    void* addr{};
+    void* data{};
+    long* ret{};
 };
-typedef struct CallKill CallKill;
 
-__attribute__((unused)) static void callkill_copy(CallKill* dst,
-                                                  const CallKill* call) {
-    dst->pid = call->pid;
-    dst->sig = call->sig;
-    dst->ret = call->ret;
-}
-
-struct CallMisc {
-    SysArgs args;
-    unsigned long* ret;
+class CallKill {
+    public:
+    pid_t pid{};
+    int sig{};
+    int* ret{};
 };
-typedef struct CallMisc CallMisc;
 
-struct CallMmap {
-    unsigned long addr;
-    unsigned long len;
-    unsigned long prot;
-    unsigned long flags;
-    unsigned long fd;
-    unsigned long off;
-    unsigned long* ret;
+class CallMisc {
+    public:
+    SysArgs args{};
+    unsigned long* ret{};
 };
-typedef struct CallMmap CallMmap;
 
-__attribute__((unused)) static void callmmap_copy(CallMmap* dst,
-                                                  const CallMmap* call) {
-    dst->addr = call->addr;
-    dst->len = call->len;
-    dst->prot = call->prot;
-    dst->flags = call->flags;
-    dst->fd = call->fd;
-    dst->off = call->off;
-    dst->ret = call->ret;
-}
+class CallMmap {
+    public:
+    unsigned long addr{};
+    unsigned long len{};
+    unsigned long prot{};
+    unsigned long flags{};
+    unsigned long fd{};
+    unsigned long off{};
+    unsigned long* ret{};
+};
 
 enum CloneType {
     CLONETYPE_FORK,
@@ -203,23 +194,24 @@ enum CloneType {
 };
 typedef CloneType CloneType;
 
-struct CallClone {
-    CloneType type;
-    struct clone_args* args;
-    size_t size;
-    int* ret;
-};
-typedef struct CallClone CallClone;
+class CallClone {
+    public:
+    CloneType type{};
+    struct clone_args* args{};
+    size_t size{};
+    int* ret{};
 
-__attribute__((unused)) static void callclone_copy(CallClone* dst,
-                                                   const CallClone* call) {
-    dst->type = call->type;
-    if (call->type >= CLONETYPE_CLONE) {
-        dst->args = call->args;
-        dst->size = call->size;
+    CallClone() = default;
+
+    CallClone(const CallClone* call) {
+        this->type = call->type;
+        if (call->type >= CLONETYPE_CLONE) {
+            this->args = call->args;
+            this->size = call->size;
+        }
+        this->ret = call->ret;
     }
-    dst->ret = call->ret;
-}
+};
 
 unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args);
 unsigned long handle_rt_sigaction(Context* ctx, SysArgs* args);

@@ -16,11 +16,12 @@ unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args) {
     trace("rt_sigprocmask()\n");
 
     int ret = {0};
-    CallSigprocmask call = {.how = how,
-                            .set = set,
-                            .oldset = oldset,
-                            .sigsetsize = sigsetsize,
-                            .ret = &ret};
+    CallSigprocmask call;
+    call.how = how;
+    call.set = set;
+    call.oldset = oldset;
+    call.sigsetsize = sigsetsize;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -35,11 +36,12 @@ unsigned long handle_rt_sigaction(Context* ctx, SysArgs* args) {
     trace("rt_sigaction(%d)\n", signum);
 
     int ret = {0};
-    CallSigaction call = {.signum = signum,
-                          .act = act,
-                          .oldact = oldact,
-                          .sigsetsize = sigsetsize,
-                          .ret = &ret};
+    CallSigaction call;
+    call.signum = signum;
+    call.act = act;
+    call.oldact = oldact;
+    call.sigsetsize = sigsetsize;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -53,8 +55,12 @@ unsigned long handle_accept(Context* ctx, SysArgs* args) {
     trace("accept()\n");
 
     int ret = {0};
-    CallAccept call = {
-        .is4 = 0, .fd = fd, .addr = addr, .addrlen = addrlen, .ret = &ret};
+    CallAccept call;
+    call.is4 = 0;
+    call.fd = fd;
+    call.addr = addr;
+    call.addrlen = addrlen;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -69,12 +75,13 @@ unsigned long handle_accept4(Context* ctx, SysArgs* args) {
     trace("accept4()\n");
 
     int ret = {0};
-    CallAccept call = {.is4 = 1,
-                       .fd = fd,
-                       .addr = addr,
-                       .addrlen = addrlen,
-                       .flags = flags,
-                       .ret = &ret};
+    CallAccept call;
+    call.is4 = 1;
+    call.fd = fd;
+    call.addr = addr;
+    call.addrlen = addrlen;
+    call.flags = flags;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -88,8 +95,12 @@ unsigned long handle_bind(Context* ctx, SysArgs* args) {
     trace("bind()\n");
 
     int ret = {0};
-    CallConnect call = {
-        .is_bind = 1, .fd = fd, .addr = addr, .addrlen = addrlen, .ret = &ret};
+    CallConnect call;
+    call.is_bind = 1;
+    call.fd = fd;
+    call.addr = addr;
+    call.addrlen = addrlen;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -103,8 +114,12 @@ unsigned long handle_connect(Context* ctx, SysArgs* args) {
     trace("connect()\n");
 
     int ret = {0};
-    CallConnect call = {
-        .is_bind = 0, .fd = fd, .addr = addr, .addrlen = addrlen, .ret = &ret};
+    CallConnect call;
+    call.is_bind = 0;
+    call.fd = fd;
+    call.addr = addr;
+    call.addrlen = addrlen;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -124,12 +139,13 @@ unsigned long handle_fanotify_mark(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallFanotifyMark call = {.fd = fanotify_fd,
-                             .flags = flags,
-                             .mask = mask,
-                             .dirfd = dfd,
-                             .path = pathname,
-                             .ret = &ret};
+    CallFanotifyMark call;
+    call.fd = fanotify_fd;
+    call.flags = flags;
+    call.mask = mask;
+    call.dirfd = dfd;
+    call.path = pathname;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -147,8 +163,11 @@ unsigned long handle_inotify_add_watch(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallInotifyAddWatch call = {
-        .fd = fd, .path = pathname, .mask = mask, .ret = &ret};
+    CallInotifyAddWatch call;
+    call.fd = fd;
+    call.path = pathname;
+    call.mask = mask;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -161,10 +180,11 @@ unsigned long handle_getrlimit(Context* ctx, SysArgs* args) {
     trace("getrlimit()\n");
 
     int ret = {0};
-    CallRlimit call = {.type = RLIMITTYPE_GET,
-                       .resource = resource,
-                       .old_rlim = old_rlim,
-                       .ret = &ret};
+    CallRlimit call;
+    call.type = RLIMITTYPE_GET;
+    call.resource = resource;
+    call.old_rlim = old_rlim;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -177,10 +197,11 @@ unsigned long handle_setrlimit(Context* ctx, SysArgs* args) {
     trace("setrlimit()\n");
 
     int ret = {0};
-    CallRlimit call = {.type = RLIMITTYPE_SET,
-                       .resource = resource,
-                       .new_rlim = new_rlim,
-                       .ret = &ret};
+    CallRlimit call;
+    call.type = RLIMITTYPE_SET;
+    call.resource = resource;
+    call.new_rlim = new_rlim;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -195,12 +216,13 @@ unsigned long handle_prlimit64(Context* ctx, SysArgs* args) {
     trace("prlimit64()\n");
 
     int ret = {0};
-    CallRlimit call = {.type = RLIMITTYPE_PR,
-                       .pid = pid,
-                       .resource = resource,
-                       .new_rlim = new_rlim,
-                       .old_rlim = old_rlim,
-                       .ret = &ret};
+    CallRlimit call;
+    call.type = RLIMITTYPE_PR;
+    call.pid = pid;
+    call.resource = resource;
+    call.new_rlim = new_rlim;
+    call.old_rlim = old_rlim;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -215,11 +237,12 @@ unsigned long handle_ptrace(Context* ctx, SysArgs* args) {
     trace("ptrace()\n");
 
     long ret = {0};
-    CallPtrace call = {.request = request,
-                       .pid = pid,
-                       .addr = addr,
-                       .data = data,
-                       .ret = &ret};
+    CallPtrace call;
+    call.request = request;
+    call.pid = pid;
+    call.addr = addr;
+    call.data = data;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -232,7 +255,10 @@ unsigned long handle_kill(Context* ctx, SysArgs* args) {
     trace("kill()\n");
 
     int ret = {0};
-    CallKill call = {.pid = pid, .sig = sig, .ret = &ret};
+    CallKill call;
+    call.pid = pid;
+    call.sig = sig;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -243,7 +269,9 @@ unsigned long handle_misc(Context* ctx, SysArgs* args) {
     trace("misc(%lu)\n", args->num);
 
     unsigned long ret = {0};
-    CallMisc call = {.args = *args, .ret = &ret};
+    CallMisc call;
+    call.args = *args;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -260,15 +288,14 @@ unsigned long handle_mmap(Context* ctx, SysArgs* args) {
     trace("mmap()\n");
 
     unsigned long ret = {0};
-    CallMmap call = {
-        .addr = addr,
-        .len = len,
-        .prot = prot,
-        .flags = flags,
-        .fd = fd,
-        .off = off,
-        .ret = &ret,
-    };
+    CallMmap call;
+    call.addr = addr;
+    call.len = len;
+    call.prot = prot;
+    call.flags = flags;
+    call.fd = fd;
+    call.off = off;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -279,10 +306,9 @@ unsigned long handle_fork(Context* ctx, SysArgs* args) {
     trace("fork()\n");
 
     int ret = 0;
-    CallClone call = {
-        .type = CLONETYPE_FORK,
-        .ret = &ret,
-    };
+    CallClone call;
+    call.type = CLONETYPE_FORK;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -293,10 +319,9 @@ unsigned long handle_vfork(Context* ctx, SysArgs* args) {
     trace("vfork()\n");
 
     int ret = 0;
-    CallClone call = {
-        .type = CLONETYPE_VFORK,
-        .ret = &ret,
-    };
+    CallClone call;
+    call.type = CLONETYPE_VFORK;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -326,12 +351,11 @@ unsigned long handle_clone(Context* ctx, SysArgs* args) {
     cargs.tls = tls;
 
     int ret = 0;
-    CallClone call = {
-        .type = CLONETYPE_CLONE,
-        .args = &cargs,
-        .size = 64,
-        .ret = &ret,
-    };
+    CallClone call;
+    call.type = CLONETYPE_CLONE;
+    call.args = &cargs;
+    call.size = 64;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -344,12 +368,11 @@ unsigned long handle_clone3(Context* ctx, SysArgs* args) {
     trace("clone3()\n");
 
     int ret = 0;
-    CallClone call = {
-        .type = CLONETYPE_CLONE3,
-        .args = uargs,
-        .size = size,
-        .ret = &ret,
-    };
+    CallClone call;
+    call.type = CLONETYPE_CLONE3;
+    call.args = uargs;
+    call.size = size;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 

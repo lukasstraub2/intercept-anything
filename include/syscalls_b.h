@@ -2,80 +2,113 @@
 
 #include "base_types.h"
 #include "myseccomp.h"
+#include "syscalls.h"
 
 #include <sys/types.h>
+#include <fcntl.h>
+#include <stdlib.h>
 
-struct CallLink {
-    int at;
-    int olddirfd;
-    const char* oldpath;
-    int newdirfd;
-    const char* newpath;
-    int flags;
-    int* ret;
-};
-typedef struct CallLink CallLink;
+class CallLink : public ICallPathDual {
+    public:
+    int at{};
+    int olddirfd{AT_FDCWD};
+    MyString oldpath{};
+    int newdirfd{AT_FDCWD};
+    MyString newpath{};
+    int flags{};
+    int* ret{};
 
-__attribute__((unused)) static void calllink_copy(CallLink* dst,
-                                                  const CallLink* call) {
-    dst->at = call->at;
+    int get_old_dirfd() const override { return this->olddirfd; }
 
-    if (dst->at) {
-        dst->olddirfd = call->olddirfd;
-        dst->newdirfd = call->newdirfd;
-        dst->flags = call->flags;
+    const char* get_old_path() const override { return this->oldpath; }
+
+    void set_old_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            this->at = 1;
+        }
+        this->olddirfd = dirfd;
     }
 
-    dst->oldpath = call->oldpath;
-    dst->newpath = call->newpath;
-    dst->ret = call->ret;
-}
+    void set_old_path(const char* path) override { this->oldpath.dup(path); }
 
-struct CallSymlink {
-    int at;
-    const char* oldpath;
-    int newdirfd;
-    const char* newpath;
-    int flags;
-    int* ret;
-};
-typedef struct CallSymlink CallSymlink;
+    int get_new_dirfd() const override { return this->newdirfd; }
 
-__attribute__((unused)) static void calllink_copy(CallSymlink* dst,
-                                                  const CallSymlink* call) {
-    dst->at = call->at;
+    const char* get_new_path() const override { return this->newpath; }
 
-    if (dst->at) {
-        dst->newdirfd = call->newdirfd;
-        dst->flags = call->flags;
+    void set_new_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            this->at = 1;
+        }
+        this->newdirfd = dirfd;
     }
 
-    dst->oldpath = call->oldpath;
-    dst->newpath = call->newpath;
-    dst->ret = call->ret;
-}
+    void set_new_path(const char* path) override { this->newpath.dup(path); }
 
-struct CallUnlink {
-    int at;
-    int dirfd;
-    const char* path;
-    int flags;
-    int* ret;
+    int get_flags() const override { return this->flags; }
+
+    void set_flags(int flags) override { this->flags = flags; }
 };
-typedef struct CallUnlink CallUnlink;
 
-__attribute__((unused)) static void callunlink_copy(CallUnlink* dst,
-                                                    const CallUnlink* call) {
-    dst->at = call->at;
+class CallSymlink : public ICallPathSymlink {
+    public:
+    int at{};
+    MyString oldpath{};
+    int newdirfd{AT_FDCWD};
+    MyString newpath{};
+    int flags{};
+    int* ret{};
 
-    if (dst->at) {
-        dst->dirfd = call->dirfd;
-        dst->flags = call->flags;
+    const char* get_old_path() const override { return this->oldpath; }
+
+    void set_old_path(const char* path) override { this->oldpath.dup(path); }
+
+    int get_new_dirfd() const override { return this->newdirfd; }
+
+    const char* get_new_path() const override { return this->newpath; }
+
+    void set_new_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            this->at = 1;
+        }
+        this->newdirfd = dirfd;
     }
 
-    dst->path = call->path;
-    dst->ret = call->ret;
-}
+    void set_new_path(const char* path) override { this->newpath.dup(path); }
+
+    int get_flags() const override { return this->flags; }
+
+    void set_flags(int flags) override { this->flags = flags; }
+};
+
+class CallUnlink : public ICallPath {
+    public:
+    int at{};
+    int dirfd{AT_FDCWD};
+    MyString path{};
+    int flags{};
+    int* ret{};
+
+    int is_l() const override { return 0; }
+
+    int get_dirfd() const override { return this->dirfd; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return this->flags; }
+
+    void clear_l() override {}
+
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            this->at = 1;
+        }
+        this->dirfd = dirfd;
+    }
+
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(int flags) override { this->flags = flags; }
+};
 
 enum RenameType { RENAMETYPE_PLAIN, RENAMETYPE_AT, RENAMETYPE_AT2 };
 typedef enum RenameType RenameType;
@@ -84,35 +117,46 @@ __attribute__((unused)) static int renametype_is_at(RenameType type) {
     return type >= RENAMETYPE_AT;
 }
 
-struct CallRename {
-    RenameType type;
-    int olddirfd;
-    const char* oldpath;
-    int newdirfd;
-    const char* newpath;
-    unsigned int flags;
-    int* ret;
+class CallRename : public ICallPathDual {
+    public:
+    RenameType type{};
+    int olddirfd{AT_FDCWD};
+    MyString oldpath{};
+    int newdirfd{AT_FDCWD};
+    MyString newpath{};
+    unsigned int flags{};
+    int* ret{};
+
+    int get_old_dirfd() const override { return this->olddirfd; }
+
+    const char* get_old_path() const override { return this->oldpath; }
+
+    void set_old_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD && renametype_is_at(this->type)) {
+            this->type = RENAMETYPE_AT2;
+        }
+        this->olddirfd = dirfd;
+    }
+
+    void set_old_path(const char* path) override { this->oldpath.dup(path); }
+
+    int get_new_dirfd() const override { return this->newdirfd; }
+
+    const char* get_new_path() const override { return this->newpath; }
+
+    void set_new_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD && renametype_is_at(this->type)) {
+            this->type = RENAMETYPE_AT2;
+        }
+        this->newdirfd = dirfd;
+    }
+
+    void set_new_path(const char* path) override { this->newpath.dup(path); }
+
+    int get_flags() const override { return this->flags; }
+
+    void set_flags(int flags) override { this->flags = flags; }
 };
-typedef struct CallRename CallRename;
-
-__attribute__((unused)) static void callrename_copy(CallRename* dst,
-                                                    const CallRename* call) {
-    dst->type = call->type;
-
-    if (renametype_is_at(call->type)) {
-        dst->olddirfd = call->olddirfd;
-        dst->newdirfd = call->newdirfd;
-    }
-
-    dst->oldpath = call->oldpath;
-    dst->newpath = call->newpath;
-
-    if (call->type == RENAMETYPE_AT2) {
-        dst->flags = call->flags;
-    }
-
-    dst->ret = call->ret;
-}
 
 enum ChmodType {
     CHMODTYPE_PLAIN,
@@ -125,93 +169,165 @@ __attribute__((unused)) static int chmodtype_is_at(ChmodType type) {
     return type == CHMODTYPE_AT;
 }
 
-// New structure for chmod calls
-struct CallChmod {
-    ChmodType type;
-    int fd;
-    int dirfd;
-    const char* path;
-    mode_t mode;
-    int* ret;
-};
-typedef struct CallChmod CallChmod;
+class CallChmod : public ICallPathF {
+    public:
+    ChmodType type{};
+    int fd{};
+    int dirfd{AT_FDCWD};
+    MyString path{};
+    mode_t mode{};
+    int* ret{};
 
-__attribute__((unused)) static void callchmod_copy(CallChmod* dst,
-                                                   const CallChmod* call) {
-    dst->type = call->type;
-    if (chmodtype_is_at(call->type)) {
-        dst->dirfd = call->dirfd;
-    } else if (call->type == CHMODTYPE_F) {
-        dst->fd = call->fd;
+    CallChmod() = default;
+
+    CallChmod(const CallChmod* call) {
+        this->type = call->type;
+        if (chmodtype_is_at(call->type)) {
+            this->dirfd = call->dirfd;
+        } else if (call->type == CHMODTYPE_F) {
+            this->fd = call->fd;
+        }
+        this->path = call->path;
+        this->mode = call->mode;
+        this->ret = call->ret;
     }
-    dst->path = call->path;
-    dst->mode = call->mode;
-    dst->ret = call->ret;
-}
 
-struct CallTruncate {
-    int f;
-    int fd;
-    const char* path;
-    off_t length;
-    int* ret;
-};
-typedef struct CallTruncate CallTruncate;
+    int is_l() const override { return 0; }
 
-__attribute__((unused)) static void calltruncate_copy(
-    CallTruncate* dst,
-    const CallTruncate* call) {
-    dst->f = call->f;
-    if (call->f) {
-        dst->fd = call->fd;
-    } else {
-        dst->path = call->path;
+    int is_f() const override { return this->type == CHMODTYPE_F; }
+
+    int get_dirfd() const override { return this->dirfd; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return 0; }
+
+    void clear_l() override {
+        if (!is_l()) {
+            abort();
+        }
+        this->type = CHMODTYPE_PLAIN;
     }
-    dst->length = call->length;
-    dst->ret = call->ret;
-}
 
-struct CallMkdir {
-    int at;
-    int dirfd;
-    const char* path;
-    mode_t mode;
-    int* ret;
-};
-typedef struct CallMkdir CallMkdir;
-
-__attribute__((unused)) static void callmkdir_copy(CallMkdir* dst,
-                                                   const CallMkdir* call) {
-    dst->at = call->at;
-    if (call->at) {
-        dst->dirfd = call->dirfd;
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD && !chmodtype_is_at(this->type)) {
+            if (this->type != CHMODTYPE_PLAIN) {
+                abort();
+            }
+            this->type = CHMODTYPE_AT;
+        }
+        this->dirfd = dirfd;
     }
-    dst->path = call->path;
-    dst->mode = call->mode;
-    dst->ret = call->ret;
-}
 
-struct CallMknod {
-    int at;     // Indicates if dirfd is used (1) or not (0)
-    int dirfd;  // File descriptor of the directory (if at == 1)
-    const char* path;
-    mode_t mode;
-    unsigned int dev;  // Device number
-    int* ret;
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(int flags) override {}
 };
-typedef struct CallMknod CallMknod;
 
-__attribute__((unused)) static void callmknod_copy(CallMknod* dst,
-                                                   const CallMknod* call) {
-    dst->at = call->at;
-    if (call->at) {
-        dst->dirfd = call->dirfd;
+class CallTruncate : public ICallPathF {
+    public:
+    int f{};
+    int fd{};
+    MyString path{};
+    off_t length{};
+    int* ret{};
+
+    CallTruncate() = default;
+
+    CallTruncate(const CallTruncate* call) {
+        this->f = call->f;
+        if (call->f) {
+            this->fd = call->fd;
+        } else {
+            this->path = call->path;
+        }
+        this->length = call->length;
+        this->ret = call->ret;
     }
-    dst->path = call->path;
-    dst->mode = call->mode;
-    dst->dev = call->dev;
-    dst->ret = call->ret;
-}
+
+    int is_f() const override { return this->f; }
+
+    int is_l() const override { return 0; }
+
+    int get_dirfd() const override { return AT_FDCWD; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return 0; }
+
+    void clear_l() override {}
+
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            abort();
+        }
+    }
+
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(int flags) override {}
+};
+
+class CallMkdir : public ICallPath {
+    public:
+    int at{};
+    int dirfd{AT_FDCWD};
+    MyString path{};
+    mode_t mode{};
+    int* ret{};
+
+    int is_l() const override { return 0; }
+
+    int get_dirfd() const override { return this->dirfd; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return 0; }
+
+    void clear_l() override {}
+
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            this->at = 1;
+        }
+        this->dirfd = dirfd;
+    }
+
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(int flags) override {}
+};
+
+class CallMknod : public ICallPath {
+    public:
+    int at{};
+    int dirfd{AT_FDCWD};
+    MyString path{};
+    mode_t mode{};
+    unsigned int dev{};
+    int* ret{};
+
+    int is_l() const override { return 0; }
+
+    int get_dirfd() const override { return this->dirfd; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return 0; }
+
+    void clear_l() override {}
+
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            this->at = 1;
+        }
+        this->dirfd = dirfd;
+    }
+
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(int flags) override {}
+};
 
 unsigned long handle_link(Context* ctx, SysArgs* args);
 unsigned long handle_linkat(Context* ctx, SysArgs* args);

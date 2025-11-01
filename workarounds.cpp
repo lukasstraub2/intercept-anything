@@ -62,8 +62,7 @@ void Workarounds::next(Context* ctx, const CallExec* call) {
             return;
         }
 
-        CallExec copy;
-        callexec_copy(&copy, call);
+        CallExec copy = *call;
         copy.path = self_exe;
         _next->next(ctx, &copy);
     }

@@ -154,8 +154,7 @@ static ssize_t handle_path(Context* ctx,
 
 void RootShim::next(Context* ctx, const CallOpen* call) {
     int* _ret = call->ret;
-    CallOpen _call;
-    callopen_copy(&_call, call);
+    CallOpen _call = *call;
 
     if (call->at && call->path[0] != '/') {
         return _next->next(ctx, call);
@@ -183,8 +182,7 @@ fail:
 
 void RootShim::next(Context* ctx, const CallStat* call) {
     int* _ret = call->ret;
-    CallStat _call;
-    callstat_copy(&_call, call);
+    CallStat _call = *call;
 
     if ((stattype_is_at(call->type) && call->path[0] != '/') ||
         call->type == STATTYPE_F) {
@@ -212,8 +210,7 @@ void RootShim::next(Context* ctx, const CallStat* call) {
 
 void RootShim::next(Context* ctx, const CallReadlink* call) {
     ssize_t* _ret = call->ret;
-    CallReadlink _call;
-    callreadlink_copy(&_call, call);
+    CallReadlink _call = *call;
 
     if (call->at && call->path[0] != '/') {
         return _next->next(ctx, call);
@@ -248,8 +245,7 @@ fail:
 
 void RootShim::next(Context* ctx, const CallAccess* call) {
     int* _ret = call->ret;
-    CallAccess _call;
-    callaccess_copy(&_call, call);
+    CallAccess _call = *call;
 
     if (call->at && call->path[0] != '/') {
         return _next->next(ctx, call);
@@ -269,8 +265,7 @@ void RootShim::next(Context* ctx, const CallAccess* call) {
 
 void RootShim::next(Context* ctx, const CallXattr* call) {
     ssize_t* _ret = call->ret;
-    CallXattr _call;
-    callxattr_copy(&_call, call);
+    CallXattr _call = *call;
 
     if (call->type2 == XATTRTYPE_F) {
         return _next->next(ctx, call);

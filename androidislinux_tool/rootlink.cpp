@@ -99,8 +99,7 @@ static ssize_t mangle_path(char* out, size_t out_len, const char* path) {
 #define MANGLE_PATH(__path, errret) _MANGLE_PATH(__path, errret, )
 
 void Rootlink::next(Context* ctx, const CallOpen* call) {
-    CallOpen _call;
-    callopen_copy(&_call, call);
+    CallOpen _call = *call;
 
     if (call->at && call->path[0] != '/') {
         return _next->next(ctx, call);
@@ -111,8 +110,7 @@ void Rootlink::next(Context* ctx, const CallOpen* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallStat* call) {
-    CallStat _call;
-    callstat_copy(&_call, call);
+    CallStat _call = *call;
 
     if ((stattype_is_at(call->type) && call->path[0] != '/') ||
         call->type == STATTYPE_F) {
@@ -124,8 +122,7 @@ void Rootlink::next(Context* ctx, const CallStat* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallReadlink* call) {
-    CallReadlink _call;
-    callreadlink_copy(&_call, call);
+    CallReadlink _call = *call;
 
     if (call->at && call->path[0] != '/') {
         return _next->next(ctx, call);
@@ -136,8 +133,7 @@ void Rootlink::next(Context* ctx, const CallReadlink* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallAccess* call) {
-    CallAccess _call;
-    callaccess_copy(&_call, call);
+    CallAccess _call = *call;
 
     if (call->at && call->path[0] != '/') {
         return _next->next(ctx, call);
@@ -148,8 +144,7 @@ void Rootlink::next(Context* ctx, const CallAccess* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallExec* call) {
-    CallExec _call;
-    callexec_copy(&_call, call);
+    CallExec _call = *call;
 
     if (call->at && call->path[0] != '/') {
         return _next->next(ctx, call);
@@ -160,8 +155,7 @@ void Rootlink::next(Context* ctx, const CallExec* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallLink* call) {
-    CallLink _call;
-    calllink_copy(&_call, call);
+    CallLink _call = *call;
 
     _MANGLE_PATH(_call.oldpath, -1, old);
     _MANGLE_PATH(_call.newpath, -1, new);
@@ -178,8 +172,7 @@ void Rootlink::next(Context* ctx, const CallLink* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallSymlink* call) {
-    CallSymlink _call;
-    calllink_copy(&_call, call);
+    CallSymlink _call = *call;
 
     _MANGLE_PATH(_call.oldpath, -1, old);
     _MANGLE_PATH(_call.newpath, -1, new);
@@ -196,8 +189,7 @@ void Rootlink::next(Context* ctx, const CallSymlink* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallUnlink* call) {
-    CallUnlink _call;
-    callunlink_copy(&_call, call);
+    CallUnlink _call = *call;
 
     if (call->at && call->path[0] != '/') {
         return _next->next(ctx, call);
@@ -208,8 +200,7 @@ void Rootlink::next(Context* ctx, const CallUnlink* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallXattr* call) {
-    CallXattr _call;
-    callxattr_copy(&_call, call);
+    CallXattr _call = *call;
 
     if (call->type2 == XATTRTYPE_F) {
         return _next->next(ctx, call);
@@ -220,8 +211,7 @@ void Rootlink::next(Context* ctx, const CallXattr* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallRename* call) {
-    CallRename _call;
-    callrename_copy(&_call, call);
+    CallRename _call = *call;
 
     _MANGLE_PATH(_call.oldpath, -1, old);
     _MANGLE_PATH(_call.newpath, -1, new);
@@ -238,8 +228,7 @@ void Rootlink::next(Context* ctx, const CallRename* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallChdir* call) {
-    CallChdir _call;
-    callchdir_copy(&_call, call);
+    CallChdir _call = *call;
 
     if (call->f) {
         return _next->next(ctx, call);
@@ -250,8 +239,7 @@ void Rootlink::next(Context* ctx, const CallChdir* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallChmod* call) {
-    CallChmod _call;
-    callchmod_copy(&_call, call);
+    CallChmod _call = *call;
 
     if ((chmodtype_is_at(call->type) && call->path[0] != '/') ||
         call->type == CHMODTYPE_F) {
@@ -263,8 +251,7 @@ void Rootlink::next(Context* ctx, const CallChmod* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallTruncate* call) {
-    CallTruncate _call;
-    calltruncate_copy(&_call, call);
+    CallTruncate _call = *call;
 
     if (call->f) {
         return _next->next(ctx, call);
@@ -275,8 +262,7 @@ void Rootlink::next(Context* ctx, const CallTruncate* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallMkdir* call) {
-    CallMkdir _call;
-    callmkdir_copy(&_call, call);
+    CallMkdir _call = *call;
 
     if (call->at && call->path[0] != '/') {
         return _next->next(ctx, call);
@@ -287,8 +273,7 @@ void Rootlink::next(Context* ctx, const CallMkdir* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallMknod* call) {
-    CallMknod _call;
-    callmknod_copy(&_call, call);
+    CallMknod _call = *call;
 
     if (call->at && call->path[0] != '/') {
         return _next->next(ctx, call);
@@ -313,11 +298,9 @@ static int fill_addr_un(struct sockaddr_un* addr, char* sun_path) {
 
 void Rootlink::next(Context* ctx, const CallConnect* call) {
     int* _ret = call->ret;
-    CallConnect _call;
-    callconnect_copy(&_call, call);
+    CallConnect _call = *call;
 
-    struct sockaddr_storage* generic = (decltype(generic))call->addr;
-    if (generic->ss_family == AF_UNIX) {
+    if (call->get_family() == AF_UNIX) {
         struct sockaddr_un* addr = (decltype(addr))call->addr;
         if (addr->sun_path[0] != '\0') {
             // Not an abstract socket
@@ -390,8 +373,7 @@ void Rootlink::next(Context* ctx, const CallConnect* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallFanotifyMark* call) {
-    CallFanotifyMark _call;
-    callfanotify_mark_copy(&_call, call);
+    CallFanotifyMark _call = *call;
 
     if (call->path[0] != '/') {
         return _next->next(ctx, call);
@@ -402,8 +384,7 @@ void Rootlink::next(Context* ctx, const CallFanotifyMark* call) {
 }
 
 void Rootlink::next(Context* ctx, const CallInotifyAddWatch* call) {
-    CallInotifyAddWatch _call;
-    callinotify_add_watch_copy(&_call, call);
+    CallInotifyAddWatch _call = *call;
 
     MANGLE_PATH(_call.path, -1);
     return _next->next(ctx, &_call);

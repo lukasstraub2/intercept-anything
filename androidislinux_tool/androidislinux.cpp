@@ -10,8 +10,7 @@ class AndroidIsLinux : public CallHandler {
 };
 
 void AndroidIsLinux::next(Context* ctx, const CallAccept* call) {
-    CallAccept _call;
-    callaccept_copy(&_call, call);
+    CallAccept _call = *call;
 
     if (!call->is4) {
         _call.is4 = 1;

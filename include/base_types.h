@@ -16,4 +16,3 @@ typedef struct RwLockHolder RwLockHolder;
 typedef struct RwLockHead RwLockHead;
 typedef struct RwLockList RwLockList;
 typedef struct This This;
-typedef struct CallHandler CallHandler;

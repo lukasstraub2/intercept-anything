@@ -22,8 +22,12 @@ unsigned long handle_execve(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallExec call = {
-        .at = 0, .path = path, .argv = argv, .envp = envp, .ret = &ret};
+    CallExec call;
+    call.at = 0;
+    call.path = path;
+    call.argv = argv;
+    call.envp = envp;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -43,13 +47,14 @@ unsigned long handle_execveat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallExec call = {.at = 1,
-                     .dirfd = dirfd,
-                     .path = path,
-                     .argv = argv,
-                     .envp = envp,
-                     .flags = flags,
-                     .ret = &ret};
+    CallExec call;
+    call.at = 1;
+    call.dirfd = dirfd;
+    call.path = path;
+    call.argv = argv;
+    call.envp = envp;
+    call.flags = flags;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -302,8 +307,7 @@ void BottomHandler::next(Context* ctx, const CallExec* call) {
     ssize_t ret, size;
     int* _ret = call->ret;
     int64_t exec_argc;
-    CallExec _call;
-    callexec_copy(&_call, call);
+    CallExec _call = *call;
 
     if (call->final) {
         *_ret = _bottom_exec(ctx, &_call);
@@ -352,7 +356,7 @@ void BottomHandler::next(Context* ctx, const CallExec* call) {
 
         cmdline_extract(header, size, argv);
         array_copy(argv + sh_argc, call->argv, exec_argc);
-        argv[sh_argc] = (char*)call->path;
+        argv[sh_argc] = (char*)(const char*)call->path;
         argv[argc] = nullptr;
         const char* pathname = argv[0];
 

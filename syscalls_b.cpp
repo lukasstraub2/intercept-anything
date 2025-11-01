@@ -17,8 +17,11 @@ unsigned long handle_link(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallLink call = {
-        .at = 0, .oldpath = oldpath, .newpath = newpath, .ret = &ret};
+    CallLink call;
+    call.at = 0;
+    call.oldpath = oldpath;
+    call.newpath = newpath;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -38,13 +41,14 @@ unsigned long handle_linkat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallLink call = {.at = 1,
-                     .olddirfd = olddirfd,
-                     .oldpath = oldpath,
-                     .newdirfd = newdirfd,
-                     .newpath = newpath,
-                     .flags = flags,
-                     .ret = &ret};
+    CallLink call;
+    call.at = 1;
+    call.olddirfd = olddirfd;
+    call.oldpath = oldpath;
+    call.newdirfd = newdirfd;
+    call.newpath = newpath;
+    call.flags = flags;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -61,8 +65,11 @@ unsigned long handle_symlink(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallSymlink call = {
-        .at = 0, .oldpath = oldpath, .newpath = newpath, .ret = &ret};
+    CallSymlink call;
+    call.at = 0;
+    call.oldpath = oldpath;
+    call.newpath = newpath;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -80,11 +87,12 @@ unsigned long handle_symlinkat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallSymlink call = {.at = 1,
-                        .oldpath = oldpath,
-                        .newdirfd = newdirfd,
-                        .newpath = newpath,
-                        .ret = &ret};
+    CallSymlink call;
+    call.at = 1;
+    call.oldpath = oldpath;
+    call.newdirfd = newdirfd;
+    call.newpath = newpath;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -100,7 +108,10 @@ unsigned long handle_unlink(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallUnlink call = {.at = 0, .path = pathname, .ret = &ret};
+    CallUnlink call;
+    call.at = 0;
+    call.path = pathname;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -118,8 +129,33 @@ unsigned long handle_unlinkat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallUnlink call = {
-        .at = 1, .dirfd = dirfd, .path = pathname, .flags = flags, .ret = &ret};
+    CallUnlink call;
+    call.at = 1;
+    call.dirfd = dirfd;
+    call.path = pathname;
+    call.flags = flags;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_rename(Context* ctx, SysArgs* args) {
+    const char* oldpath = (const char*)args->arg1;
+    const char* newpath = (const char*)args->arg2;
+    trace("rename(%s, %s)\n", or_null(oldpath), or_null(newpath));
+
+    if (!oldpath || !newpath) {
+        return -EFAULT;
+    }
+
+    int ret = {0};
+    CallRename call;
+    call.type = RENAMETYPE_PLAIN;
+    call.oldpath = oldpath;
+    call.newpath = newpath;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -138,12 +174,13 @@ unsigned long handle_renameat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallRename call = {.type = RENAMETYPE_AT,
-                       .olddirfd = olddirfd,
-                       .oldpath = oldpath,
-                       .newdirfd = newdirfd,
-                       .newpath = newpath,
-                       .ret = &ret};
+    CallRename call;
+    call.type = RENAMETYPE_AT;
+    call.olddirfd = olddirfd;
+    call.oldpath = oldpath;
+    call.newdirfd = newdirfd;
+    call.newpath = newpath;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -163,13 +200,14 @@ unsigned long handle_renameat2(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallRename call = {.type = RENAMETYPE_AT2,
-                       .olddirfd = olddirfd,
-                       .oldpath = oldpath,
-                       .newdirfd = newdirfd,
-                       .newpath = newpath,
-                       .flags = flags,
-                       .ret = &ret};
+    CallRename call;
+    call.type = RENAMETYPE_AT2;
+    call.olddirfd = olddirfd;
+    call.oldpath = oldpath;
+    call.newdirfd = newdirfd;
+    call.newpath = newpath;
+    call.flags = flags;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -185,7 +223,10 @@ unsigned long handle_chdir(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallChdir call = {.f = 0, .path = path, .ret = &ret};
+    CallChdir call;
+    call.f = 0;
+    call.path = path;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -202,8 +243,11 @@ unsigned long handle_chmod(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallChmod call = {
-        .type = CHMODTYPE_PLAIN, .path = path, .mode = mode, .ret = &ret};
+    CallChmod call;
+    call.type = CHMODTYPE_PLAIN;
+    call.path = path;
+    call.mode = mode;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -216,7 +260,11 @@ unsigned long handle_fchmod(Context* ctx, SysArgs* args) {
     trace("fchmod(%d)\n", fd);
 
     int ret = {0};
-    CallChmod call = {.type = CHMODTYPE_F, .fd = fd, .mode = mode, .ret = &ret};
+    CallChmod call;
+    call.type = CHMODTYPE_F;
+    call.fd = fd;
+    call.mode = mode;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -234,11 +282,12 @@ unsigned long handle_fchmodat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallChmod call = {.type = CHMODTYPE_AT,
-                      .dirfd = dirfd,
-                      .path = path,
-                      .mode = mode,
-                      .ret = &ret};
+    CallChmod call;
+    call.type = CHMODTYPE_AT;
+    call.dirfd = dirfd;
+    call.path = path;
+    call.mode = mode;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -255,7 +304,11 @@ unsigned long handle_truncate(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallTruncate call = {.f = 0, .path = path, .length = length, .ret = &ret};
+    CallTruncate call;
+    call.f = 0;
+    call.path = path;
+    call.length = length;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -268,7 +321,11 @@ unsigned long handle_ftruncate(Context* ctx, SysArgs* args) {
     trace("ftruncate(%d)\n", fd);
 
     int ret = {0};
-    CallTruncate call = {.f = 1, .fd = fd, .length = length, .ret = &ret};
+    CallTruncate call;
+    call.f = 1;
+    call.fd = fd;
+    call.length = length;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -285,7 +342,11 @@ unsigned long handle_mkdir(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallMkdir call = {.at = 0, .path = path, .mode = mode, .ret = &ret};
+    CallMkdir call;
+    call.at = 0;
+    call.path = path;
+    call.mode = mode;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -303,8 +364,12 @@ unsigned long handle_mkdirat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallMkdir call = {
-        .at = 1, .dirfd = dirfd, .path = path, .mode = mode, .ret = &ret};
+    CallMkdir call;
+    call.at = 1;
+    call.dirfd = dirfd;
+    call.path = path;
+    call.mode = mode;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -322,8 +387,12 @@ unsigned long handle_mknod(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallMknod call = {
-        .at = 0, .path = path, .mode = mode, .dev = dev, .ret = &ret};
+    CallMknod call;
+    call.at = 0;
+    call.path = path;
+    call.mode = mode;
+    call.dev = dev;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -342,12 +411,13 @@ unsigned long handle_mknodat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallMknod call = {.at = 1,
-                      .dirfd = dirfd,
-                      .path = path,
-                      .mode = mode,
-                      .dev = dev,
-                      .ret = &ret};
+    CallMknod call;
+    call.at = 1;
+    call.dirfd = dirfd;
+    call.path = path;
+    call.mode = mode;
+    call.dev = dev;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 

@@ -2,32 +2,38 @@
 
 #include "base_types.h"
 #include "myseccomp.h"
+#include "syscalls.h"
 
 #include <sys/types.h>
+#include <fcntl.h>
+#include <stdlib.h>
 
-struct CallOpen {
-    int at;
-    int dirfd;
-    const char* path;
-    int flags;
-    mode_t mode;
-    int* ret;
-};
-typedef struct CallOpen CallOpen;
+class CallOpen : public ICallPathOpen {
+    public:
+    int at{};
+    int dirfd{AT_FDCWD};
+    MyString path{};
+    int flags{};
+    mode_t mode{};
+    int* ret{};
 
-__attribute__((unused)) static void callopen_copy(CallOpen* dst,
-                                                  const CallOpen* call) {
-    dst->at = call->at;
+    int get_dirfd() const override { return this->dirfd; }
 
-    if (call->at) {
-        dst->dirfd = call->dirfd;
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return this->flags; }
+
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            this->at = 1;
+        }
+        this->dirfd = dirfd;
     }
 
-    dst->path = call->path;
-    dst->flags = call->flags;
-    dst->mode = call->mode;
-    dst->ret = call->ret;
-}
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(int flags) override { this->flags = flags; }
+};
 
 enum StatType {
     STATTYPE_PLAIN = 0,
@@ -41,86 +47,130 @@ __attribute__((unused)) static int stattype_is_at(StatType type) {
     return type >= STATTYPE_AT;
 }
 
-struct CallStat {
-    StatType type;
-    int dirfd;
-    const char* path;
-    int flags;
-    unsigned int mask;
-    void* statbuf;
-    int* ret;
+class CallStat : public ICallPathF {
+    public:
+    StatType type{};
+    int dirfd{};
+    MyString path{};
+    int flags{};
+    unsigned int mask{};
+    void* statbuf{};
+    int* ret{};
+
+    CallStat() = default;
+
+    CallStat(const CallStat* call) {
+        this->type = call->type;
+
+        this->dirfd = call->dirfd;
+        this->flags = call->flags;
+
+        if (call->type == STATTYPE_F) {
+            this->dirfd = call->dirfd;
+        } else {
+            this->path = call->path;
+        }
+
+        if (call->type == STATTYPE_X) {
+            this->mask = call->mask;
+        }
+
+        this->statbuf = call->statbuf;
+        this->ret = call->ret;
+    }
+
+    int is_l() const override { return this->type == STATTYPE_L; }
+
+    int is_f() const override { return this->type == STATTYPE_F; }
+
+    int get_dirfd() const override { return this->dirfd; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return this->flags; }
+
+    void clear_l() override {
+        if (!is_l()) {
+            abort();
+        }
+        this->type = STATTYPE_PLAIN;
+    }
+
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD && !stattype_is_at(this->type)) {
+            if (this->type != STATTYPE_PLAIN) {
+                abort();
+            }
+            this->type = STATTYPE_AT;
+        }
+        this->dirfd = dirfd;
+    }
+
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(int flags) override { this->flags = flags; }
 };
-typedef struct CallStat CallStat;
 
-__attribute__((unused)) static void callstat_copy(CallStat* dst,
-                                                  const CallStat* call) {
-    dst->type = call->type;
+class CallReadlink : public ICallPath {
+    public:
+    int at{};
+    int dirfd{AT_FDCWD};
+    MyString path{};
+    char* buf{};
+    size_t bufsiz{};
+    ssize_t* ret{};
 
-    if (stattype_is_at(call->type)) {
-        dst->dirfd = call->dirfd;
-        dst->flags = call->flags;
+    int is_l() const override { return 0; }
+
+    int get_dirfd() const override { return this->dirfd; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return 0; }
+
+    void clear_l() override {}
+
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            this->at = 1;
+        }
+        this->dirfd = dirfd;
     }
 
-    if (call->type == STATTYPE_F) {
-        dst->dirfd = call->dirfd;
-    } else {
-        dst->path = call->path;
-    }
+    void set_path(const char* path) override { this->path.dup(path); }
 
-    if (call->type == STATTYPE_X) {
-        dst->mask = call->mask;
-    }
-
-    dst->statbuf = call->statbuf;
-    dst->ret = call->ret;
-}
-
-struct CallReadlink {
-    int at;
-    int dirfd;
-    const char* path;
-    char* buf;
-    size_t bufsiz;
-    ssize_t* ret;
+    void set_flags(int flags) override {}
 };
-typedef struct CallReadlink CallReadlink;
 
-__attribute__((unused)) static void callreadlink_copy(
-    CallReadlink* dst,
-    const CallReadlink* call) {
-    dst->at = call->at;
+class CallAccess : public ICallPath {
+    public:
+    int at{};
+    int dirfd{AT_FDCWD};
+    MyString path{};
+    int mode{};
+    int* ret{};
 
-    if (call->at) {
-        dst->dirfd = call->dirfd;
+    int is_l() const override { return 0; }
+
+    int get_dirfd() const override { return this->dirfd; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return 0; }
+
+    void clear_l() override {}
+
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            this->at = 1;
+        }
+        this->dirfd = dirfd;
     }
 
-    dst->path = call->path;
-    dst->buf = call->buf;
-    dst->bufsiz = call->bufsiz;
-    dst->ret = call->ret;
-}
+    void set_path(const char* path) override { this->path.dup(path); }
 
-struct CallAccess {
-    int at;
-    int dirfd;
-    const char* path;
-    int mode;
-    int* ret;
+    void set_flags(int flags) override {}
 };
-typedef struct CallAccess CallAccess;
-
-__attribute__((unused)) static void callaccess_copy(CallAccess* dst,
-                                                    const CallAccess* call) {
-    dst->at = call->at;
-
-    if (call->at) {
-        dst->dirfd = call->dirfd;
-    }
-
-    dst->path = call->path;
-    dst->mode = call->mode;
-    dst->ret = call->ret;
-}
 
 enum XattrType {
     XATTRTYPE_SET,
@@ -133,117 +183,153 @@ typedef enum XattrType XattrType;
 enum XattrType2 { XATTRTYPE_PLAIN, XATTRTYPE_L, XATTRTYPE_F };
 typedef enum XattrType2 XattrType2;
 
-struct CallXattr {
-    XattrType type;
-    XattrType2 type2;
-    union {
-        int fd;
-        const char* path;
-    };
-    union {
-        char* list;
-        struct {
-            const char* name;
-            void* value;
-        };
-    };
-    size_t size;
-    int flags;
-    ssize_t* ret;
-};
-typedef struct CallXattr CallXattr;
+class CallXattr : public ICallPathF {
+    public:
+    XattrType type{};
+    XattrType2 type2{};
+    int fd{};
+    MyString path{};
+    char* list{};
+    const char* name{};
+    void* value{};
+    size_t size{};
+    int flags{};
+    ssize_t* ret{};
 
-__attribute__((unused)) static void callxattr_copy(CallXattr* dst,
-                                                   const CallXattr* call) {
-    dst->type = call->type;
-    dst->type2 = call->type2;
+    CallXattr() = default;
 
-    if (call->type2 == XATTRTYPE_F) {
-        dst->fd = call->fd;
-    } else {
-        dst->path = call->path;
+    CallXattr(const CallXattr* call) {
+        this->type = call->type;
+        this->type2 = call->type2;
+
+        if (call->type2 == XATTRTYPE_F) {
+            this->fd = call->fd;
+        } else {
+            this->path = call->path;
+        }
+
+        switch (call->type) {
+            case XATTRTYPE_SET:
+                this->flags = call->flags;
+            /*fallthrough*/
+            case XATTRTYPE_GET:
+                this->name = call->name;
+                this->value = call->value;
+                this->size = call->size;
+                break;
+
+            case XATTRTYPE_LIST:
+                this->list = call->list;
+                this->size = call->size;
+                break;
+
+            case XATTRTYPE_REMOVE:
+                this->name = call->name;
+                break;
+        }
+
+        this->ret = call->ret;
     }
 
-    switch (call->type) {
-        case XATTRTYPE_SET:
-            dst->flags = call->flags;
-        /*fallthrough*/
-        case XATTRTYPE_GET:
-            dst->name = call->name;
-            dst->value = call->value;
-            dst->size = call->size;
-            break;
+    int is_l() const override { return this->type2 == XATTRTYPE_L; }
 
-        case XATTRTYPE_LIST:
-            dst->list = call->list;
-            dst->size = call->size;
-            break;
+    int is_f() const override { return this->type2 == XATTRTYPE_F; }
 
-        case XATTRTYPE_REMOVE:
-            dst->name = call->name;
-            break;
+    int get_dirfd() const override { return AT_FDCWD; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return 0; }
+
+    void clear_l() override {
+        if (!is_l()) {
+            abort();
+        }
+        this->type2 = XATTRTYPE_PLAIN;
     }
 
-    dst->ret = call->ret;
-}
-
-struct CallChdir {
-    int f;
-    int fd;
-    const char* path;
-    int* ret;
-};
-typedef struct CallChdir CallChdir;
-
-__attribute__((unused)) static void callchdir_copy(CallChdir* dst,
-                                                   const CallChdir* call) {
-    dst->f = call->f;
-    if (call->f) {
-        dst->fd = call->fd;
-    } else {
-        dst->path = call->path;
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            abort();
+        }
     }
-    dst->ret = call->ret;
-}
 
-struct CallGetdents {
-    int is64;
-    int fd;
-    void* dirp;
-    size_t count;
-    ssize_t* ret;
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(int flags) override {}
 };
-typedef struct CallGetdents CallGetdents;
 
-__attribute__((unused)) static void callgetdents_copy(
-    CallGetdents* dst,
-    const CallGetdents* call) {
-    dst->is64 = call->is64;
-    dst->fd = call->fd;
-    dst->dirp = call->dirp;
-    dst->count = call->count;
-    dst->ret = call->ret;
-}
+class CallChdir : public ICallPathF {
+    public:
+    int f{};
+    int fd{};
+    MyString path{};
+    int* ret{};
 
-struct CallClose {
-    int is_range;
-    unsigned int fd;
-    unsigned int max_fd;  // Only used for close_range
-    unsigned int flags;   // Only used for close_range
-    int* ret;
-};
-typedef struct CallClose CallClose;
+    CallChdir() = default;
 
-__attribute__((unused)) static void callclose_copy(CallClose* dst,
-                                                   const CallClose* call) {
-    dst->is_range = call->is_range;
-    dst->fd = call->fd;
-    if (call->is_range) {
-        dst->max_fd = call->max_fd;
-        dst->flags = call->flags;
+    CallChdir(CallChdir* call) {
+        this->f = call->f;
+        if (call->f) {
+            this->fd = call->fd;
+        } else {
+            this->path = call->path;
+        }
+        this->ret = call->ret;
     }
-    dst->ret = call->ret;
-}
+
+    int is_f() const override { return this->f; }
+
+    int is_l() const override { return 0; }
+
+    int get_dirfd() const override { return AT_FDCWD; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return 0; }
+
+    void clear_l() override {}
+
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            abort();
+        }
+    }
+
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(int flags) override {}
+};
+
+class CallGetdents {
+    public:
+    int is64{};
+    int fd{};
+    void* dirp{};
+    size_t count{};
+    ssize_t* ret{};
+};
+
+class CallClose {
+    public:
+    int is_range{};
+    unsigned int fd{};
+    unsigned int max_fd{};  // Only used for close_range
+    unsigned int flags{};   // Only used for close_range
+    int* ret{};
+
+    CallClose() = default;
+
+    CallClose(CallClose* call) {
+        this->is_range = call->is_range;
+        this->fd = call->fd;
+        if (call->is_range) {
+            this->max_fd = call->max_fd;
+            this->flags = call->flags;
+        }
+        this->ret = call->ret;
+    }
+};
 
 unsigned long handle_open(Context* ctx, SysArgs* args);
 unsigned long handle_openat(Context* ctx, SysArgs* args);

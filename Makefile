@@ -2,7 +2,7 @@ CMAKE=cmake
 CTEST=ctest
 DIR=out
 
-.PHONY: clean check format
+.PHONY: clean check format lint
 
 all: compile
 
@@ -18,8 +18,11 @@ compile: $(DIR)
 clean:
 	rm -rf $(DIR)
 
-check: compile
-	cd $(DIR) && $(CTEST) -j4
+check: compile lint
+	cd $(DIR) && $(CTEST)
 
 format:
 	find . -maxdepth 2 -type f -name '*.c' -print0 -or -name '*.cpp' -print0 -or -name '*.h' -print0 | xargs -0 clang-format -i --style=file
+
+lint:
+	clang-tidy -p . --format-style=file --checks=-\*,cppcoreguidelines-pro-type-member-init -header-filter=syscalls_\* syscalls_*.cpp intercept_seccomp.cpp

@@ -13,9 +13,17 @@ unsigned long handle_open(Context* ctx, SysArgs* args) {
     mode_t mode = args->arg3;
     trace("open(%s)\n", or_null(path));
 
+    if (!path) {
+        return -EFAULT;
+    }
+
     int ret = {0};
-    CallOpen call = {
-        .at = 0, .path = path, .flags = flags, .mode = mode, .ret = &ret};
+    CallOpen call;
+    call.at = 0;
+    call.path = path;
+    call.flags = flags;
+    call.mode = mode;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -29,13 +37,18 @@ unsigned long handle_openat(Context* ctx, SysArgs* args) {
     mode_t mode = args->arg4;
     trace("openat(%s)\n", or_null(path));
 
+    if (!path) {
+        return -EFAULT;
+    }
+
     int ret = {0};
-    CallOpen call = {.at = 1,
-                     .dirfd = dirfd,
-                     .path = path,
-                     .flags = flags,
-                     .mode = mode,
-                     .ret = &ret};
+    CallOpen call;
+    call.at = 1;
+    call.dirfd = dirfd;
+    call.path = path;
+    call.flags = flags;
+    call.mode = mode;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -52,8 +65,11 @@ unsigned long handle_stat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallStat call = {
-        .type = STATTYPE_PLAIN, .path = path, .statbuf = statbuf, .ret = &ret};
+    CallStat call;
+    call.type = STATTYPE_PLAIN;
+    call.path = path;
+    call.statbuf = statbuf;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -66,8 +82,11 @@ unsigned long handle_fstat(Context* ctx, SysArgs* args) {
     trace("fstat()\n");
 
     int ret = {0};
-    CallStat call = {
-        .type = STATTYPE_F, .dirfd = fd, .statbuf = statbuf, .ret = &ret};
+    CallStat call;
+    call.type = STATTYPE_F;
+    call.dirfd = fd;
+    call.statbuf = statbuf;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -84,8 +103,11 @@ unsigned long handle_lstat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallStat call = {
-        .type = STATTYPE_L, .path = path, .statbuf = statbuf, .ret = &ret};
+    CallStat call;
+    call.type = STATTYPE_L;
+    call.path = path;
+    call.statbuf = statbuf;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -104,12 +126,13 @@ unsigned long handle_newfstatat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallStat call = {.type = STATTYPE_AT,
-                     .dirfd = dirfd,
-                     .path = path,
-                     .flags = flags,
-                     .statbuf = statbuf,
-                     .ret = &ret};
+    CallStat call;
+    call.type = STATTYPE_AT;
+    call.dirfd = dirfd;
+    call.path = path;
+    call.flags = flags;
+    call.statbuf = statbuf;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -129,13 +152,14 @@ unsigned long handle_statx(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallStat call = {.type = STATTYPE_X,
-                     .dirfd = dirfd,
-                     .path = path,
-                     .flags = flags,
-                     .mask = mask,
-                     .statbuf = statbuf,
-                     .ret = &ret};
+    CallStat call;
+    call.type = STATTYPE_X;
+    call.dirfd = dirfd;
+    call.path = path;
+    call.flags = flags;
+    call.mask = mask;
+    call.statbuf = statbuf;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -157,8 +181,12 @@ unsigned long handle_readlink(Context* ctx, SysArgs* args) {
     // buf nullptr: -EFAULT
 
     ssize_t ret = {0};
-    CallReadlink call = {
-        .at = 0, .path = path, .buf = buf, .bufsiz = bufsiz, .ret = &ret};
+    CallReadlink call;
+    call.at = 0;
+    call.path = path;
+    call.buf = buf;
+    call.bufsiz = bufsiz;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -179,12 +207,13 @@ unsigned long handle_readlinkat(Context* ctx, SysArgs* args) {
     }
 
     ssize_t ret = {0};
-    CallReadlink call = {.at = 1,
-                         .dirfd = dirfd,
-                         .path = path,
-                         .buf = buf,
-                         .bufsiz = bufsiz,
-                         .ret = &ret};
+    CallReadlink call;
+    call.at = 1;
+    call.dirfd = dirfd;
+    call.path = path;
+    call.buf = buf;
+    call.bufsiz = bufsiz;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -201,7 +230,11 @@ unsigned long handle_access(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallAccess call = {.at = 0, .path = path, .mode = mode, .ret = &ret};
+    CallAccess call;
+    call.at = 0;
+    call.path = path;
+    call.mode = mode;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -219,8 +252,12 @@ unsigned long handle_faccessat(Context* ctx, SysArgs* args) {
     }
 
     int ret = {0};
-    CallAccess call = {
-        .at = 1, .dirfd = dirfd, .path = path, .mode = mode, .ret = &ret};
+    CallAccess call;
+    call.at = 1;
+    call.dirfd = dirfd;
+    call.path = path;
+    call.mode = mode;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -240,14 +277,15 @@ unsigned long handle_setxattr(Context* ctx, SysArgs* args) {
     }
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_SET,
-                      .type2 = XATTRTYPE_PLAIN,
-                      .path = path,
-                      .name = name,
-                      .value = (void*)value,
-                      .size = size,
-                      .flags = flags,
-                      .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_SET;
+    call.type2 = XATTRTYPE_PLAIN;
+    call.path = path;
+    call.name = name;
+    call.value = (void*)value;
+    call.size = size;
+    call.flags = flags;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -267,14 +305,15 @@ unsigned long handle_lsetxattr(Context* ctx, SysArgs* args) {
     }
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_SET,
-                      .type2 = XATTRTYPE_L,
-                      .path = path,
-                      .name = name,
-                      .value = (void*)value,
-                      .size = size,
-                      .flags = flags,
-                      .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_SET;
+    call.type2 = XATTRTYPE_L;
+    call.path = path;
+    call.name = name;
+    call.value = (void*)value;
+    call.size = size;
+    call.flags = flags;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -290,14 +329,15 @@ unsigned long handle_fsetxattr(Context* ctx, SysArgs* args) {
     trace("fsetxattr(%d)\n", fd);
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_SET,
-                      .type2 = XATTRTYPE_F,
-                      .fd = fd,
-                      .name = name,
-                      .value = (void*)value,
-                      .size = size,
-                      .flags = flags,
-                      .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_SET;
+    call.type2 = XATTRTYPE_F;
+    call.fd = fd;
+    call.name = name;
+    call.value = (void*)value;
+    call.size = size;
+    call.flags = flags;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -316,13 +356,14 @@ unsigned long handle_getxattr(Context* ctx, SysArgs* args) {
     }
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_GET,
-                      .type2 = XATTRTYPE_PLAIN,
-                      .path = path,
-                      .name = name,
-                      .value = value,
-                      .size = size,
-                      .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_GET;
+    call.type2 = XATTRTYPE_PLAIN;
+    call.path = path;
+    call.name = name;
+    call.value = value;
+    call.size = size;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -341,13 +382,14 @@ unsigned long handle_lgetxattr(Context* ctx, SysArgs* args) {
     }
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_GET,
-                      .type2 = XATTRTYPE_L,
-                      .path = path,
-                      .name = name,
-                      .value = value,
-                      .size = size,
-                      .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_GET;
+    call.type2 = XATTRTYPE_L;
+    call.path = path;
+    call.name = name;
+    call.value = value;
+    call.size = size;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -362,13 +404,14 @@ unsigned long handle_fgetxattr(Context* ctx, SysArgs* args) {
     trace("fgetxattr(%d)\n", fd);
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_GET,
-                      .type2 = XATTRTYPE_F,
-                      .fd = fd,
-                      .name = name,
-                      .value = value,
-                      .size = size,
-                      .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_GET;
+    call.type2 = XATTRTYPE_F;
+    call.fd = fd;
+    call.name = name;
+    call.value = value;
+    call.size = size;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -386,12 +429,13 @@ unsigned long handle_listxattr(Context* ctx, SysArgs* args) {
     }
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_LIST,
-                      .type2 = XATTRTYPE_PLAIN,
-                      .path = path,
-                      .list = list,
-                      .size = size,
-                      .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_LIST;
+    call.type2 = XATTRTYPE_PLAIN;
+    call.path = path;
+    call.list = list;
+    call.size = size;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -409,12 +453,13 @@ unsigned long handle_llistxattr(Context* ctx, SysArgs* args) {
     }
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_LIST,
-                      .type2 = XATTRTYPE_L,
-                      .path = path,
-                      .list = list,
-                      .size = size,
-                      .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_LIST;
+    call.type2 = XATTRTYPE_L;
+    call.path = path;
+    call.list = list;
+    call.size = size;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -428,12 +473,13 @@ unsigned long handle_flistxattr(Context* ctx, SysArgs* args) {
     trace("flistxattr(%d)\n", fd);
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_LIST,
-                      .type2 = XATTRTYPE_F,
-                      .fd = fd,
-                      .list = list,
-                      .size = size,
-                      .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_LIST;
+    call.type2 = XATTRTYPE_F;
+    call.fd = fd;
+    call.list = list;
+    call.size = size;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -450,11 +496,12 @@ unsigned long handle_removexattr(Context* ctx, SysArgs* args) {
     }
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_REMOVE,
-                      .type2 = XATTRTYPE_PLAIN,
-                      .path = path,
-                      .name = name,
-                      .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_REMOVE;
+    call.type2 = XATTRTYPE_PLAIN;
+    call.path = path;
+    call.name = name;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -471,11 +518,12 @@ unsigned long handle_lremovexattr(Context* ctx, SysArgs* args) {
     }
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_REMOVE,
-                      .type2 = XATTRTYPE_L,
-                      .path = path,
-                      .name = name,
-                      .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_REMOVE;
+    call.type2 = XATTRTYPE_L;
+    call.path = path;
+    call.name = name;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -488,31 +536,12 @@ unsigned long handle_fremovexattr(Context* ctx, SysArgs* args) {
     trace("fremovexattr(%d)\n", fd);
 
     ssize_t ret = {0};
-    CallXattr call = {.type = XATTRTYPE_REMOVE,
-                      .type2 = XATTRTYPE_F,
-                      .fd = fd,
-                      .name = name,
-                      .ret = &ret};
-
-    intercept_entrypoint->next(ctx, &call);
-
-    return ret;
-}
-
-unsigned long handle_rename(Context* ctx, SysArgs* args) {
-    const char* oldpath = (const char*)args->arg1;
-    const char* newpath = (const char*)args->arg2;
-    trace("rename(%s, %s)\n", or_null(oldpath), or_null(newpath));
-
-    if (!oldpath || !newpath) {
-        return -EFAULT;
-    }
-
-    int ret = {0};
-    CallRename call = {.type = RENAMETYPE_PLAIN,
-                       .oldpath = oldpath,
-                       .newpath = newpath,
-                       .ret = &ret};
+    CallXattr call;
+    call.type = XATTRTYPE_REMOVE;
+    call.type2 = XATTRTYPE_F;
+    call.fd = fd;
+    call.name = name;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -524,7 +553,10 @@ unsigned long handle_fchdir(Context* ctx, SysArgs* args) {
     trace("fchdir(%d)\n", fd);
 
     int ret = {0};
-    CallChdir call = {.f = 1, .fd = fd, .ret = &ret};
+    CallChdir call;
+    call.f = 1;
+    call.fd = fd;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -538,8 +570,12 @@ unsigned long handle_getdents(Context* ctx, SysArgs* args) {
     trace("getdents(%d)\n", fd);
 
     ssize_t ret = {0};
-    CallGetdents call = {
-        .is64 = 0, .fd = fd, .dirp = dirp, .count = count, .ret = &ret};
+    CallGetdents call;
+    call.is64 = 0;
+    call.fd = fd;
+    call.dirp = dirp;
+    call.count = count;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -553,8 +589,12 @@ unsigned long handle_getdents64(Context* ctx, SysArgs* args) {
     trace("getdents64(%d)\n", fd);
 
     ssize_t ret = {0};
-    CallGetdents call = {
-        .is64 = 1, .fd = fd, .dirp = dirp, .count = count, .ret = &ret};
+    CallGetdents call;
+    call.is64 = 1;
+    call.fd = fd;
+    call.dirp = dirp;
+    call.count = count;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -566,7 +606,10 @@ unsigned long handle_close(Context* ctx, SysArgs* args) {
     trace("close(%u)\n", fd);
 
     int ret = {0};
-    CallClose call = {.is_range = 0, .fd = fd, .ret = &ret};
+    CallClose call;
+    call.is_range = 0;
+    call.fd = fd;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 
@@ -580,11 +623,12 @@ unsigned long handle_close_range(Context* ctx, SysArgs* args) {
     trace("close_range(%u, %u)\n", first, last);
 
     int ret = {0};
-    CallClose call = {.is_range = 1,
-                      .fd = first,
-                      .max_fd = last,
-                      .flags = flags,
-                      .ret = &ret};
+    CallClose call;
+    call.is_range = 1;
+    call.fd = first;
+    call.max_fd = last;
+    call.flags = flags;
+    call.ret = &ret;
 
     intercept_entrypoint->next(ctx, &call);
 

@@ -500,8 +500,7 @@ void HardlinkShim::next(Context* ctx, const CallOpen* call) {
     }
 
     if (ret) {
-        CallOpen _call;
-        callopen_copy(&_call, call);
+        CallOpen _call = *call;
 
         _call.flags &= ~(O_NOFOLLOW);
         _next->next(ctx, &_call);
@@ -537,8 +536,7 @@ void HardlinkShim::next(Context* ctx, const CallStat* call) {
         int cnt;
         struct kstat* statbuf_plain;
         struct statx* statbuf_x;
-        CallStat _call;
-        callstat_copy(&_call, call);
+        CallStat _call = *call;
 
         ret = cnt_read_hardlink(ctx, dirfd, call->path);
         if (ret < 0) {
@@ -634,8 +632,7 @@ void HardlinkShim::next(Context* ctx, const CallExec* call) {
     }
 
     if (ret) {
-        CallExec _call;
-        callexec_copy(&_call, call);
+        CallExec _call = *call;
 
         if (call->at) {
             _call.flags &= ~AT_SYMLINK_NOFOLLOW;
@@ -869,11 +866,10 @@ void HardlinkShim::next(Context* ctx, const CallXattr* call) {
     }
 
     if (ret) {
-        CallXattr _call;
-        callxattr_copy(&_call, call);
+        CallXattr _call = *call;
 
-        if (call->type2 == XATTRTYPE_L) {
-            _call.type2 = XATTRTYPE_PLAIN;
+        if (call->is_l()) {
+            _call.clear_l();
         }
 
         _next->next(ctx, &_call);

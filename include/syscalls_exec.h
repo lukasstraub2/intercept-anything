@@ -2,34 +2,42 @@
 
 #include "base_types.h"
 #include "myseccomp.h"
+#include "syscalls.h"
 
-struct CallExec {
-    int at;
-    int final;
-    int dirfd;
-    const char* path;
-    char* const* argv;
-    char* const* envp;
-    int flags;
-    int* ret;
-};
-typedef struct CallExec CallExec;
+#include <fcntl.h>
 
-__attribute__((unused)) static void callexec_copy(CallExec* dst,
-                                                  const CallExec* call) {
-    dst->at = call->at;
-    dst->final = call->final;
+class CallExec : public ICallPath {
+    public:
+    int at{};
+    int final{};
+    int dirfd{AT_FDCWD};
+    MyString path{};
+    char* const* argv{};
+    char* const* envp{};
+    int flags{};
+    int* ret{};
 
-    if (call->at) {
-        dst->dirfd = call->dirfd;
-        dst->flags = call->flags;
+    int is_l() const override { return 0; }
+
+    int get_dirfd() const override { return this->dirfd; }
+
+    const char* get_path() const override { return this->path; }
+
+    int get_flags() const override { return flags; }
+
+    void clear_l() override {}
+
+    void set_dirfd(int dirfd) override {
+        if (dirfd != AT_FDCWD) {
+            this->at = 1;
+        }
+        this->dirfd = dirfd;
     }
 
-    dst->path = call->path;
-    dst->argv = call->argv;
-    dst->envp = call->envp;
-    dst->ret = call->ret;
-}
+    void set_path(const char* path) override { this->path.dup(path); }
+
+    void set_flags(int flags) override { this->flags = flags; }
+};
 
 unsigned long handle_execve(Context* ctx, SysArgs* args);
 unsigned long handle_execveat(Context* ctx, SysArgs* args);
