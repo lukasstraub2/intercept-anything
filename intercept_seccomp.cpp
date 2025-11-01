@@ -9,7 +9,7 @@
 #include "util.h"
 #include "pagesize.h"
 #include "syscall_trampo.h"
-#include "syscalls.h"
+#include "handle_syscall.h"
 #include "bottomhandler.h"
 
 #define DEBUG_ENV "DEBUG_INTERCEPT"
