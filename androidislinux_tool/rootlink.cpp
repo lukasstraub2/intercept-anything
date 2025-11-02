@@ -5,7 +5,7 @@
 #include "config.h"
 #include "intercept.h"
 #include "util.h"
-#include "callhandler.h"
+#include "manglepaths.h"
 
 #include <string.h>
 #include <errno.h>
@@ -13,28 +13,32 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-class Rootlink : public CallHandler {
+class Rootlink final : public ManglePaths {
     public:
-    Rootlink(CallHandler* next) : CallHandler(next) {}
+    Rootlink(CallHandler* next) : ManglePaths(next) {}
 
-    void next(Context* ctx, const CallOpen* call) override;
-    void next(Context* ctx, const CallStat* call) override;
-    void next(Context* ctx, const CallReadlink* call) override;
-    void next(Context* ctx, const CallAccess* call) override;
-    void next(Context* ctx, const CallXattr* call) override;
-    void next(Context* ctx, const CallChdir* call) override;
-    void next(Context* ctx, const CallLink* call) override;
-    void next(Context* ctx, const CallSymlink* call) override;
-    void next(Context* ctx, const CallUnlink* call) override;
-    void next(Context* ctx, const CallRename* call) override;
-    void next(Context* ctx, const CallChmod* call) override;
-    void next(Context* ctx, const CallTruncate* call) override;
-    void next(Context* ctx, const CallMkdir* call) override;
-    void next(Context* ctx, const CallMknod* call) override;
-    void next(Context* ctx, const CallConnect* call) override;
-    void next(Context* ctx, const CallFanotifyMark* call) override;
-    void next(Context* ctx, const CallInotifyAddWatch* call) override;
-    void next(Context* ctx, const CallExec* call) override;
+    protected:
+    virtual int mangle_path(Context* ctx,
+                            ICallPath* copy,
+                            const ICallPath* call) override;
+    virtual int mangle_path(Context* ctx,
+                            ICallPathOpen* copy,
+                            const ICallPathOpen* call) override;
+    virtual int mangle_path(Context* ctx,
+                            ICallPathFanotify* copy,
+                            const ICallPathFanotify* call) override;
+    virtual int mangle_path(Context* ctx,
+                            ICallPathF* copy,
+                            const ICallPathF* call) override;
+    virtual int mangle_path(Context* ctx,
+                            ICallPathDual* copy,
+                            const ICallPathDual* call) override;
+    virtual int mangle_path(Context* ctx,
+                            ICallPathSymlink* copy,
+                            const ICallPathSymlink* call) override;
+    virtual int mangle_path(Context* ctx,
+                            ICallPathConnect* copy,
+                            const ICallPathConnect* call) override;
 };
 
 static int handle_path(const char* path) {
@@ -52,235 +56,146 @@ static int handle_path(const char* path) {
            !strcmp_prefix(path, "/etc/ssl");
 }
 
-static ssize_t mangle_path(char* out, size_t out_len, const char* path) {
-    size_t len;
+static int _mangle_path(char** out,
+                        const IReturn* call,
+                        int dirfd,
+                        const char* path) {
+    if (dirfd != AT_FDCWD && path[0] != '/') {
+        *out = nullptr;
+        return 0;
+    }
 
     if (!handle_path(path)) {
-        len = strlen(path) + 1;
-        if (!out) {
-            return len;
+        *out = nullptr;
+        return 0;
+    }
+
+    ssize_t len = concat(nullptr, 0, PREFIX "/tmp/rootlink", path);
+    if (len > SCRATCH_SIZE) {
+        call->set_return(-ENAMETOOLONG);
+        return -1;
+    }
+
+    *out = new char[len];
+    ssize_t ret = concat(*out, len, PREFIX "/tmp/rootlink", path);
+    if (ret > len) {
+        delete[] *out;
+        call->set_return(-ENAMETOOLONG);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int _mangle_path(ICallPathBase* copy) {
+    char* out;
+
+    int ret = _mangle_path(&out, copy, copy->get_dirfd(), copy->get_path());
+    if (ret < 0) {
+        return -1;
+    } else if (!out) {
+        return 0;
+    }
+
+    copy->set_path(out);
+    delete[] out;
+    return 0;
+}
+
+int Rootlink::mangle_path(Context* ctx,
+                          ICallPath* copy,
+                          const ICallPath* call) {
+    if (call->get_flags() & AT_EMPTY_PATH && !strlen(call->get_path())) {
+        return 0;
+    }
+
+    return _mangle_path(copy);
+}
+
+int Rootlink::mangle_path(Context* ctx,
+                          ICallPathOpen* copy,
+                          const ICallPathOpen* call) {
+    return _mangle_path(copy);
+}
+
+int Rootlink::mangle_path(Context* ctx,
+                          ICallPathFanotify* copy,
+                          const ICallPathFanotify* call) {
+    char* out;
+    int ret = _mangle_path(&out, call, call->get_dirfd(), call->get_path());
+    if (ret < 0) {
+        return -1;
+    } else if (!out) {
+        return 0;
+    }
+
+    copy->set_path(out);
+    delete[] out;
+    return 0;
+}
+
+int Rootlink::mangle_path(Context* ctx,
+                          ICallPathF* copy,
+                          const ICallPathF* call) {
+    if (call->is_f()) {
+        return 0;
+    }
+
+    if (call->get_flags() & AT_EMPTY_PATH && !strlen(call->get_path())) {
+        return 0;
+    }
+
+    return _mangle_path(copy);
+}
+
+int Rootlink::mangle_path(Context* ctx,
+                          ICallPathDual* copy,
+                          const ICallPathDual* call) {
+    char* oldout = nullptr;
+    char* newout = nullptr;
+    int ret;
+
+    if (!(call->get_flags() & AT_EMPTY_PATH && !strlen(call->get_old_path()))) {
+        ret = _mangle_path(&oldout, call, call->get_old_dirfd(),
+                           call->get_old_path());
+        if (ret < 0) {
+            return -1;
         }
-
-        if (len > out_len) {
-            return -ENAMETOOLONG;
-        }
-
-        memcpy(out, path, len);
-        return len;
     }
 
-    len = concat(out, out_len, PREFIX "/tmp/rootlink", path);
-    if (!out) {
-        if (len > SCRATCH_SIZE) {
-            return -ENAMETOOLONG;
-        }
-        return len;
+    ret = _mangle_path(&newout, call, call->get_new_dirfd(),
+                       call->get_new_path());
+    if (ret < 0) {
+        delete[] oldout;
+        return -1;
     }
 
-    if (len > out_len) {
-        return -ENAMETOOLONG;
+    if (oldout) {
+        copy->set_old_path(oldout);
     }
-
-    return len;
+    if (newout) {
+        copy->set_new_path(newout);
+    }
+    delete[] oldout;
+    delete[] newout;
+    return 0;
 }
 
-#define _MANGLE_PATH(__path, errret, prefix)                       \
-    ssize_t prefix##len = mangle_path(nullptr, 0, (__path));       \
-    if (prefix##len < 0) {                                         \
-        *call->ret = prefix##len;                                  \
-        return;                                                    \
-    }                                                              \
-                                                                   \
-    char prefix##buf[prefix##len];                                 \
-    prefix##len = mangle_path(prefix##buf, prefix##len, (__path)); \
-    assert(prefix##len >= 0);                                      \
-    (__path) = prefix##buf
-
-#define MANGLE_PATH(__path, errret) _MANGLE_PATH(__path, errret, )
-
-void Rootlink::next(Context* ctx, const CallOpen* call) {
-    CallOpen _call = *call;
-
-    if (call->at && call->path[0] != '/') {
-        return _next->next(ctx, call);
+int Rootlink::mangle_path(Context* ctx,
+                          ICallPathSymlink* copy,
+                          const ICallPathSymlink* call) {
+    char* out;
+    int ret =
+        _mangle_path(&out, call, call->get_new_dirfd(), call->get_new_path());
+    if (ret < 0) {
+        return -1;
+    } else if (!out) {
+        return 0;
     }
 
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallStat* call) {
-    CallStat _call = *call;
-
-    if ((stattype_is_at(call->type) && call->path[0] != '/') ||
-        call->type == STATTYPE_F) {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallReadlink* call) {
-    CallReadlink _call = *call;
-
-    if (call->at && call->path[0] != '/') {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallAccess* call) {
-    CallAccess _call = *call;
-
-    if (call->at && call->path[0] != '/') {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallExec* call) {
-    CallExec _call = *call;
-
-    if (call->at && call->path[0] != '/') {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallLink* call) {
-    CallLink _call = *call;
-
-    _MANGLE_PATH(_call.oldpath, -1, old);
-    _MANGLE_PATH(_call.newpath, -1, new);
-
-    if (call->at && call->oldpath[0] != '/') {
-        _call.oldpath = call->oldpath;
-    }
-
-    if (call->at && call->newpath[0] != '/') {
-        _call.newpath = call->newpath;
-    }
-
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallSymlink* call) {
-    CallSymlink _call = *call;
-
-    _MANGLE_PATH(_call.oldpath, -1, old);
-    _MANGLE_PATH(_call.newpath, -1, new);
-
-    if (call->at && call->oldpath[0] != '/') {
-        _call.oldpath = call->oldpath;
-    }
-
-    if (call->at && call->newpath[0] != '/') {
-        _call.newpath = call->newpath;
-    }
-
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallUnlink* call) {
-    CallUnlink _call = *call;
-
-    if (call->at && call->path[0] != '/') {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallXattr* call) {
-    CallXattr _call = *call;
-
-    if (call->type2 == XATTRTYPE_F) {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallRename* call) {
-    CallRename _call = *call;
-
-    _MANGLE_PATH(_call.oldpath, -1, old);
-    _MANGLE_PATH(_call.newpath, -1, new);
-
-    if (renametype_is_at(call->type) && call->oldpath[0] != '/') {
-        _call.oldpath = call->oldpath;
-    }
-
-    if (renametype_is_at(call->type) && call->newpath[0] != '/') {
-        _call.newpath = call->newpath;
-    }
-
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallChdir* call) {
-    CallChdir _call = *call;
-
-    if (call->f) {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallChmod* call) {
-    CallChmod _call = *call;
-
-    if ((chmodtype_is_at(call->type) && call->path[0] != '/') ||
-        call->type == CHMODTYPE_F) {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallTruncate* call) {
-    CallTruncate _call = *call;
-
-    if (call->f) {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallMkdir* call) {
-    CallMkdir _call = *call;
-
-    if (call->at && call->path[0] != '/') {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallMknod* call) {
-    CallMknod _call = *call;
-
-    if (call->at && call->path[0] != '/') {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
+    copy->set_new_path(out);
+    delete[] out;
+    return 0;
 }
 
 static int fill_addr_un(struct sockaddr_un* addr, char* sun_path) {
@@ -296,23 +211,29 @@ static int fill_addr_un(struct sockaddr_un* addr, char* sun_path) {
     return 0;
 }
 
-void Rootlink::next(Context* ctx, const CallConnect* call) {
-    int* _ret = call->ret;
-    CallConnect _call = *call;
+class CloseFd : public IDestroyCB {
+    int fd;
 
+    public:
+    CloseFd(int fd) { fd = fd; }
+
+    ~CloseFd() { sys_close(fd); }
+};
+
+int Rootlink::mangle_path(Context* ctx,
+                          ICallPathConnect* copy,
+                          const ICallPathConnect* call) {
     if (call->get_family() == AF_UNIX) {
-        struct sockaddr_un* addr = (decltype(addr))call->addr;
+        struct sockaddr_un* addr = (decltype(addr))call->get_addr();
         if (addr->sun_path[0] != '\0') {
             // Not an abstract socket
-            ssize_t len = mangle_path(nullptr, 0, addr->sun_path);
-            if (len < 0) {
-                *_ret = len;
-                return;
+            char* new_path;
+            int ret = _mangle_path(&new_path, call, AT_FDCWD, addr->sun_path);
+            if (ret < 0) {
+                return -1;
+            } else if (!new_path) {
+                return 0;
             }
-
-            char new_path[len];
-            len = mangle_path(new_path, len, addr->sun_path);
-            assert(len >= 0);
 
             char* slash = strrchr(new_path, '/');
             if (slash) {
@@ -321,8 +242,9 @@ void Rootlink::next(Context* ctx, const CallConnect* call) {
                     new_path, O_RDONLY | O_DIRECTORY | O_NOCTTY | O_CLOEXEC, 0);
                 *slash = '/';
                 if (dirfd < 0) {
-                    *_ret = dirfd;
-                    return;
+                    delete[] new_path;
+                    call->set_return(dirfd);
+                    return -1;
                 }
 
                 char dirfd_buf[21];
@@ -332,8 +254,8 @@ void Rootlink::next(Context* ctx, const CallConnect* call) {
                 const char* basename = slash;
                 const ssize_t basename_len = strlen(basename) + 1;
                 const ssize_t fd_path_len = prefix_len + 21 + basename_len;
-                char fd_path[fd_path_len];
-                len =
+                char* fd_path = new char[fd_path_len];
+                ssize_t len =
                     concat3(fd_path, fd_path_len, prefix, dirfd_buf, basename);
                 if (len > fd_path_len) {
                     abort();
@@ -341,53 +263,33 @@ void Rootlink::next(Context* ctx, const CallConnect* call) {
 
                 struct sockaddr_un new_addr;
                 int ret = fill_addr_un(&new_addr, fd_path);
+                delete[] fd_path;
+                delete[] new_path;
                 if (ret < 0) {
+                    call->set_return(ret);
                     sys_close(dirfd);
-                    *_ret = ret;
-                    return;
+                    return -1;
                 }
 
-                _call.addr = &new_addr;
-                _call.addrlen = sizeof(new_addr);
-                _next->next(ctx, &_call);
-                ret = *_ret;
-                sys_close(dirfd);
-
-                return;
+                copy->set_addr(&new_addr, sizeof(new_addr));
+                copy->set_destroy_cb(new CloseFd(dirfd));
+                return 0;
             } else {
                 struct sockaddr_un new_addr;
                 int ret = fill_addr_un(&new_addr, new_path);
+                delete[] new_path;
                 if (ret < 0) {
-                    *_ret = ret;
-                    return;
+                    call->set_return(ret);
+                    return -1;
                 }
 
-                _call.addr = &new_addr;
-                _call.addrlen = sizeof(new_addr);
-                return _next->next(ctx, &_call);
+                copy->set_addr(&new_addr, sizeof(new_addr));
+                return 0;
             }
         }
     }
 
-    return _next->next(ctx, call);
-}
-
-void Rootlink::next(Context* ctx, const CallFanotifyMark* call) {
-    CallFanotifyMark _call = *call;
-
-    if (call->path[0] != '/') {
-        return _next->next(ctx, call);
-    }
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
-}
-
-void Rootlink::next(Context* ctx, const CallInotifyAddWatch* call) {
-    CallInotifyAddWatch _call = *call;
-
-    MANGLE_PATH(_call.path, -1);
-    return _next->next(ctx, &_call);
+    return 0;
 }
 
 CallHandler* rootlink_init(CallHandler* next) {
