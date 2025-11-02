@@ -8,25 +8,29 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-class CallSigprocmask {
+class CallSigprocmask final : public CallBase {
     public:
     int how{};
     const sigset_t* set{};
     sigset_t* oldset{};
     size_t sigsetsize{};
     int* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallSigaction {
+class CallSigaction final : public CallBase {
     public:
     int signum{};
     const struct k_sigaction* act{};
     struct k_sigaction* oldact{};
     size_t sigsetsize{};
     int* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallAccept {
+class CallAccept final : public CallBase {
     public:
     int is4{};
     int fd{};
@@ -47,9 +51,11 @@ class CallAccept {
         }
         this->ret = call->ret;
     }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallConnect : public ICallPathConnect {
+class CallConnect final : public ICallPathConnect, public CallBase {
     public:
     int is_bind{};
     int fd{};
@@ -65,10 +71,13 @@ class CallConnect : public ICallPathConnect {
 
     void set_addr(void* addr, size_t size) override {
         this->addr.dup(addr, size);
+        this->addrlen = size;
     }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallFanotifyMark : public ICallPathFanotify {
+class CallFanotifyMark final : public ICallPathFanotify, public CallBase {
     public:
     int fd{};
     unsigned int flags{};
@@ -88,9 +97,11 @@ class CallFanotifyMark : public ICallPathFanotify {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(unsigned int flags) override { this->flags = flags; }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallInotifyAddWatch : public ICallPath {
+class CallInotifyAddWatch final : public ICallPath, public CallBase {
     public:
     int fd{};
     MyString path{};
@@ -99,7 +110,7 @@ class CallInotifyAddWatch : public ICallPath {
 
     int is_l() const override { return 0; }
 
-    int get_dirfd() const override { return 0; }
+    int get_dirfd() const override { return AT_FDCWD; }
 
     const char* get_path() const override { return this->path; }
 
@@ -116,12 +127,14 @@ class CallInotifyAddWatch : public ICallPath {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override {}
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
 enum RlimitType { RLIMITTYPE_GET, RLIMITTYPE_SET, RLIMITTYPE_PR };
 typedef enum RlimitType RlimitType;
 
-class CallRlimit {
+class CallRlimit final : public CallBase {
     public:
     RlimitType type{};
     pid_t pid{};
@@ -151,31 +164,39 @@ class CallRlimit {
 
         this->ret = call->ret;
     }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallPtrace {
+class CallPtrace final : public CallBase {
     public:
     long request{};
     long pid{};
     void* addr{};
     void* data{};
     long* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallKill {
+class CallKill final : public CallBase {
     public:
     pid_t pid{};
     int sig{};
     int* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallMisc {
+class CallMisc final : public CallBase {
     public:
     SysArgs args{};
     unsigned long* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallMmap {
+class CallMmap final : public CallBase {
     public:
     unsigned long addr{};
     unsigned long len{};
@@ -184,6 +205,8 @@ class CallMmap {
     unsigned long fd{};
     unsigned long off{};
     unsigned long* ret{};
+
+    void set_return(int ret) const override { *this->ret = (long)ret; }
 };
 
 enum CloneType {
@@ -194,7 +217,7 @@ enum CloneType {
 };
 typedef CloneType CloneType;
 
-class CallClone {
+class CallClone final : public CallBase {
     public:
     CloneType type{};
     struct clone_args* args{};
@@ -211,6 +234,8 @@ class CallClone {
         }
         this->ret = call->ret;
     }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
 unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args);

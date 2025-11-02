@@ -6,7 +6,7 @@
 
 #include <fcntl.h>
 
-class CallExec : public ICallPath {
+class CallExec final : public ICallPath, public CallBase {
     public:
     int at{};
     int final{};
@@ -37,6 +37,8 @@ class CallExec : public ICallPath {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override { this->flags = flags; }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
 unsigned long handle_execve(Context* ctx, SysArgs* args);

@@ -134,10 +134,6 @@ unsigned long handle_fanotify_mark(Context* ctx, SysArgs* args) {
     const char* pathname = (const char*)args->arg5;
     trace("fanotify_mark(%s)\n", or_null(pathname));
 
-    if (!pathname) {
-        return -EFAULT;
-    }
-
     int ret = {0};
     CallFanotifyMark call;
     call.fd = fanotify_fd;

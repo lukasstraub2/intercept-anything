@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-class CallLink : public ICallPathDual {
+class CallLink final : public ICallPathDual, public CallBase {
     public:
     int at{};
     int olddirfd{AT_FDCWD};
@@ -47,9 +47,11 @@ class CallLink : public ICallPathDual {
     int get_flags() const override { return this->flags; }
 
     void set_flags(int flags) override { this->flags = flags; }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallSymlink : public ICallPathSymlink {
+class CallSymlink final : public ICallPathSymlink, public CallBase {
     public:
     int at{};
     MyString oldpath{};
@@ -78,9 +80,11 @@ class CallSymlink : public ICallPathSymlink {
     int get_flags() const override { return this->flags; }
 
     void set_flags(int flags) override { this->flags = flags; }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallUnlink : public ICallPath {
+class CallUnlink final : public ICallPath, public CallBase {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -108,6 +112,8 @@ class CallUnlink : public ICallPath {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override { this->flags = flags; }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
 enum RenameType { RENAMETYPE_PLAIN, RENAMETYPE_AT, RENAMETYPE_AT2 };
@@ -117,7 +123,7 @@ __attribute__((unused)) static int renametype_is_at(RenameType type) {
     return type >= RENAMETYPE_AT;
 }
 
-class CallRename : public ICallPathDual {
+class CallRename final : public ICallPathDual, public CallBase {
     public:
     RenameType type{};
     int olddirfd{AT_FDCWD};
@@ -156,6 +162,8 @@ class CallRename : public ICallPathDual {
     int get_flags() const override { return this->flags; }
 
     void set_flags(int flags) override { this->flags = flags; }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
 enum ChmodType {
@@ -169,7 +177,7 @@ __attribute__((unused)) static int chmodtype_is_at(ChmodType type) {
     return type == CHMODTYPE_AT;
 }
 
-class CallChmod : public ICallPathF {
+class CallChmod final : public ICallPathF, public CallBase {
     public:
     ChmodType type{};
     int fd{};
@@ -222,9 +230,11 @@ class CallChmod : public ICallPathF {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override {}
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallTruncate : public ICallPathF {
+class CallTruncate final : public ICallPathF, public CallBase {
     public:
     int f{};
     int fd{};
@@ -266,9 +276,11 @@ class CallTruncate : public ICallPathF {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override {}
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallMkdir : public ICallPath {
+class CallMkdir final : public ICallPath, public CallBase {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -296,9 +308,11 @@ class CallMkdir : public ICallPath {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override {}
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallMknod : public ICallPath {
+class CallMknod final : public ICallPath, public CallBase {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -327,6 +341,8 @@ class CallMknod : public ICallPath {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override {}
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
 unsigned long handle_link(Context* ctx, SysArgs* args);

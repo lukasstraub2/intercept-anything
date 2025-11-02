@@ -70,37 +70,58 @@ class MyBlob {
     }
 };
 
-class ICallPath {
+class IReturn {
     public:
-    virtual int is_l() const = 0;
+    virtual void set_return(int ret) const = 0;
+    virtual ~IReturn(){};
+};
+
+class IDestroyCB {
+    public:
+    virtual ~IDestroyCB(){};
+};
+
+class ICallBase : public virtual IReturn {
+    public:
+    virtual void set_destroy_cb(IDestroyCB* cb) = 0;
+    virtual ~ICallBase(){};
+};
+
+class ICallPathBase : public virtual ICallBase {
+    public:
     virtual int get_dirfd() const = 0;
     virtual const char* get_path() const = 0;
+
+    virtual void set_dirfd(int dirfd) = 0;
+    virtual void set_path(const char* path) = 0;
+
+    virtual ~ICallPathBase(){};
+};
+
+class ICallPath : public virtual ICallPathBase {
+    public:
+    virtual int is_l() const = 0;
     virtual int get_flags() const = 0;
 
     virtual void clear_l() = 0;
-    virtual void set_dirfd(int dirfd) = 0;
-    virtual void set_path(const char* path) = 0;
     virtual void set_flags(int flags) = 0;
 
     virtual ~ICallPath(){};
 };
 
 // Special case for openat, since the flags have different meanings
-class ICallPathOpen {
+class ICallPathOpen : public virtual ICallPathBase {
     public:
-    virtual int get_dirfd() const = 0;
-    virtual const char* get_path() const = 0;
     virtual int get_flags() const = 0;
-
-    virtual void set_dirfd(int dirfd) = 0;
-    virtual void set_path(const char* path) = 0;
     virtual void set_flags(int flags) = 0;
 
     virtual ~ICallPathOpen(){};
 };
 
-// Special case for fanotify_mark, since the flags have different meanings
-class ICallPathFanotify {
+// Special case for fanotify_mark
+// flags have different meanings
+// path can be NULL, then behavour is like AT_EMPTY_PATH
+class ICallPathFanotify : public virtual ICallBase {
     public:
     virtual int get_dirfd() const = 0;
     virtual const char* get_path() const = 0;
@@ -114,23 +135,19 @@ class ICallPathFanotify {
 };
 
 // Special case for fstat, f<op>xattr and fchdir
-class ICallPathF {
+class ICallPathF : public virtual ICallPathBase {
     public:
     virtual int is_l() const = 0;
     virtual int is_f() const = 0;
-    virtual int get_dirfd() const = 0;
-    virtual const char* get_path() const = 0;
     virtual int get_flags() const = 0;
 
     virtual void clear_l() = 0;
-    virtual void set_dirfd(int dirfd) = 0;
-    virtual void set_path(const char* path) = 0;
     virtual void set_flags(int flags) = 0;
 
     virtual ~ICallPathF(){};
 };
 
-class ICallPathDual {
+class ICallPathDual : public virtual ICallBase {
     public:
     virtual int get_old_dirfd() const = 0;
     virtual const char* get_old_path() const = 0;
@@ -148,7 +165,7 @@ class ICallPathDual {
     virtual ~ICallPathDual(){};
 };
 
-class ICallPathSymlink {
+class ICallPathSymlink : public virtual ICallBase {
     public:
     virtual const char* get_old_path() const = 0;
     virtual void set_old_path(const char* path) = 0;
@@ -164,7 +181,7 @@ class ICallPathSymlink {
     virtual ~ICallPathSymlink(){};
 };
 
-class ICallPathConnect {
+class ICallPathConnect : public virtual ICallBase {
     public:
     virtual sa_family_t get_family() const = 0;
     virtual void* get_addr() const = 0;
@@ -172,4 +189,22 @@ class ICallPathConnect {
     virtual void set_addr(void* addr, size_t size) = 0;
 
     virtual ~ICallPathConnect(){};
+};
+
+class CallBase : public virtual ICallBase {
+    IDestroyCB* cb{};
+
+    public:
+    void set_destroy_cb(IDestroyCB* cb) {
+        if (this->cb) {
+            abort();
+        }
+        this->cb = cb;
+    }
+
+    virtual ~CallBase() {
+        if (cb) {
+            delete cb;
+        }
+    }
 };

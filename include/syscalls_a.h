@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-class CallOpen : public ICallPathOpen {
+class CallOpen final : public ICallPathOpen, public CallBase {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -33,6 +33,8 @@ class CallOpen : public ICallPathOpen {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override { this->flags = flags; }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
 enum StatType {
@@ -47,7 +49,7 @@ __attribute__((unused)) static int stattype_is_at(StatType type) {
     return type >= STATTYPE_AT;
 }
 
-class CallStat : public ICallPathF {
+class CallStat final : public ICallPathF, public CallBase {
     public:
     StatType type{};
     int dirfd{};
@@ -109,9 +111,11 @@ class CallStat : public ICallPathF {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override { this->flags = flags; }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallReadlink : public ICallPath {
+class CallReadlink final : public ICallPath, public CallBase {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -140,9 +144,11 @@ class CallReadlink : public ICallPath {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override {}
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallAccess : public ICallPath {
+class CallAccess final : public ICallPath, public CallBase {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -170,6 +176,8 @@ class CallAccess : public ICallPath {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override {}
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
 enum XattrType {
@@ -183,7 +191,7 @@ typedef enum XattrType XattrType;
 enum XattrType2 { XATTRTYPE_PLAIN, XATTRTYPE_L, XATTRTYPE_F };
 typedef enum XattrType2 XattrType2;
 
-class CallXattr : public ICallPathF {
+class CallXattr final : public ICallPathF, public CallBase {
     public:
     XattrType type{};
     XattrType2 type2{};
@@ -257,9 +265,11 @@ class CallXattr : public ICallPathF {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override {}
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallChdir : public ICallPathF {
+class CallChdir final : public ICallPathF, public CallBase {
     public:
     int f{};
     int fd{};
@@ -299,18 +309,22 @@ class CallChdir : public ICallPathF {
     void set_path(const char* path) override { this->path.dup(path); }
 
     void set_flags(int flags) override {}
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallGetdents {
+class CallGetdents final : public CallBase {
     public:
     int is64{};
     int fd{};
     void* dirp{};
     size_t count{};
     ssize_t* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallClose {
+class CallClose final : public CallBase {
     public:
     int is_range{};
     unsigned int fd{};
@@ -329,6 +343,8 @@ class CallClose {
         }
         this->ret = call->ret;
     }
+
+    void set_return(int ret) const override { *this->ret = ret; }
 };
 
 unsigned long handle_open(Context* ctx, SysArgs* args);
