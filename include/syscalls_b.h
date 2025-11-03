@@ -138,8 +138,8 @@ class CallRename final : public ICallPathDual, public CallBase {
     const char* get_old_path() const override { return this->oldpath; }
 
     void set_old_dirfd(int dirfd) override {
-        if (dirfd != AT_FDCWD && renametype_is_at(this->type)) {
-            this->type = RENAMETYPE_AT2;
+        if (dirfd != AT_FDCWD && !renametype_is_at(this->type)) {
+            this->type = RENAMETYPE_AT;
         }
         this->olddirfd = dirfd;
     }
@@ -151,17 +151,17 @@ class CallRename final : public ICallPathDual, public CallBase {
     const char* get_new_path() const override { return this->newpath; }
 
     void set_new_dirfd(int dirfd) override {
-        if (dirfd != AT_FDCWD && renametype_is_at(this->type)) {
-            this->type = RENAMETYPE_AT2;
+        if (dirfd != AT_FDCWD && !renametype_is_at(this->type)) {
+            this->type = RENAMETYPE_AT;
         }
         this->newdirfd = dirfd;
     }
 
     void set_new_path(const char* path) override { this->newpath.dup(path); }
 
-    int get_flags() const override { return this->flags; }
+    int get_flags() const override { return 0; }
 
-    void set_flags(int flags) override { this->flags = flags; }
+    void set_flags(int flags) override {}
 
     void set_return(int ret) const override { *this->ret = ret; }
 };
