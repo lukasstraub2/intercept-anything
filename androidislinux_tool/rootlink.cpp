@@ -121,6 +121,10 @@ int Rootlink::mangle_path(Context* ctx,
 int Rootlink::mangle_path(Context* ctx,
                           ICallPathFanotify* copy,
                           const ICallPathFanotify* call) {
+    if (!call->get_path()) {
+        return 0;
+    }
+
     char* out;
     int ret = _mangle_path(&out, call, call->get_dirfd(), call->get_path());
     if (ret < 0) {
