@@ -325,6 +325,22 @@ __attribute__((unused)) unsigned long handle_syscall(Context* ctx,
             ret = handle_clone3(ctx, args);
             break;
 
+        case __NR_read:
+            ret = handle_read(ctx, args);
+            break;
+
+        case __NR_pread64:
+            ret = handle_pread64(ctx, args);
+            break;
+
+        case __NR_preadv:
+            ret = handle_preadv(ctx, args);
+            break;
+
+        case __NR_preadv2:
+            ret = handle_preadv2(ctx, args);
+            break;
+
         default:
             ret = handle_misc(ctx, args);
             break;

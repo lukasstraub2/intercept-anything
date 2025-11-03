@@ -238,6 +238,24 @@ class CallClone final : public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
+enum ReadWriteType { READWRITE_PLAIN, READWRITE_64, READWRITE_V, READWRITE_V2 };
+typedef CloneType CloneType;
+
+class CallReadWrite final : public CallBase {
+    public:
+    ReadWriteType type{};
+    int is_write{};
+    unsigned long fd{};
+    const struct iovec* iov{};
+    unsigned long iovcnt{};
+    unsigned long pos_l{};
+    unsigned long pos_h{};
+    int flags{};
+    ssize_t* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
 unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args);
 unsigned long handle_rt_sigaction(Context* ctx, SysArgs* args);
 unsigned long handle_accept(Context* ctx, SysArgs* args);
@@ -257,3 +275,7 @@ unsigned long handle_fork(Context* ctx, SysArgs* args);
 unsigned long handle_vfork(Context* ctx, SysArgs* args);
 unsigned long handle_clone(Context* ctx, SysArgs* args);
 unsigned long handle_clone3(Context* ctx, SysArgs* args);
+unsigned long handle_read(Context* ctx, SysArgs* args);
+unsigned long handle_pread64(Context* ctx, SysArgs* args);
+unsigned long handle_preadv(Context* ctx, SysArgs* args);
+unsigned long handle_preadv2(Context* ctx, SysArgs* args);

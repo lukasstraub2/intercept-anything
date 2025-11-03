@@ -100,4 +100,7 @@ class CallHandler {
     virtual void next(Context* ctx, const CallExec* call) {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
+    virtual void next(Context* ctx, const CallReadWrite* call) {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
 };

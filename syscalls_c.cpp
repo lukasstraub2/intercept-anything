@@ -375,6 +375,98 @@ unsigned long handle_clone3(Context* ctx, SysArgs* args) {
     return ret;
 }
 
+unsigned long handle_read(Context* ctx, SysArgs* args) {
+    unsigned int fd = args->arg1;
+    char* buf = (char*)args->arg2;
+    size_t count = args->arg3;
+    trace("read(%d)\n", fd);
+
+    struct iovec iov = {buf, count};
+
+    ssize_t ret = {0};
+    CallReadWrite call;
+    call.type = READWRITE_PLAIN;
+    call.fd = fd;
+    call.iov = &iov;
+    call.iovcnt = 1;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_pread64(Context* ctx, SysArgs* args) {
+    unsigned int fd = args->arg1;
+    char* buf = (char*)args->arg2;
+    size_t count = args->arg3;
+    loff_t pos = args->arg4;
+    trace("pread64(%d, %lu)\n", fd, pos);
+
+    struct iovec iov = {buf, count};
+
+    ssize_t ret = {0};
+    CallReadWrite call;
+    call.type = READWRITE_64;
+    call.fd = fd;
+    call.iov = &iov;
+    call.iovcnt = 1;
+    call.pos_l = pos;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_preadv(Context* ctx, SysArgs* args) {
+    unsigned long fd = args->arg1;
+    const struct iovec* iov = (const struct iovec*)args->arg2;
+    unsigned long iovcnt = args->arg3;
+    unsigned long pos_l = args->arg4;
+    unsigned long pos_h = args->arg5;
+    trace("preadv(%lu)\n", fd);
+
+    ssize_t ret = {0};
+    CallReadWrite call;
+    call.type = READWRITE_V;
+    call.fd = fd;
+    call.iov = iov;
+    call.iovcnt = iovcnt;
+    call.pos_l = pos_l;
+    call.pos_h = pos_h;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_preadv2(Context* ctx, SysArgs* args) {
+    unsigned long fd = args->arg1;
+    const struct iovec* iov = (const struct iovec*)args->arg2;
+    unsigned long iovcnt = args->arg3;
+    unsigned long pos_l = args->arg4;
+    unsigned long pos_h = args->arg5;
+    int flags = args->arg6;
+    trace("preadv2(%lu)\n", fd);
+
+    ssize_t ret = {0};
+    CallReadWrite call;
+    call.type = READWRITE_V2;
+    call.fd = fd;
+    call.iov = iov;
+    call.iovcnt = iovcnt;
+    call.pos_l = pos_l;
+    call.pos_h = pos_h;
+    call.flags = flags;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
 void BottomHandler::next(Context* ctx, const CallAccept* call) {
     int ret;
     int* _ret = call->ret;
@@ -492,6 +584,40 @@ void BottomHandler::next(Context* ctx, const CallMmap* call) {
     signalmanager_enable_signals(ctx);
     ret = (unsigned long)sys_mmap((void*)call->addr, call->len, call->prot,
                                   call->flags, call->fd, call->off);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallReadWrite* call) {
+    ssize_t ret;
+    ssize_t* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    switch (call->type) {
+        case READWRITE_PLAIN:
+            ret = sys_read(call->fd, call->iov->iov_base, call->iov->iov_len);
+            break;
+
+        case READWRITE_64:
+            ret = sys_pread64(call->fd, (char *)call->iov->iov_base, call->iov->iov_len,
+                              call->pos_l);
+            break;
+
+        case READWRITE_V:
+            ret = sys_preadv(call->fd, call->iov, call->iovcnt, call->pos_l,
+                             call->pos_h);
+            break;
+
+        case READWRITE_V2:
+            ret = sys_preadv2(call->fd, call->iov, call->iovcnt, call->pos_l,
+                              call->pos_h, call->flags);
+            break;
+
+        default:
+            abort();
+            break;
+    }
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;

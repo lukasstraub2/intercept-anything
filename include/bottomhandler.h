@@ -32,4 +32,5 @@ class BottomHandler : public CallHandler {
     void next(Context* ctx, const CallMisc* call) override;
     void next(Context* ctx, const CallMmap* call) override;
     void next(Context* ctx, const CallExec* call) override;
+    void next(Context* ctx, const CallReadWrite* call) override;
 };
