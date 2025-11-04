@@ -279,3 +279,7 @@ unsigned long handle_read(Context* ctx, SysArgs* args);
 unsigned long handle_pread64(Context* ctx, SysArgs* args);
 unsigned long handle_preadv(Context* ctx, SysArgs* args);
 unsigned long handle_preadv2(Context* ctx, SysArgs* args);
+unsigned long handle_write(Context* ctx, SysArgs* args);
+unsigned long handle_pwrite64(Context* ctx, SysArgs* args);
+unsigned long handle_pwritev(Context* ctx, SysArgs* args);
+unsigned long handle_pwritev2(Context* ctx, SysArgs* args);

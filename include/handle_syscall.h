@@ -341,6 +341,22 @@ __attribute__((unused)) unsigned long handle_syscall(Context* ctx,
             ret = handle_preadv2(ctx, args);
             break;
 
+        case __NR_write:
+            ret = handle_write(ctx, args);
+            break;
+
+        case __NR_pwrite64:
+            ret = handle_pwrite64(ctx, args);
+            break;
+
+        case __NR_pwritev:
+            ret = handle_pwritev(ctx, args);
+            break;
+
+        case __NR_pwritev2:
+            ret = handle_pwritev2(ctx, args);
+            break;
+
         default:
             ret = handle_misc(ctx, args);
             break;

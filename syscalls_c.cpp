@@ -28,6 +28,102 @@ unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args) {
     return ret;
 }
 
+unsigned long handle_write(Context* ctx, SysArgs* args) {
+    unsigned int fd = args->arg1;
+    const char* buf = (const char*)args->arg2;
+    size_t count = args->arg3;
+    trace("write(%d)\n", fd);
+
+    struct iovec iov = {(void*)buf, count};
+
+    ssize_t ret = {0};
+    CallReadWrite call;
+    call.type = READWRITE_PLAIN;
+    call.is_write = 1;
+    call.fd = fd;
+    call.iov = &iov;
+    call.iovcnt = 1;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_pwrite64(Context* ctx, SysArgs* args) {
+    unsigned int fd = args->arg1;
+    const char* buf = (const char*)args->arg2;
+    size_t count = args->arg3;
+    loff_t pos = args->arg4;
+    trace("pwrite64(%d, %lu)\n", fd, pos);
+
+    struct iovec iov = {(void*)buf, count};
+
+    ssize_t ret = {0};
+    CallReadWrite call;
+    call.type = READWRITE_64;
+    call.is_write = 1;
+    call.fd = fd;
+    call.iov = &iov;
+    call.iovcnt = 1;
+    call.pos_l = pos;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_pwritev(Context* ctx, SysArgs* args) {
+    unsigned long fd = args->arg1;
+    const struct iovec* iov = (const struct iovec*)args->arg2;
+    unsigned long iovcnt = args->arg3;
+    unsigned long pos_l = args->arg4;
+    unsigned long pos_h = args->arg5;
+    trace("pwritev(%lu)\n", fd);
+
+    ssize_t ret = {0};
+    CallReadWrite call;
+    call.type = READWRITE_V;
+    call.is_write = 1;
+    call.fd = fd;
+    call.iov = iov;
+    call.iovcnt = iovcnt;
+    call.pos_l = pos_l;
+    call.pos_h = pos_h;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_pwritev2(Context* ctx, SysArgs* args) {
+    unsigned long fd = args->arg1;
+    const struct iovec* iov = (const struct iovec*)args->arg2;
+    unsigned long iovcnt = args->arg3;
+    unsigned long pos_l = args->arg4;
+    unsigned long pos_h = args->arg5;
+    int flags = args->arg6;
+    trace("pwritev2(%lu)\n", fd);
+
+    ssize_t ret = {0};
+    CallReadWrite call;
+    call.type = READWRITE_V2;
+    call.is_write = 1;
+    call.fd = fd;
+    call.iov = iov;
+    call.iovcnt = iovcnt;
+    call.pos_l = pos_l;
+    call.pos_h = pos_h;
+    call.flags = flags;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
 unsigned long handle_rt_sigaction(Context* ctx, SysArgs* args) {
     int signum = args->arg1;
     const struct k_sigaction* act = (const struct k_sigaction*)args->arg2;
@@ -594,29 +690,58 @@ void BottomHandler::next(Context* ctx, const CallReadWrite* call) {
     ssize_t* _ret = call->ret;
 
     signalmanager_enable_signals(ctx);
-    switch (call->type) {
-        case READWRITE_PLAIN:
-            ret = sys_read(call->fd, call->iov->iov_base, call->iov->iov_len);
-            break;
+    if (call->is_write) {
+        switch (call->type) {
+            case READWRITE_PLAIN:
+                ret = sys_write(call->fd, (const char*)call->iov->iov_base,
+                                call->iov->iov_len);
+                break;
 
-        case READWRITE_64:
-            ret = sys_pread64(call->fd, (char *)call->iov->iov_base, call->iov->iov_len,
-                              call->pos_l);
-            break;
+            case READWRITE_64:
+                ret = sys_pwrite64(call->fd, (const char*)call->iov->iov_base,
+                                   call->iov->iov_len, call->pos_l);
+                break;
 
-        case READWRITE_V:
-            ret = sys_preadv(call->fd, call->iov, call->iovcnt, call->pos_l,
-                             call->pos_h);
-            break;
+            case READWRITE_V:
+                ret = sys_pwritev(call->fd, call->iov, call->iovcnt,
+                                  call->pos_l, call->pos_h);
+                break;
 
-        case READWRITE_V2:
-            ret = sys_preadv2(call->fd, call->iov, call->iovcnt, call->pos_l,
-                              call->pos_h, call->flags);
-            break;
+            case READWRITE_V2:
+                ret = sys_pwritev2(call->fd, call->iov, call->iovcnt,
+                                   call->pos_l, call->pos_h, call->flags);
+                break;
 
-        default:
-            abort();
-            break;
+            default:
+                abort();
+                break;
+        }
+    } else {
+        switch (call->type) {
+            case READWRITE_PLAIN:
+                ret =
+                    sys_read(call->fd, call->iov->iov_base, call->iov->iov_len);
+                break;
+
+            case READWRITE_64:
+                ret = sys_pread64(call->fd, (char*)call->iov->iov_base,
+                                  call->iov->iov_len, call->pos_l);
+                break;
+
+            case READWRITE_V:
+                ret = sys_preadv(call->fd, call->iov, call->iovcnt, call->pos_l,
+                                 call->pos_h);
+                break;
+
+            case READWRITE_V2:
+                ret = sys_preadv2(call->fd, call->iov, call->iovcnt,
+                                  call->pos_l, call->pos_h, call->flags);
+                break;
+
+            default:
+                abort();
+                break;
+        }
     }
     signalmanager_disable_signals(ctx);
 

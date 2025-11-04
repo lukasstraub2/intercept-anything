@@ -418,3 +418,27 @@ static __attribute__((unused)) ssize_t sys_preadv2(unsigned long fd,
                                                    int flags) {
     return my_syscall6(__NR_preadv2, fd, iov, iovcnt, pos_l, pos_h, flags);
 }
+
+static __attribute__((unused)) ssize_t sys_pwrite64(unsigned int fd,
+                                                    const char* buf,
+                                                    size_t count,
+                                                    loff_t pos) {
+    return my_syscall4(__NR_pwrite64, fd, buf, count, pos);
+}
+
+static __attribute__((unused)) ssize_t sys_pwritev(unsigned long fd,
+                                                   const struct iovec* iov,
+                                                   unsigned long iovcnt,
+                                                   unsigned long pos_l,
+                                                   unsigned long pos_h) {
+    return my_syscall5(__NR_pwritev, fd, iov, iovcnt, pos_l, pos_h);
+}
+
+static __attribute__((unused)) ssize_t sys_pwritev2(unsigned long fd,
+                                                    const struct iovec* iov,
+                                                    unsigned long iovcnt,
+                                                    unsigned long pos_l,
+                                                    unsigned long pos_h,
+                                                    int flags) {
+    return my_syscall6(__NR_pwritev2, fd, iov, iovcnt, pos_l, pos_h, flags);
+}
