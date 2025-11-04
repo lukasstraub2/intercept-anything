@@ -52,28 +52,12 @@ else()
 endif()
 
 include(CheckLinkerFlag)
-check_linker_flag(C "-static;-lgcc" USE_LIBGCC)
-if(USE_LIBGCC)
-    set(LIBGCC -lgcc)
-else()
-    set(LIBGCC -lcompiler_rt)
-endif()
-
-check_linker_flag(CXX "-lgcc_eh" USE_LIBGCC_UNWIND)
-if(USE_LIBGCC_UNWIND)
-    set(LIBUNWIND -lgcc_eh)
-else()
-    set(LIBUNWIND -lunwind)
-endif()
-
-check_linker_flag(CXX "-lsupc++" USE_LIBSUPCXX)
+check_linker_flag(CXX "-static;-lsupc++" USE_LIBSUPCXX)
 if(USE_LIBSUPCXX)
     set(LIBSUPCXX -lsupc++)
 else()
     set(LIBSUPCXX -lc++abi)
 endif()
-
-target_link_libraries(c INTERFACE -Wl,-z,muldefs "$<LINK_GROUP:RESCAN,libc,${LIBUNWIND},${LIBGCC}>")
 
 include_directories(include include/nolibc)
 add_compile_definitions(_GNU_SOURCE)
@@ -96,12 +80,12 @@ add_library(freestanding OBJECT
     syscall_trampo.cpp
     cxxcompat.c
     cxxcompat.cpp)
-target_link_libraries(freestanding PRIVATE c)
+target_link_libraries(freestanding PRIVATE libc)
 target_include_directories(freestanding PUBLIC "include/linux-headers/${ARCH}/include")
 
 set(TOOLS_OBJS tools freestanding crt_pie)
 add_library(tools INTERFACE)
-target_link_libraries(tools INTERFACE -Wl,-z,relro,-z,now -static-pie c ${LIBSUPCXX})
+target_link_libraries(tools INTERFACE -Wl,-z,relro,-z,now -static-pie libc ${LIBSUPCXX})
 
 add_library(loader_main OBJECT loader_main.cpp)
 target_link_libraries(loader_main PRIVATE ${TOOLS_OBJS})
@@ -157,13 +141,13 @@ target_link_libraries(execve_thread_test PRIVATE execve_thread)
 add_executable(signal_tests signal_tests.c)
 
 add_executable(libc_tls_test libc_tls_test.c libc_tls_test2.c)
-target_link_libraries(libc_tls_test PRIVATE c -static-pie crt_pie)
+target_link_libraries(libc_tls_test PRIVATE libc -static-pie crt_pie)
 
 add_executable(libc_tls_stresstest libc_tls_stresstest.c)
-target_link_libraries(libc_tls_stresstest PRIVATE c -static-pie crt_pie)
+target_link_libraries(libc_tls_stresstest PRIVATE libc -static-pie crt_pie)
 
 add_executable(libc_external_thread_test libc_external_thread_test.c)
-target_link_libraries(libc_external_thread_test PRIVATE c -static-pie crt_pie)
+target_link_libraries(libc_external_thread_test PRIVATE libc -static-pie crt_pie)
 
 add_executable(tls_stresstest tls_stresstest.c)
 
