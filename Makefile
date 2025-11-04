@@ -6,10 +6,10 @@ DIR=out
 
 all: compile
 
-libs/musl:
+libs/musl/CMakeLists.txt:
 	git submodule update --init libs/musl
 
-$(DIR): libs/musl
+$(DIR): libs/musl/CMakeLists.txt
 	$(CMAKE) -B $(DIR)
 
 compile: $(DIR)
