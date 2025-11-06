@@ -33,7 +33,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallStat* call) override {
@@ -41,7 +41,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallReadlink* call) override {
@@ -49,7 +49,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallAccess* call) override {
@@ -57,7 +57,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallXattr* call) override {
@@ -65,7 +65,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallChdir* call) override {
@@ -73,7 +73,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallLink* call) override {
@@ -81,7 +81,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallSymlink* call) override {
@@ -89,7 +89,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallUnlink* call) override {
@@ -97,7 +97,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallRename* call) override {
@@ -105,7 +105,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallChmod* call) override {
@@ -113,7 +113,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallTruncate* call) override {
@@ -121,7 +121,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallMkdir* call) override {
@@ -129,7 +129,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallMknod* call) override {
@@ -137,7 +137,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallConnect* call) override {
@@ -145,7 +145,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallFanotifyMark* call) override {
@@ -153,7 +153,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallInotifyAddWatch* call) override {
@@ -161,7 +161,7 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 
     void next(Context* ctx, const CallExec* call) override {
@@ -169,6 +169,6 @@ class ManglePaths : public CallHandler {
         if (mangle_path(ctx, &copy, call)) {
             return;
         }
-        _next->next(ctx, call);
+        _next->next(ctx, &copy);
     }
 };
