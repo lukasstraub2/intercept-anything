@@ -219,7 +219,7 @@ class CloseFd : public IDestroyCB {
     int fd;
 
     public:
-    CloseFd(int fd) { fd = fd; }
+    CloseFd(int fd) { this->fd = fd; }
 
     ~CloseFd() { sys_close(fd); }
 };
