@@ -18,27 +18,27 @@ class Rootlink final : public ManglePaths {
     Rootlink(CallHandler* next) : ManglePaths(next) {}
 
     protected:
-    virtual int mangle_path(Context* ctx,
-                            ICallPath* copy,
-                            const ICallPath* call) override;
-    virtual int mangle_path(Context* ctx,
-                            ICallPathOpen* copy,
-                            const ICallPathOpen* call) override;
-    virtual int mangle_path(Context* ctx,
-                            ICallPathFanotify* copy,
-                            const ICallPathFanotify* call) override;
-    virtual int mangle_path(Context* ctx,
-                            ICallPathF* copy,
-                            const ICallPathF* call) override;
-    virtual int mangle_path(Context* ctx,
-                            ICallPathDual* copy,
-                            const ICallPathDual* call) override;
-    virtual int mangle_path(Context* ctx,
-                            ICallPathSymlink* copy,
-                            const ICallPathSymlink* call) override;
-    virtual int mangle_path(Context* ctx,
-                            ICallPathConnect* copy,
-                            const ICallPathConnect* call) override;
+    int mangle_path(Context* ctx,
+                    ICallPath* copy,
+                    const ICallPath* call) override;
+    int mangle_path(Context* ctx,
+                    ICallPathOpen* copy,
+                    const ICallPathOpen* call) override;
+    int mangle_path(Context* ctx,
+                    ICallPathFanotify* copy,
+                    const ICallPathFanotify* call) override;
+    int mangle_path(Context* ctx,
+                    ICallPathF* copy,
+                    const ICallPathF* call) override;
+    int mangle_path(Context* ctx,
+                    ICallPathDual* copy,
+                    const ICallPathDual* call) override;
+    int mangle_path(Context* ctx,
+                    ICallPathSymlink* copy,
+                    const ICallPathSymlink* call) override;
+    int mangle_path(Context* ctx,
+                    ICallPathConnect* copy,
+                    const ICallPathConnect* call) override;
 };
 
 static int handle_path(const char* path) {
