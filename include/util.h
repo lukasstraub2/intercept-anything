@@ -32,6 +32,8 @@ __attribute__((unused)) static const char* or_null(const char* str) {
     }
 }
 
+extern const char* tmpdir;
+
 void randchar6(char* buf);
 int mkostemp(char* templ, int flags, mode_t mode);
 

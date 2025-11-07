@@ -6,8 +6,10 @@
 #include "rootshim.h"
 #include "androidislinux.h"
 #include "workarounds.h"
+#include "util.h"
 
 CallHandler* main_init(CallHandler* const bottom, int recursing) {
+    tmpdir = PREFIX "/tmp";
     CallHandler* const noxattrs = noxattrs_init(bottom);
     CallHandler* const hardlinkshim =
         hardlinkshim_init(noxattrs, bottom, recursing);

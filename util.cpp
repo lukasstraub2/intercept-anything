@@ -7,6 +7,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+const char* tmpdir = "/tmp";
+
 void randchar6(char* buf) {
     int ret;
     const char* table =
