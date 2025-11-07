@@ -442,3 +442,12 @@ static __attribute__((unused)) ssize_t sys_pwritev2(unsigned long fd,
                                                     int flags) {
     return my_syscall6(__NR_pwritev2, fd, iov, iovcnt, pos_l, pos_h, flags);
 }
+
+static __attribute__((unused)) int sys_unshare(int flags) {
+    return my_syscall1(__NR_unshare, flags);
+}
+
+static __attribute__((unused)) int sys_pidfd_open(pid_t pid,
+                                                  unsigned int flags) {
+    return my_syscall2(__NR_pidfd_open, pid, flags);
+}

@@ -26,6 +26,10 @@
 #include <sys/mman.h>
 #include <pthread.h>
 
+extern "C" {
+int __set_thread_area(void* p);
+}
+
 class SignalManager : public CallHandler {
     public:
     SignalManager(CallHandler* next) : CallHandler(next){};
@@ -436,13 +440,159 @@ typedef struct sigmgmt_trampo_data sigmgmt_trampo_data;
 static __thread sigmgmt_trampo_data data = {};
 static unsigned int* vfork_shm = nullptr;
 
+void sync_wake(unsigned int* shm) {
+    __atomic_store_n(shm, 1, __ATOMIC_RELAXED);
+    futex_wake(shm, INT_MAX);
+}
+
 void vfork_exit_callback() {
     if (vfork_shm) {
-        __atomic_store_n(vfork_shm, 1, __ATOMIC_RELAXED);
-        futex_wake(vfork_shm, INT_MAX);
+        sync_wake(vfork_shm);
         sys_munmap(vfork_shm, PAGE_SIZE);
         vfork_shm = nullptr;
     }
+}
+
+static int handle_clone_fork(const CallClone* call) {
+    struct clone_args* args = call->args;
+    unsigned int* shm;
+    int ret;
+
+    assert(call->type == CLONETYPE_CLONE || call->type == CLONETYPE_CLONE3);
+
+    if (call->type == CLONETYPE_CLONE && args->flags & CLONE_PARENT_SETTID &&
+        args->flags & CLONE_PIDFD) {
+        return -EINVAL;
+    }
+
+    if (args->flags & CLONE_PIDFD && args->flags & CLONE_DETACHED) {
+        return -EINVAL;
+    }
+
+    if (args->flags & CLONE_SIGHAND) {
+        return -EINVAL;
+    }
+
+    if (call->type == CLONETYPE_CLONE3 && args->set_tid) {
+        abort();
+    }
+
+    if (args->flags & CLONE_UNTRACED) {
+        abort();
+    }
+
+    shm = (unsigned int*)sys_mmap(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
+                                  MAP_ANON | MAP_SHARED, -1, 0);
+    if ((unsigned long)shm >= -4095UL) {
+        return -ENOMEM;
+    }
+
+    ret = fork();
+    if (ret) {
+        if (ret < 0) {
+            return -errno;
+        }
+
+        if (args->flags & CLONE_PARENT_SETTID) {
+            int* tidptr = (int*)args->parent_tid;
+            *tidptr = ret;
+        }
+
+        if (args->flags & CLONE_PIDFD) {
+            int* tidptr;
+            if (call->type == CLONETYPE_CLONE) {
+                tidptr = (int*)args->parent_tid;
+            } else {
+                tidptr = (int*)args->pidfd;
+            }
+
+            ret = sys_pidfd_open(ret, 0);
+            if (ret < 0) {
+                abort();
+            }
+            *tidptr = ret;
+        }
+
+        while (!__atomic_load_n(&shm, __ATOMIC_RELAXED)) {
+            int ret = futex_wait(shm, 0);
+            if (ret == -ETIMEDOUT && is_pid_dead(ret)) {
+                break;
+            }
+        }
+
+        sys_munmap(shm, PAGE_SIZE);
+    } else {
+        int* tidptr = (int*)args->child_tid;
+        int tid = 0;
+
+        if (args->flags & CLONE_CHILD_CLEARTID) {
+            tid = my_syscall1(__NR_set_tid_address, tidptr);
+        }
+
+        if (args->flags & CLONE_CHILD_SETTID) {
+            *tidptr = (tid ? tid : sys_gettid());
+        }
+
+        if (call->type == CLONETYPE_CLONE3 &&
+            (args->flags & CLONE_CLEAR_SIGHAND)) {
+            memset(mysignal()->mysignal, 0, sizeof(mysignal()->mysignal));
+            for (int signum = 1; signum <= mysignal_size; signum++) {
+                if (signum == SIGKILL || signum == SIGSTOP) {
+                    continue;
+                }
+
+                int ret = install_generic_handler(
+                    signum, mysignal()->mysignal + signum - 1);
+                if (ret < 0) {
+                    exit_error("rt_sigaction(): %d", ret);
+                }
+            }
+        }
+
+        if (args->flags & CLONE_FILES || args->flags & CLONE_FS) {
+            abort();
+        }
+
+        if (call->type == CLONETYPE_CLONE3 &&
+            (args->flags & CLONE_INTO_CGROUP)) {
+            abort();
+        }
+
+        if (args->flags & CLONE_IO) {
+            // noop
+        }
+
+        if (args->flags & CLONE_PTRACE) {
+            abort();
+        }
+
+        if (args->flags & CLONE_SETTLS) {
+            ret = __set_thread_area((void*)(uintptr_t)args->tls);
+            if (ret < 0) {
+                abort();
+            }
+        }
+
+        int unshare_flags = args->flags;
+        unshare_flags &= (CLONE_NEWCGROUP | CLONE_NEWIPC | CLONE_NEWNET |
+                          CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWTIME |
+                          CLONE_NEWUSER | CLONE_NEWUTS | CLONE_SYSVSEM);
+        if (unshare_flags) {
+            ret = sys_unshare(unshare_flags);
+            if (ret < 0) {
+                abort();
+            }
+        }
+
+        if (args->flags & CLONE_VFORK) {
+            vfork_shm = shm;
+        } else {
+            sync_wake(shm);
+            sys_munmap(shm, PAGE_SIZE);
+        }
+    }
+
+    return ret;
 }
 
 void SignalManager::next(Context* ctx, const CallClone* call) {
@@ -490,70 +640,7 @@ void SignalManager::next(Context* ctx, const CallClone* call) {
     }
 
     if (!(args->flags & CLONE_VM)) {
-        unsigned int* shm;
-        if (args->flags & CLONE_VFORK) {
-            shm = (unsigned int*)sys_mmap(0, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                                          MAP_ANON | MAP_SHARED, -1, 0);
-            if ((unsigned long)shm >= -4095UL) {
-                *_ret = -ENOMEM;
-                return;
-            }
-        }
-
-        *_ret = fork();
-        if (*_ret) {
-            if (*_ret < 0) {
-                *_ret = -errno;
-                return;
-            }
-
-            if (args->flags & CLONE_PARENT_SETTID) {
-                int* tidptr = (int*)args->parent_tid;
-                *tidptr = *_ret;
-            }
-
-            if (args->flags & CLONE_VFORK) {
-                while (!__atomic_load_n(&shm, __ATOMIC_RELAXED)) {
-                    int ret = futex_wait(shm, 0);
-                    if (ret == -ETIMEDOUT && is_pid_dead(*_ret)) {
-                        break;
-                    }
-                }
-
-                sys_munmap(shm, PAGE_SIZE);
-            }
-        } else {
-            int* tidptr = (int*)args->child_tid;
-            int tid = 0;
-
-            if (args->flags & CLONE_CHILD_CLEARTID) {
-                tid = my_syscall1(__NR_set_tid_address, tidptr);
-            }
-
-            if (args->flags & CLONE_CHILD_SETTID) {
-                *tidptr = (tid ? tid : sys_gettid());
-            }
-
-            if (args->flags & CLONE_VFORK) {
-                vfork_shm = shm;
-            }
-
-            if (call->type == CLONETYPE_CLONE3 &&
-                (args->flags & CLONE_CLEAR_SIGHAND)) {
-                memset(mysignal()->mysignal, 0, sizeof(mysignal()->mysignal));
-                for (int signum = 1; signum <= mysignal_size; signum++) {
-                    if (signum == SIGKILL || signum == SIGSTOP) {
-                        continue;
-                    }
-
-                    int ret = install_generic_handler(
-                        signum, mysignal()->mysignal + signum - 1);
-                    if (ret < 0) {
-                        exit_error("rt_sigaction(): %d", ret);
-                    }
-                }
-            }
-        }
+        *_ret = handle_clone_fork(call);
         return;
     }
 
