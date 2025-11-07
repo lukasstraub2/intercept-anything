@@ -159,12 +159,36 @@ static ssize_t read_full(int fd, char* buf, size_t count) {
 
 static int _bottom_exec(Context* ctx, CallExec* call) {
     ssize_t ret;
-    int64_t argc;
+    int64_t envc;
     int dirfd = (call->at ? call->dirfd : AT_FDCWD);
 
-    argc = array_len(call->argv);
-    if (argc < 0) {
-        return -E2BIG;
+    if (call->envp) {
+        envc = array_len(call->envp);
+        if (envc < 0) {
+            return -E2BIG;
+        }
+    } else {
+        envc = 0;
+    }
+
+    const char* env_prefix = "LOADER_RECURSE=";
+    size_t env_prefix_len = strlen(env_prefix);
+    char* new_envp[envc + 2];
+    char* const* src = call->envp;
+    int i = 0;
+    while (i < envc) {
+        if (!*src) {
+            break;
+        } else if (!strncmp(*src, "LOADER_RECURSE=", env_prefix_len)) {
+            src++;
+            continue;
+        }
+
+        char** dst = new_envp + i;
+
+        *dst = *src;
+        src++;
+        i++;
     }
 
     ret = concatat(&ctx->tls->cache, nullptr, 0, dirfd, call->path);
@@ -175,8 +199,9 @@ static int _bottom_exec(Context* ctx, CallExec* call) {
         return -ENAMETOOLONG;
     }
 
-    char fullpath[ret];
-    ret = concatat(&ctx->tls->cache, fullpath, ret, dirfd, call->path);
+    char fullpath[ret + env_prefix_len];
+    ret = concatat(&ctx->tls->cache, fullpath + env_prefix_len, ret, dirfd,
+                   call->path);
     if (ret < 0) {
         abort();
     }
@@ -185,16 +210,14 @@ static int _bottom_exec(Context* ctx, CallExec* call) {
         fullpath[ret - 2] = '\0';
     }
 
-    char* new_argv[argc > 1 ? 2 + argc : 3];
-    new_argv[0] = (char*)"loader_recurse";
-    new_argv[1] = (char*)fullpath;
-    if (argc > 1) {
-        array_copy(new_argv + 2, call->argv + 1, argc);
-    } else {
-        new_argv[2] = nullptr;
-    }
+    memcpy(fullpath, env_prefix, env_prefix_len);
+    new_envp[i] = fullpath;
+    i++;
+
+    new_envp[i] = nullptr;
+
     call->path = "/proc/self/exe";
-    call->argv = new_argv;
+    call->envp = new_envp;
 
     // TODO: What if execve fails?
     thread_exit_exec(ctx->tls);

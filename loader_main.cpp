@@ -36,6 +36,7 @@
 
 #include <string.h>
 #include <unistd.h>
+#include <sys/prctl.h>
 
 extern char** environ;
 int main(int argc, char** argv, char** envp) {
@@ -50,23 +51,47 @@ int main(int argc, char** argv, char** envp) {
         ;
     auxv = (unsigned long*)p;
 
-    if (argc < 2)
-        exit_error("no input file");
+    // todo: allow fd for execveat
+    char* exe = getenv("LOADER_RECURSE");
+    int recursing = exe != NULL;
+    if (!recursing) {
+        if (argc < 2) {
+            exit_error("no input file");
+        }
+        exe = argv[1];
+    }
 
-    int recursing = !strcmp(argv[0], "loader_recurse");
-    intercept_init(recursing, argv[1]);
+    intercept_init(recursing, exe);
 
-    load_file(&info, argv[1]);
+    load_file(&info, exe);
 
-    after_auxv = patch_auxv(auxv, &info, argv[1]);
+    after_auxv = patch_auxv(auxv, &info, exe);
 
-    /* Shift argv, env and av. */
-    memcpy(&argv[0], &argv[1],
-           (unsigned long)after_auxv - (unsigned long)&argv[1]);
-    environ--;
-    libc.auxv--;
-    /* SP points to argc. */
-    (*sp)--;
+    char* basename = strrchr(exe, '/');
+    if (!basename) {
+        basename = exe;
+    } else {
+        basename += 1;
+    }
+    int ret = prctl(PR_SET_NAME, (uintptr_t)basename);
+    if (ret < 0) {
+        abort();
+    }
+
+    if (recursing) {
+        /* Shift av after modifying the environment */
+        unsetenv("LOADER_RECURSE");
+        memcpy(auxv - 1, auxv, (unsigned long)after_auxv - (unsigned long)auxv);
+        libc.auxv--;
+    } else {
+        /* Shift argv, env and av. */
+        memcpy(&argv[0], &argv[1],
+               (unsigned long)after_auxv - (unsigned long)&argv[1]);
+        environ--;
+        libc.auxv--;
+        /* SP points to argc. */
+        (*sp)--;
+    }
 
     z_trampo((void (*)(void))(info.elf_interp ? info.entry[Z_INTERP]
                                               : info.entry[Z_PROG]),
