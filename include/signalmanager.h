@@ -11,6 +11,7 @@ void vfork_exit_callback();
 
 void signalmanager_clean_dead(Tls* tls);
 void signalmanager_install_sigsys(myhandler_t handler);
+void signalmanager_skip_enable_signals(int skip);
 void signalmanager_enable_signals(Context* ctx);
 void signalmanager_disable_signals(Context* ctx);
 CallHandler* signalmanager_init(CallHandler* const next);

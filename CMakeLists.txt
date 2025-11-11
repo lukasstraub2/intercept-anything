@@ -113,6 +113,9 @@ add_executable(emulate_swap
     emulate_swap_tool/emulate_swap_main.cpp)
 target_link_libraries(emulate_swap PUBLIC ${STATIC_TOOLS_OBJS})
 
+add_executable(passthrough_bench passthrough_bench_tool/passthrough_bench_main.cpp)
+target_link_libraries(passthrough_bench PUBLIC ${STATIC_TOOLS_OBJS})
+
 add_library(execve_thread_obj OBJECT libexecve_thread.cpp execve_here.cpp loader.cpp loader_open_stub.cpp)
 target_compile_options(execve_thread_obj PUBLIC -fPIC)
 

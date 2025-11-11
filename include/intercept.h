@@ -8,7 +8,6 @@
 struct Context {
     Tls* tls;
     void* ucontext;
-    int signalmanager_masked;
     int trampo_armed;
 };
 

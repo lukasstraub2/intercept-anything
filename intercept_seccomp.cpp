@@ -57,7 +57,7 @@ static void handler(int sig, siginfo_t* info, void* ucontext) {
         tls->tid = gettid();
     }
 
-    Context ctx = {tls, ucontext, 0, 0};
+    Context ctx = {tls, ucontext, 0};
     ssize_t ret;
     SysArgs args;
 

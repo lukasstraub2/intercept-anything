@@ -244,8 +244,14 @@ static void generic_handler(int signum, siginfo_t* info, void* ucontext) {
     }
 }
 
+static int skip_enable_signals = 0;
+
+void signalmanager_skip_enable_signals(int skip) {
+    skip_enable_signals = skip;
+}
+
 void signalmanager_disable_signals(Context* ctx) {
-    if (!ctx->ucontext) {
+    if (!ctx->ucontext || skip_enable_signals) {
         return;
     }
 
@@ -256,7 +262,7 @@ void signalmanager_disable_signals(Context* ctx) {
 }
 
 void signalmanager_enable_signals(Context* ctx) {
-    if (!ctx->ucontext) {
+    if (!ctx->ucontext || skip_enable_signals) {
         return;
     }
 
