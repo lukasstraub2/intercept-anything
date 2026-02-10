@@ -4,6 +4,7 @@
 #include "syscalls_a.h"
 #include "syscalls_b.h"
 #include "syscalls_c.h"
+#include "syscalls_d.h"
 #include "syscalls_exec.h"
 
 class CallHandler {
@@ -101,6 +102,30 @@ class CallHandler {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
     virtual void next(Context* ctx, const CallReadWrite* call) {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    virtual void next(Context* ctx, const CallSocket* call) {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    virtual void next(Context* ctx, const CallSendRecv* call) {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    virtual void next(Context* ctx, const CallMsg* call) {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    virtual void next(Context* ctx, const CallShutdown* call) {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    virtual void next(Context* ctx, const CallListen* call) {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    virtual void next(Context* ctx, const CallSockName* call) {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    virtual void next(Context* ctx, const CallSocketpair* call) {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    virtual void next(Context* ctx, const CallSockOpt* call) {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
 };

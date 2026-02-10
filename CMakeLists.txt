@@ -72,6 +72,7 @@ add_library(freestanding OBJECT
     syscalls_a.cpp
     syscalls_b.cpp
     syscalls_c.cpp
+    syscalls_d.cpp
     syscalls_exec.cpp
     util.cpp
     signalmanager.cpp

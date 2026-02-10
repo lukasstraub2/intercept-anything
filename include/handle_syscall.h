@@ -5,6 +5,7 @@
 #include "syscalls_a.h"
 #include "syscalls_b.h"
 #include "syscalls_c.h"
+#include "syscalls_d.h"
 #include "syscalls_exec.h"
 
 #include <syscall.h>
@@ -355,6 +356,62 @@ __attribute__((unused)) unsigned long handle_syscall(Context* ctx,
 
         case __NR_pwritev2:
             ret = handle_pwritev2(ctx, args);
+            break;
+
+        case __NR_socket:
+            ret = handle_socket(ctx, args);
+            break;
+
+        case __NR_sendto:
+            ret = handle_sendto(ctx, args);
+            break;
+
+        case __NR_recvfrom:
+            ret = handle_recvfrom(ctx, args);
+            break;
+
+        case __NR_sendmsg:
+            ret = handle_sendmsg(ctx, args);
+            break;
+
+        case __NR_recvmsg:
+            ret = handle_recvmsg(ctx, args);
+            break;
+
+        case __NR_sendmmsg:
+            ret = handle_sendmmsg(ctx, args);
+            break;
+
+        case __NR_recvmmsg:
+            ret = handle_recvmmsg(ctx, args);
+            break;
+
+        case __NR_shutdown:
+            ret = handle_shutdown(ctx, args);
+            break;
+
+        case __NR_listen:
+            ret = handle_listen(ctx, args);
+            break;
+
+        case __NR_getsockname:
+            ret = handle_getsockname(ctx, args);
+            break;
+
+        case __NR_getpeername:
+            ret = handle_getpeername(ctx, args);
+            break;
+
+        case __NR_socketpair:
+            ret = handle_socketpair(ctx, args);
+            break;
+
+        case __NR_setsockopt:
+            ret = handle_setsockopt(ctx, args);
+            break;
+
+        case __NR_getsockopt:
+            ret = handle_getsockopt(ctx, args);
             break;
 
         default:

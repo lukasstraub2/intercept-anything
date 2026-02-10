@@ -451,3 +451,98 @@ static __attribute__((unused)) int sys_pidfd_open(pid_t pid,
                                                   unsigned int flags) {
     return my_syscall2(__NR_pidfd_open, pid, flags);
 }
+
+static __attribute__((unused)) int sys_socket(int family,
+                                              int type,
+                                              int protocol) {
+    return my_syscall3(__NR_socket, family, type, protocol);
+}
+
+static __attribute__((unused)) int sys_sendto(int fd,
+                                              void* buff,
+                                              size_t len,
+                                              unsigned int flags,
+                                              void* addr,
+                                              int addr_len) {
+    return my_syscall6(__NR_sendto, fd, buff, len, flags, addr, addr_len);
+}
+
+static __attribute__((unused)) int sys_recvfrom(int fd,
+                                                void* ubuf,
+                                                size_t size,
+                                                unsigned int flags,
+                                                void* addr,
+                                                int* addr_len) {
+    return my_syscall6(__NR_recvfrom, fd, ubuf, size, flags, addr, addr_len);
+}
+
+static __attribute__((unused)) long sys_sendmsg(int fd,
+                                                struct user_msghdr* msg,
+                                                unsigned int flags) {
+    return my_syscall3(__NR_sendmsg, fd, msg, flags);
+}
+
+static __attribute__((unused)) long sys_recvmsg(int fd,
+                                                struct user_msghdr* msg,
+                                                unsigned int flags) {
+    return my_syscall3(__NR_recvmsg, fd, msg, flags);
+}
+
+static __attribute__((unused)) int sys_sendmmsg(int fd,
+                                                struct mmsghdr* mmsg,
+                                                unsigned int vlen,
+                                                unsigned int flags) {
+    return my_syscall4(__NR_sendmmsg, fd, mmsg, vlen, flags);
+}
+
+static __attribute__((unused)) int sys_recvmmsg(
+    int fd,
+    struct mmsghdr* mmsg,
+    unsigned int vlen,
+    unsigned int flags,
+    struct __kernel_timespec* timeout) {
+    return my_syscall5(__NR_recvmmsg, fd, mmsg, vlen, flags, timeout);
+}
+
+static __attribute__((unused)) int sys_shutdown(int fd, int how) {
+    return my_syscall2(__NR_shutdown, fd, how);
+}
+
+static __attribute__((unused)) int sys_listen(int fd, int backlog) {
+    return my_syscall2(__NR_listen, fd, backlog);
+}
+
+static __attribute__((unused)) int sys_getsockname(int fd,
+                                                   void* usockaddr,
+                                                   int* usockaddr_len) {
+    return my_syscall3(__NR_getsockname, fd, usockaddr, usockaddr_len);
+}
+
+static __attribute__((unused)) int sys_getpeername(int fd,
+                                                   void* usockaddr,
+                                                   int* usockaddr_len) {
+    return my_syscall3(__NR_getpeername, fd, usockaddr, usockaddr_len);
+}
+
+static __attribute__((unused)) int sys_socketpair(int family,
+                                                  int type,
+                                                  int protocol,
+                                                  int* usockvec) {
+    return my_syscall4(__NR_socketpair, family, type, protocol, usockvec);
+}
+
+static __attribute__((unused)) int sys_setsockopt(int fd,
+                                                  int level,
+                                                  int optname,
+                                                  void* optval,
+                                                  int optlen) {
+    return my_syscall5(__NR_setsockopt, fd, level, optname, optval, optlen);
+}
+
+static __attribute__((unused)) int sys_getsockopt(int fd,
+                                                  int level,
+                                                  int optname,
+                                                  void* optval,
+                                                  int* optlen) {
+    return my_syscall5(__NR_getsockopt, fd, level, optname, optval, optlen);
+}
