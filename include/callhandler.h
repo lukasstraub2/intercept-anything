@@ -7,125 +7,169 @@
 #include "syscalls_d.h"
 #include "syscalls_exec.h"
 
-class CallHandler {
+class ICallHandler {
+    public:
+    virtual ~ICallHandler(){};
+
+    virtual void next(Context* ctx, const CallOpen* call) = 0;
+    virtual void next(Context* ctx, const CallStat* call) = 0;
+    virtual void next(Context* ctx, const CallReadlink* call) = 0;
+    virtual void next(Context* ctx, const CallAccess* call) = 0;
+    virtual void next(Context* ctx, const CallXattr* call) = 0;
+    virtual void next(Context* ctx, const CallChdir* call) = 0;
+    virtual void next(Context* ctx, const CallGetdents* call) = 0;
+    virtual void next(Context* ctx, const CallClose* call) = 0;
+    virtual void next(Context* ctx, const CallLink* call) = 0;
+    virtual void next(Context* ctx, const CallSymlink* call) = 0;
+    virtual void next(Context* ctx, const CallUnlink* call) = 0;
+    virtual void next(Context* ctx, const CallRename* call) = 0;
+    virtual void next(Context* ctx, const CallChmod* call) = 0;
+    virtual void next(Context* ctx, const CallTruncate* call) = 0;
+    virtual void next(Context* ctx, const CallMkdir* call) = 0;
+    virtual void next(Context* ctx, const CallMknod* call) = 0;
+    virtual void next(Context* ctx, const CallSigprocmask* call) = 0;
+    virtual void next(Context* ctx, const CallSigaction* call) = 0;
+    virtual void next(Context* ctx, const CallAccept* call) = 0;
+    virtual void next(Context* ctx, const CallConnect* call) = 0;
+    virtual void next(Context* ctx, const CallFanotifyMark* call) = 0;
+    virtual void next(Context* ctx, const CallInotifyAddWatch* call) = 0;
+    virtual void next(Context* ctx, const CallRlimit* call) = 0;
+    virtual void next(Context* ctx, const CallPtrace* call) = 0;
+    virtual void next(Context* ctx, const CallKill* call) = 0;
+    virtual void next(Context* ctx, const CallMisc* call) = 0;
+    virtual void next(Context* ctx, const CallMmap* call) = 0;
+    virtual void next(Context* ctx, const CallClone* call) = 0;
+    virtual void next(Context* ctx, const CallExec* call) = 0;
+    virtual void next(Context* ctx, const CallReadWrite* call) = 0;
+    virtual void next(Context* ctx, const CallSocket* call) = 0;
+    virtual void next(Context* ctx, const CallSendRecv* call) = 0;
+    virtual void next(Context* ctx, const CallMsg* call) = 0;
+    virtual void next(Context* ctx, const CallShutdown* call) = 0;
+    virtual void next(Context* ctx, const CallListen* call) = 0;
+    virtual void next(Context* ctx, const CallSockName* call) = 0;
+    virtual void next(Context* ctx, const CallSocketpair* call) = 0;
+    virtual void next(Context* ctx, const CallSockOpt* call) = 0;
+};
+
+class CallHandler : public ICallHandler {
     protected:
     CallHandler* const _next;
 
     public:
     CallHandler(CallHandler* next) : _next(next) {}
 
-    virtual void next(Context* ctx, const CallOpen* call) {
+    void next(Context* ctx, const CallOpen* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallStat* call) {
+    void next(Context* ctx, const CallStat* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallReadlink* call) {
+    void next(Context* ctx, const CallReadlink* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallAccess* call) {
+    void next(Context* ctx, const CallAccess* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallXattr* call) {
+    void next(Context* ctx, const CallXattr* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallChdir* call) {
+    void next(Context* ctx, const CallChdir* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallGetdents* call) {
+    void next(Context* ctx, const CallGetdents* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallClose* call) {
+    void next(Context* ctx, const CallClose* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallLink* call) {
+    void next(Context* ctx, const CallLink* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallSymlink* call) {
+    void next(Context* ctx, const CallSymlink* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallUnlink* call) {
+    void next(Context* ctx, const CallUnlink* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallRename* call) {
+    void next(Context* ctx, const CallRename* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallChmod* call) {
+    void next(Context* ctx, const CallChmod* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallTruncate* call) {
+    void next(Context* ctx, const CallTruncate* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallMkdir* call) {
+    void next(Context* ctx, const CallMkdir* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallMknod* call) {
+    void next(Context* ctx, const CallMknod* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallSigprocmask* call) {
+    void next(Context* ctx, const CallSigprocmask* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallSigaction* call) {
+    void next(Context* ctx, const CallSigaction* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallAccept* call) {
+    void next(Context* ctx, const CallAccept* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallConnect* call) {
+    void next(Context* ctx, const CallConnect* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallFanotifyMark* call) {
+    void next(Context* ctx, const CallFanotifyMark* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallInotifyAddWatch* call) {
+    void next(Context* ctx, const CallInotifyAddWatch* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallRlimit* call) {
+    void next(Context* ctx, const CallRlimit* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallPtrace* call) {
+    void next(Context* ctx, const CallPtrace* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallKill* call) {
+    void next(Context* ctx, const CallKill* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallMisc* call) {
+    void next(Context* ctx, const CallMisc* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallMmap* call) {
+    void next(Context* ctx, const CallMmap* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallClone* call) {
+    void next(Context* ctx, const CallClone* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallExec* call) {
+    void next(Context* ctx, const CallExec* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallReadWrite* call) {
+    void next(Context* ctx, const CallReadWrite* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallSocket* call) {
+    void next(Context* ctx, const CallSocket* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallSendRecv* call) {
+    void next(Context* ctx, const CallSendRecv* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallMsg* call) {
+    void next(Context* ctx, const CallMsg* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallShutdown* call) {
+    void next(Context* ctx, const CallShutdown* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallListen* call) {
+    void next(Context* ctx, const CallListen* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallSockName* call) {
+    void next(Context* ctx, const CallSockName* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallSocketpair* call) {
+    void next(Context* ctx, const CallSocketpair* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
-    virtual void next(Context* ctx, const CallSockOpt* call) {
+    void next(Context* ctx, const CallSockOpt* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
 };
