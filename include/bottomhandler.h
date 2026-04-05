@@ -2,7 +2,9 @@
 
 #include "callhandler.h"
 
-class BottomHandler : public CallHandler {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winaccessible-base"
+class BottomHandler : public CallHandler, public ICallHandler {
     public:
     BottomHandler() : CallHandler(nullptr) {}
 
@@ -22,6 +24,8 @@ class BottomHandler : public CallHandler {
     void next(Context* ctx, const CallTruncate* call) override;
     void next(Context* ctx, const CallMkdir* call) override;
     void next(Context* ctx, const CallMknod* call) override;
+    void next(Context* ctx, const CallSigprocmask* call) override;
+    void next(Context* ctx, const CallSigaction* call) override;
     void next(Context* ctx, const CallAccept* call) override;
     void next(Context* ctx, const CallConnect* call) override;
     void next(Context* ctx, const CallFanotifyMark* call) override;
@@ -31,6 +35,7 @@ class BottomHandler : public CallHandler {
     void next(Context* ctx, const CallKill* call) override;
     void next(Context* ctx, const CallMisc* call) override;
     void next(Context* ctx, const CallMmap* call) override;
+    void next(Context* ctx, const CallClone* call) override;
     void next(Context* ctx, const CallExec* call) override;
     void next(Context* ctx, const CallReadWrite* call) override;
     void next(Context* ctx, const CallSocket* call) override;
@@ -42,3 +47,4 @@ class BottomHandler : public CallHandler {
     void next(Context* ctx, const CallSocketpair* call) override;
     void next(Context* ctx, const CallSockOpt* call) override;
 };
+#pragma GCC diagnostic pop

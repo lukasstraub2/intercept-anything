@@ -563,6 +563,24 @@ unsigned long handle_preadv2(Context* ctx, SysArgs* args) {
     return ret;
 }
 
+void BottomHandler::next(Context* ctx, const CallSigaction* call) {
+    int ret;
+    int* _ret = call->ret;
+    signalmanager_enable_signals(ctx);
+    ret = sys_rt_sigaction(call->signum, call->act, call->oldact,
+                           call->sigsetsize);
+    signalmanager_disable_signals(ctx);
+}
+
+void BottomHandler::next(Context* ctx, const CallSigprocmask* call) {
+    int ret;
+    int* _ret = call->ret;
+    signalmanager_enable_signals(ctx);
+    ret = sys_rt_sigprocmask(call->how, call->set, call->oldset,
+                             call->sigsetsize);
+    signalmanager_disable_signals(ctx);
+}
+
 void BottomHandler::next(Context* ctx, const CallAccept* call) {
     int ret;
     int* _ret = call->ret;
@@ -683,6 +701,10 @@ void BottomHandler::next(Context* ctx, const CallMmap* call) {
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallClone* call) {
+    abort();
 }
 
 void BottomHandler::next(Context* ctx, const CallReadWrite* call) {

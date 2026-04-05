@@ -51,7 +51,7 @@ class ICallHandler {
     virtual void next(Context* ctx, const CallSockOpt* call) = 0;
 };
 
-class CallHandler : public ICallHandler {
+class CallHandler : virtual public ICallHandler {
     protected:
     CallHandler* const _next;
 
