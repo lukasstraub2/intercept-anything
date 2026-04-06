@@ -706,8 +706,8 @@ void HardlinkShim::next(Context* ctx, const CallLink* call) {
         return;
     }
 
-    if (call->at && call->flags & (AT_EMPTY_PATH | AT_SYMLINK_FOLLOW)) {
-        // TODO: Handle AT_SYMLINK_FOLLOW
+    // TODO: Handle AT_SYMLINK_FOLLOW
+    if (call->at && call->flags & (AT_EMPTY_PATH)) {
         *_ret = -ENOENT;
         return;
     }
