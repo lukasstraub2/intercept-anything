@@ -100,25 +100,32 @@ struct WorkaroundPaths : public ManglePaths {
     protected:
     int mangle_path(Context* ctx,
                     ICallPath* copy,
-                    const ICallPath* call) override;
+                    const ICallPath* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathOpen* copy,
-                    const ICallPathOpen* call) override;
+                    const ICallPathOpen* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathFanotify* copy,
-                    const ICallPathFanotify* call) override;
+                    const ICallPathFanotify* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathF* copy,
-                    const ICallPathF* call) override;
+                    const ICallPathF* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathDual* copy,
-                    const ICallPathDual* call) override;
+                    const ICallPathDual* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathSymlink* copy,
-                    const ICallPathSymlink* call) override;
+                    const ICallPathSymlink* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathConnect* copy,
-                    const ICallPathConnect* call) override;
+                    const ICallPathConnect* call,
+                    IDestroyCB** cb) override;
 };
 
 class UnlinkSymlink : public IDestroyCB {
@@ -136,7 +143,8 @@ class UnlinkSymlink : public IDestroyCB {
 static int _mangle_path(char** out,
                         ICallBase* call,
                         int dirfd,
-                        const char* path) {
+                        const char* path,
+                        IDestroyCB** cb) {
     if (dirfd != AT_FDCWD && path[0] != '/') {
         *out = nullptr;
         return 0;
@@ -163,7 +171,7 @@ static int _mangle_path(char** out,
             return -1;
         }
 
-        call->set_destroy_cb(new UnlinkSymlink(new_path));
+        *cb = new UnlinkSymlink(new_path);
         *out = new_path;
         return 0;
     } else {
@@ -172,10 +180,10 @@ static int _mangle_path(char** out,
     }
 }
 
-static int _mangle_path(ICallPathBase* copy) {
+static int _mangle_path(ICallPathBase* copy, IDestroyCB** cb) {
     char* out;
 
-    int ret = _mangle_path(&out, copy, copy->get_dirfd(), copy->get_path());
+    int ret = _mangle_path(&out, copy, copy->get_dirfd(), copy->get_path(), cb);
     if (ret < 0) {
         return -1;
     } else if (!out) {
@@ -189,29 +197,32 @@ static int _mangle_path(ICallPathBase* copy) {
 
 int WorkaroundPaths::mangle_path(Context* ctx,
                                  ICallPath* copy,
-                                 const ICallPath* call) {
+                                 const ICallPath* call,
+                                 IDestroyCB** cb) {
     if (call->get_flags() & AT_EMPTY_PATH && !strlen(call->get_path())) {
         return 0;
     }
 
-    return _mangle_path(copy);
+    return _mangle_path(copy, cb);
 }
 
 int WorkaroundPaths::mangle_path(Context* ctx,
                                  ICallPathOpen* copy,
-                                 const ICallPathOpen* call) {
-    return _mangle_path(copy);
+                                 const ICallPathOpen* call,
+                                 IDestroyCB** cb) {
+    return _mangle_path(copy, cb);
 }
 
 int WorkaroundPaths::mangle_path(Context* ctx,
                                  ICallPathFanotify* copy,
-                                 const ICallPathFanotify* call) {
+                                 const ICallPathFanotify* call,
+                                 IDestroyCB** cb) {
     if (!call->get_path()) {
         return 0;
     }
 
     char* out;
-    int ret = _mangle_path(&out, copy, call->get_dirfd(), call->get_path());
+    int ret = _mangle_path(&out, copy, call->get_dirfd(), call->get_path(), cb);
     if (ret < 0) {
         return -1;
     } else if (!out) {
@@ -225,7 +236,8 @@ int WorkaroundPaths::mangle_path(Context* ctx,
 
 int WorkaroundPaths::mangle_path(Context* ctx,
                                  ICallPathF* copy,
-                                 const ICallPathF* call) {
+                                 const ICallPathF* call,
+                                 IDestroyCB** cb) {
     if (call->is_f()) {
         return 0;
     }
@@ -234,26 +246,27 @@ int WorkaroundPaths::mangle_path(Context* ctx,
         return 0;
     }
 
-    return _mangle_path(copy);
+    return _mangle_path(copy, cb);
 }
 
 int WorkaroundPaths::mangle_path(Context* ctx,
                                  ICallPathDual* copy,
-                                 const ICallPathDual* call) {
+                                 const ICallPathDual* call,
+                                 IDestroyCB** cb) {
     char* oldout = nullptr;
     char* newout = nullptr;
     int ret;
 
     if (!(call->get_flags() & AT_EMPTY_PATH && !strlen(call->get_old_path()))) {
         ret = _mangle_path(&oldout, copy, call->get_old_dirfd(),
-                           call->get_old_path());
+                           call->get_old_path(), cb);
         if (ret < 0) {
             return -1;
         }
     }
 
     ret = _mangle_path(&newout, copy, call->get_new_dirfd(),
-                       call->get_new_path());
+                       call->get_new_path(), cb);
     if (ret < 0) {
         delete[] oldout;
         return -1;
@@ -272,10 +285,11 @@ int WorkaroundPaths::mangle_path(Context* ctx,
 
 int WorkaroundPaths::mangle_path(Context* ctx,
                                  ICallPathSymlink* copy,
-                                 const ICallPathSymlink* call) {
+                                 const ICallPathSymlink* call,
+                                 IDestroyCB** cb) {
     char* out;
-    int ret =
-        _mangle_path(&out, copy, call->get_new_dirfd(), call->get_new_path());
+    int ret = _mangle_path(&out, copy, call->get_new_dirfd(),
+                           call->get_new_path(), cb);
     if (ret < 0) {
         return -1;
     } else if (!out) {
@@ -289,7 +303,8 @@ int WorkaroundPaths::mangle_path(Context* ctx,
 
 int WorkaroundPaths::mangle_path(Context* ctx,
                                  ICallPathConnect* copy,
-                                 const ICallPathConnect* call) {
+                                 const ICallPathConnect* call,
+                                 IDestroyCB** cb) {
     return 0;
 }
 

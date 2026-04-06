@@ -6,7 +6,7 @@
 
 #include <fcntl.h>
 
-class CallExec final : public ICallPath, public CallBase {
+class CallExec final : public ICallPath, virtual public ICallBase {
     public:
     int at{};
     int final{};

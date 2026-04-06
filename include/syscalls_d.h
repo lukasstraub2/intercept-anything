@@ -8,7 +8,7 @@
 #include <sys/socket.h>
 #include <stdlib.h>
 
-class CallSocket final : public CallBase {
+class CallSocket final : public ICallBase {
     public:
     int family{};
     int type{};
@@ -20,7 +20,7 @@ class CallSocket final : public CallBase {
 
 enum SendRecvType { SENDRECV_SENDTO, SENDRECV_RECVFROM };
 
-class CallSendRecv final : public CallBase {
+class CallSendRecv final : public ICallBase {
     public:
     SendRecvType type{};
     int fd{};
@@ -36,7 +36,7 @@ class CallSendRecv final : public CallBase {
 
 enum MsgType { MSG_SEND, MSG_RECV, MSG_SENDM, MSG_RECVM };
 
-class CallMsg final : public CallBase {
+class CallMsg final : public ICallBase {
     public:
     MsgType type{};
     int fd{};
@@ -49,7 +49,7 @@ class CallMsg final : public CallBase {
     void set_return(int ret) const override { *this->ret = (long)ret; }
 };
 
-class CallShutdown final : public CallBase {
+class CallShutdown final : public ICallBase {
     public:
     int fd{};
     int how{};
@@ -58,7 +58,7 @@ class CallShutdown final : public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallListen final : public CallBase {
+class CallListen final : public ICallBase {
     public:
     int fd{};
     int backlog{};
@@ -69,7 +69,7 @@ class CallListen final : public CallBase {
 
 enum SockNameType { SOCKNAME_GET, SOCKNAME_PEER };
 
-class CallSockName final : public CallBase {
+class CallSockName final : public ICallBase {
     public:
     SockNameType type{};
     int fd{};
@@ -80,7 +80,7 @@ class CallSockName final : public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallSocketpair final : public CallBase {
+class CallSocketpair final : public ICallBase {
     public:
     int family{};
     int type{};
@@ -93,7 +93,7 @@ class CallSocketpair final : public CallBase {
 
 enum SockOptType { SOCKOPT_SET, SOCKOPT_GET };
 
-class CallSockOpt final : public CallBase {
+class CallSockOpt final : public ICallBase {
     public:
     SockOptType type{};
     int fd{};

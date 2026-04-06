@@ -83,7 +83,6 @@ class IDestroyCB {
 
 class ICallBase : public virtual IReturn {
     public:
-    virtual void set_destroy_cb(IDestroyCB* cb) = 0;
     virtual ~ICallBase(){};
 };
 
@@ -189,22 +188,4 @@ class ICallPathConnect : public virtual ICallBase {
     virtual void set_addr(void* addr, size_t size) = 0;
 
     virtual ~ICallPathConnect(){};
-};
-
-class CallBase : public virtual ICallBase {
-    IDestroyCB* cb{};
-
-    public:
-    void set_destroy_cb(IDestroyCB* cb) {
-        if (this->cb) {
-            abort();
-        }
-        this->cb = cb;
-    }
-
-    virtual ~CallBase() {
-        if (cb) {
-            delete cb;
-        }
-    }
 };

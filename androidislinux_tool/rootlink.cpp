@@ -20,25 +20,32 @@ class Rootlink final : public ManglePaths {
     protected:
     int mangle_path(Context* ctx,
                     ICallPath* copy,
-                    const ICallPath* call) override;
+                    const ICallPath* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathOpen* copy,
-                    const ICallPathOpen* call) override;
+                    const ICallPathOpen* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathFanotify* copy,
-                    const ICallPathFanotify* call) override;
+                    const ICallPathFanotify* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathF* copy,
-                    const ICallPathF* call) override;
+                    const ICallPathF* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathDual* copy,
-                    const ICallPathDual* call) override;
+                    const ICallPathDual* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathSymlink* copy,
-                    const ICallPathSymlink* call) override;
+                    const ICallPathSymlink* call,
+                    IDestroyCB** cb) override;
     int mangle_path(Context* ctx,
                     ICallPathConnect* copy,
-                    const ICallPathConnect* call) override;
+                    const ICallPathConnect* call,
+                    IDestroyCB** cb) override;
 };
 
 static int handle_path(const char* path) {
@@ -104,7 +111,8 @@ static int _mangle_path(ICallPathBase* copy) {
 
 int Rootlink::mangle_path(Context* ctx,
                           ICallPath* copy,
-                          const ICallPath* call) {
+                          const ICallPath* call,
+                          IDestroyCB** cb) {
     if (call->get_flags() & AT_EMPTY_PATH && !strlen(call->get_path())) {
         return 0;
     }
@@ -114,13 +122,15 @@ int Rootlink::mangle_path(Context* ctx,
 
 int Rootlink::mangle_path(Context* ctx,
                           ICallPathOpen* copy,
-                          const ICallPathOpen* call) {
+                          const ICallPathOpen* call,
+                          IDestroyCB** cb) {
     return _mangle_path(copy);
 }
 
 int Rootlink::mangle_path(Context* ctx,
                           ICallPathFanotify* copy,
-                          const ICallPathFanotify* call) {
+                          const ICallPathFanotify* call,
+                          IDestroyCB** cb) {
     if (!call->get_path()) {
         return 0;
     }
@@ -140,7 +150,8 @@ int Rootlink::mangle_path(Context* ctx,
 
 int Rootlink::mangle_path(Context* ctx,
                           ICallPathF* copy,
-                          const ICallPathF* call) {
+                          const ICallPathF* call,
+                          IDestroyCB** cb) {
     if (call->is_f()) {
         return 0;
     }
@@ -154,7 +165,8 @@ int Rootlink::mangle_path(Context* ctx,
 
 int Rootlink::mangle_path(Context* ctx,
                           ICallPathDual* copy,
-                          const ICallPathDual* call) {
+                          const ICallPathDual* call,
+                          IDestroyCB** cb) {
     char* oldout = nullptr;
     char* newout = nullptr;
     int ret;
@@ -187,7 +199,8 @@ int Rootlink::mangle_path(Context* ctx,
 
 int Rootlink::mangle_path(Context* ctx,
                           ICallPathSymlink* copy,
-                          const ICallPathSymlink* call) {
+                          const ICallPathSymlink* call,
+                          IDestroyCB** cb) {
     char* out;
     int ret =
         _mangle_path(&out, call, call->get_new_dirfd(), call->get_new_path());
@@ -226,7 +239,8 @@ class CloseFd : public IDestroyCB {
 
 int Rootlink::mangle_path(Context* ctx,
                           ICallPathConnect* copy,
-                          const ICallPathConnect* call) {
+                          const ICallPathConnect* call,
+                          IDestroyCB** cb) {
     if (call->get_family() == AF_UNIX) {
         struct sockaddr_un* addr = (decltype(addr))call->get_addr();
         if (addr->sun_path[0] != '\0') {
@@ -276,7 +290,7 @@ int Rootlink::mangle_path(Context* ctx,
                 }
 
                 copy->set_addr(&new_addr, sizeof(new_addr));
-                copy->set_destroy_cb(new CloseFd(dirfd));
+                *cb = new CloseFd(dirfd);
                 return 0;
             } else {
                 struct sockaddr_un new_addr;

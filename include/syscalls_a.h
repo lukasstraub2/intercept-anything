@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-class CallOpen final : public ICallPathOpen, public CallBase {
+class CallOpen final : public ICallPathOpen, virtual public ICallBase {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -49,7 +49,7 @@ __attribute__((unused)) static int stattype_is_at(StatType type) {
     return type >= STATTYPE_AT;
 }
 
-class CallStat final : public ICallPathF, public CallBase {
+class CallStat final : public ICallPathF, virtual public ICallBase {
     public:
     StatType type{};
     int dirfd{};
@@ -115,7 +115,7 @@ class CallStat final : public ICallPathF, public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallReadlink final : public ICallPath, public CallBase {
+class CallReadlink final : public ICallPath, virtual public ICallBase {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -148,7 +148,7 @@ class CallReadlink final : public ICallPath, public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallAccess final : public ICallPath, public CallBase {
+class CallAccess final : public ICallPath, virtual public ICallBase {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -191,7 +191,7 @@ typedef enum XattrType XattrType;
 enum XattrType2 { XATTRTYPE_PLAIN, XATTRTYPE_L, XATTRTYPE_F };
 typedef enum XattrType2 XattrType2;
 
-class CallXattr final : public ICallPathF, public CallBase {
+class CallXattr final : public ICallPathF, virtual public ICallBase {
     public:
     XattrType type{};
     XattrType2 type2{};
@@ -269,7 +269,7 @@ class CallXattr final : public ICallPathF, public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallChdir final : public ICallPathF, public CallBase {
+class CallChdir final : public ICallPathF, virtual public ICallBase {
     public:
     int f{};
     int fd{};
@@ -313,7 +313,7 @@ class CallChdir final : public ICallPathF, public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallGetdents final : public CallBase {
+class CallGetdents final : public ICallBase {
     public:
     int is64{};
     int fd{};
@@ -324,7 +324,7 @@ class CallGetdents final : public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallClose final : public CallBase {
+class CallClose final : public ICallBase {
     public:
     int is_range{};
     unsigned int fd{};

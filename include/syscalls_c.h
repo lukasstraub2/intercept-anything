@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-class CallSigprocmask final : public CallBase {
+class CallSigprocmask final : public ICallBase {
     public:
     int how{};
     const sigset_t* set{};
@@ -19,7 +19,7 @@ class CallSigprocmask final : public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallSigaction final : public CallBase {
+class CallSigaction final : public ICallBase {
     public:
     int signum{};
     const struct k_sigaction* act{};
@@ -30,7 +30,7 @@ class CallSigaction final : public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallAccept final : public CallBase {
+class CallAccept final : public ICallBase {
     public:
     int is4{};
     int fd{};
@@ -55,7 +55,7 @@ class CallAccept final : public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallConnect final : public ICallPathConnect, public CallBase {
+class CallConnect final : public ICallPathConnect, virtual public ICallBase {
     public:
     int is_bind{};
     int fd{};
@@ -77,7 +77,8 @@ class CallConnect final : public ICallPathConnect, public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallFanotifyMark final : public ICallPathFanotify, public CallBase {
+class CallFanotifyMark final : public ICallPathFanotify,
+                               virtual public ICallBase {
     public:
     int fd{};
     unsigned int flags{};
@@ -101,7 +102,7 @@ class CallFanotifyMark final : public ICallPathFanotify, public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallInotifyAddWatch final : public ICallPath, public CallBase {
+class CallInotifyAddWatch final : public ICallPath, virtual public ICallBase {
     public:
     int fd{};
     MyString path{};
@@ -134,7 +135,7 @@ class CallInotifyAddWatch final : public ICallPath, public CallBase {
 enum RlimitType { RLIMITTYPE_GET, RLIMITTYPE_SET, RLIMITTYPE_PR };
 typedef enum RlimitType RlimitType;
 
-class CallRlimit final : public CallBase {
+class CallRlimit final : public ICallBase {
     public:
     RlimitType type{};
     pid_t pid{};
@@ -168,7 +169,7 @@ class CallRlimit final : public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallPtrace final : public CallBase {
+class CallPtrace final : public ICallBase {
     public:
     long request{};
     long pid{};
@@ -179,7 +180,7 @@ class CallPtrace final : public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallKill final : public CallBase {
+class CallKill final : public ICallBase {
     public:
     pid_t pid{};
     int sig{};
@@ -188,7 +189,7 @@ class CallKill final : public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallMisc final : public CallBase {
+class CallMisc final : public ICallBase {
     public:
     SysArgs args{};
     unsigned long* ret{};
@@ -196,7 +197,7 @@ class CallMisc final : public CallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallMmap final : public CallBase {
+class CallMmap final : public ICallBase {
     public:
     unsigned long addr{};
     unsigned long len{};
@@ -217,7 +218,7 @@ enum CloneType {
 };
 typedef CloneType CloneType;
 
-class CallClone final : public CallBase {
+class CallClone final : public ICallBase {
     public:
     CloneType type{};
     struct clone_args* args{};
@@ -241,7 +242,7 @@ class CallClone final : public CallBase {
 enum ReadWriteType { READWRITE_PLAIN, READWRITE_64, READWRITE_V, READWRITE_V2 };
 typedef CloneType CloneType;
 
-class CallReadWrite final : public CallBase {
+class CallReadWrite final : public ICallBase {
     public:
     ReadWriteType type{};
     int is_write{};
