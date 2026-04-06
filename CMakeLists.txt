@@ -122,6 +122,11 @@ add_executable(syscall_log
     syscall_log_tool/syscall_log_main.cpp)
 target_link_libraries(syscall_log PUBLIC ${STATIC_TOOLS_OBJS})
 
+add_executable(socket_timeout
+    socket_timeout_tool/socket_timeout.cpp
+    socket_timeout_tool/socket_timeout_main.cpp)
+target_link_libraries(socket_timeout PUBLIC ${STATIC_TOOLS_OBJS})
+
 add_library(execve_thread_obj OBJECT libexecve_thread.cpp execve_here.cpp loader.cpp loader_open_stub.cpp)
 target_compile_options(execve_thread_obj PUBLIC -fPIC)
 
