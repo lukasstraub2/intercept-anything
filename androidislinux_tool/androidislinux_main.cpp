@@ -11,8 +11,8 @@
 CallHandler* main_init(CallHandler* const bottom, int recursing) {
     tmpdir = PREFIX "/tmp";
     CallHandler* const noxattrs = noxattrs_init(bottom);
-    CallHandler* const hardlinkshim =
-        hardlinkshim_init(noxattrs, bottom, recursing);
+    CallHandler* const hardlinkshim = hardlinkshim_init(
+        noxattrs, bottom, recursing, PREFIX, PREFIX "/tmp/hardlinkshim/");
     CallHandler* const rootlink = rootlink_init(hardlinkshim);
     CallHandler* const rootshim = rootshim_init(rootlink);
     CallHandler* const androidislinux = androidislinux_init(rootshim);

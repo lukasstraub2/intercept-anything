@@ -22,20 +22,22 @@
 #include <sys/mman.h>
 #include <kstat.h>
 
-#define HARDLINK_PREFIX PREFIX "/tmp/hardlinkshim/"
 #define LOCKFILE "lock"
 
-class HardlinkShim : public CallHandler {
+class HardlinkShim final : public CallHandler {
     private:
     CallHandler* const bottom;
-    struct statx prefix;
+    struct statx prefix_st;
     RwLock* mapped_rwlock;
+    char* prefix;
+    char* hardlink_prefix;
 
     void lock_read(Tls* tls);
     void unlock_read(Tls* tls);
     void lock_write(Tls* tls);
     void unlock_write(Tls* tls);
 
+    int is_hardlinkat(Context* ctx, int dirfd, const char* path);
     int _is_inside_prefix(const char* component);
     int is_inside_prefix(const char* _file_path);
     int is_inside_prefixat(Context* ctx, int dirfd, const char* path);
@@ -45,8 +47,14 @@ class HardlinkShim : public CallHandler {
                            int dirfdb,
                            const char* pathb);
 
+    size_t make_linkname(char* out, size_t out_len, uint64_t ino);
+
     public:
-    HardlinkShim(CallHandler* next, CallHandler* bottom, int recursing);
+    HardlinkShim(CallHandler* next,
+                 CallHandler* bottom,
+                 int recursing,
+                 const char* prefix,
+                 const char* hardlink_prefix);
     void next(Context* ctx, const CallOpen* call) override;
     void next(Context* ctx, const CallStat* call) override;
     void next(Context* ctx, const CallReadlink* call) override;
@@ -58,6 +66,8 @@ class HardlinkShim : public CallHandler {
     void next(Context* ctx, const CallXattr* call) override;
     void next(Context* ctx, const CallRename* call) override;
     void next(Context* ctx, const CallGetdents* call) override;
+
+    ~HardlinkShim();
 };
 
 void HardlinkShim::lock_read(Tls* tls) {
@@ -223,7 +233,7 @@ static int cnt_read_hardlink(Context* ctx, int dirfd, const char* path) {
     return ret;
 }
 
-static int is_hardlinkat(Context* ctx, int dirfd, const char* path) {
+int HardlinkShim::is_hardlinkat(Context* ctx, int dirfd, const char* path) {
     ssize_t ret;
 
     ret = readlink_cache(&ctx->tls->cache, nullptr, 0, dirfd, path);
@@ -241,7 +251,7 @@ static int is_hardlinkat(Context* ctx, int dirfd, const char* path) {
         abort();
     }
 
-    if (!strcmp_prefix(target, HARDLINK_PREFIX)) {
+    if (!strcmp_prefix(target, this->hardlink_prefix)) {
         return 1;
     }
 
@@ -258,9 +268,9 @@ int HardlinkShim::_is_inside_prefix(const char* component) {
         return ret;
     }
 
-    if (statbuf.stx_dev_minor == this->prefix.stx_dev_minor &&
-        statbuf.stx_dev_major == this->prefix.stx_dev_major &&
-        statbuf.stx_ino == this->prefix.stx_ino) {
+    if (statbuf.stx_dev_minor == this->prefix_st.stx_dev_minor &&
+        statbuf.stx_dev_major == this->prefix_st.stx_dev_major &&
+        statbuf.stx_ino == this->prefix_st.stx_ino) {
         return 1;
     }
 
@@ -295,7 +305,7 @@ int HardlinkShim::is_inside_prefix(const char* _file_path) {
     // Skip the first few components that may match our prefix
     // This reduces the number of stat calls we do later
     int components = -2;
-    for (path = strchr(PREFIX, '/'); path; path = strchr(path + 1, '/')) {
+    for (path = strchr(this->prefix, '/'); path; path = strchr(path + 1, '/')) {
         components++;
     }
 
@@ -644,10 +654,10 @@ void HardlinkShim::next(Context* ctx, const CallExec* call) {
     }
 }
 
-static size_t make_linkname(char* out, size_t out_len, uint64_t ino) {
+size_t HardlinkShim::make_linkname(char* out, size_t out_len, uint64_t ino) {
     const char* prefix = "ino_";
     const size_t prefix_len = strlen(prefix);
-    const size_t hardlink_prefix_len = strlen(HARDLINK_PREFIX);
+    const size_t hardlink_prefix_len = strlen(this->hardlink_prefix);
     const size_t len = hardlink_prefix_len + 21 + 1 + prefix_len + 21;
     const uint64_t ino_hash = ino % 1499;
     size_t pos = 0;
@@ -660,7 +670,7 @@ static size_t make_linkname(char* out, size_t out_len, uint64_t ino) {
         abort();
     }
 
-    memcpy(out + pos, HARDLINK_PREFIX, hardlink_prefix_len);
+    memcpy(out + pos, this->hardlink_prefix, hardlink_prefix_len);
     pos += hardlink_prefix_len;
 
     pos += u64toa_r(ino_hash, out + pos);
@@ -1021,20 +1031,47 @@ void HardlinkShim::next(Context* ctx, const CallGetdents* call) {
 
 HardlinkShim::HardlinkShim(CallHandler* const next,
                            CallHandler* const bottom,
-                           int recursing)
+                           int recursing,
+                           const char* prefix,
+                           const char* hardlink_prefix)
     : CallHandler(next), bottom(bottom) {
     int ret, fd;
 
+    const size_t hardlink_prefix_len = strlen(hardlink_prefix);
+    this->hardlink_prefix = (char*)malloc(hardlink_prefix_len + 1 + 1);
+    memcpy(this->hardlink_prefix, hardlink_prefix, hardlink_prefix_len + 1);
+    // Ensure it ends with a '/'
+    if (this->hardlink_prefix[hardlink_prefix_len - 1] != '/') {
+        this->hardlink_prefix[hardlink_prefix_len] = '/';
+        this->hardlink_prefix[hardlink_prefix_len + 1] = '\x00';
+    }
+
+    const size_t lockfile_len = strlen(LOCKFILE);
+    const size_t lockfile_path_len = hardlink_prefix_len + 1 + lockfile_len + 1;
+    char lockfile_path[lockfile_path_len];
+    memcpy(lockfile_path, this->hardlink_prefix, hardlink_prefix_len);
+    lockfile_path[hardlink_prefix_len] = '/';
+    memcpy(lockfile_path + hardlink_prefix_len + 1, LOCKFILE, lockfile_len);
+    lockfile_path[lockfile_path_len - 1] = '\x00';
+
+    const size_t prefix_len = strlen(prefix);
+    this->prefix = (char*)malloc(prefix_len + 1);
+    memcpy(this->prefix, prefix, prefix_len + 1);
+    // Ensure it does not end with a '/'
+    if (this->prefix[prefix_len - 1] == '/') {
+        this->prefix[prefix_len - 1] = '\x00';
+    }
+
     if (!recursing) {
-        ret = mkpath(HARDLINK_PREFIX LOCKFILE, 0777);
+        ret = mkpath(lockfile_path, 0777);
         if (ret < 0) {
-            exit_error("mkpath(%s): %d", LOCKFILE, ret);
+            exit_error("mkpath(%s): %d", lockfile_path, ret);
         }
     }
 
-    ret = sys_open(HARDLINK_PREFIX LOCKFILE, O_CREAT | O_RDWR, 0777);
+    ret = sys_open(lockfile_path, O_CREAT | O_RDWR, 0777);
     if (ret < 0) {
-        exit_error("open64(%s): %d", HARDLINK_PREFIX LOCKFILE, -ret);
+        exit_error("open64(%s): %d", lockfile_path, -ret);
     }
     fd = ret;
 
@@ -1052,15 +1089,22 @@ HardlinkShim::HardlinkShim(CallHandler* const next,
 
     sys_close(fd);
 
-    ret = sys_statx(AT_FDCWD, PREFIX, AT_NO_AUTOMOUNT, STATX_BASIC_STATS,
-                    &this->prefix);
+    ret = sys_statx(AT_FDCWD, this->prefix, AT_NO_AUTOMOUNT, STATX_BASIC_STATS,
+                    &this->prefix_st);
     if (ret < 0) {
-        exit_error("stat64(%s): %d", PREFIX, ret);
+        exit_error("stat64(%s): %d", this->prefix, ret);
     }
+}
+
+HardlinkShim::~HardlinkShim() {
+    free(this->hardlink_prefix);
+    free(this->prefix);
 }
 
 CallHandler* hardlinkshim_init(CallHandler* next,
                                CallHandler* bottom,
-                               int recursing) {
-    return new HardlinkShim(next, bottom, recursing);
+                               int recursing,
+                               const char* prefix,
+                               const char* hardlink_prefix) {
+    return new HardlinkShim(next, bottom, recursing, prefix, hardlink_prefix);
 }

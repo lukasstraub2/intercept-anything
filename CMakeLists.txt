@@ -105,11 +105,11 @@ add_library(androidislinux_tool OBJECT
     androidislinux_tool/rootlink.cpp)
 target_link_libraries(androidislinux_tool PRIVATE ${TOOLS_OBJS})
 
-add_executable(androidislinux androidislinux_tool/main.cpp)
+add_executable(androidislinux androidislinux_tool/androidislinux_main.cpp)
 target_link_libraries(androidislinux PUBLIC androidislinux_tool ${STATIC_TOOLS_OBJS})
 
-add_executable(norootlink androidislinux_tool/norootlink.cpp)
-target_link_libraries(norootlink PUBLIC androidislinux_tool ${STATIC_TOOLS_OBJS})
+add_executable(hardlinkshim androidislinux_tool/hardlinkshim_main.cpp)
+target_link_libraries(hardlinkshim PUBLIC androidislinux_tool ${STATIC_TOOLS_OBJS})
 
 add_executable(emulate_swap
     emulate_swap_tool/emulate_swap.cpp

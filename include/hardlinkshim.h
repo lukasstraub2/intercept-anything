@@ -4,4 +4,6 @@
 
 CallHandler* hardlinkshim_init(CallHandler* next,
                                CallHandler* bottom,
-                               int recursing);
+                               int recursing,
+                               const char* prefix,
+                               const char* hardlink_prefix);
