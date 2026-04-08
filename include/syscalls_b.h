@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-class CallLink final : public ICallPathDual, virtual public ICallBase {
+class CallLink final : public ICallPathDual {
     public:
     int at{};
     int olddirfd{AT_FDCWD};
@@ -51,7 +51,7 @@ class CallLink final : public ICallPathDual, virtual public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallSymlink final : public ICallPathSymlink, virtual public ICallBase {
+class CallSymlink final : public ICallPathSymlink {
     public:
     int at{};
     MyString oldpath{};
@@ -84,7 +84,7 @@ class CallSymlink final : public ICallPathSymlink, virtual public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallUnlink final : public ICallPath, virtual public ICallBase {
+class CallUnlink final : public ICallPath {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -123,7 +123,7 @@ __attribute__((unused)) static int renametype_is_at(RenameType type) {
     return type >= RENAMETYPE_AT;
 }
 
-class CallRename final : public ICallPathDual, virtual public ICallBase {
+class CallRename final : public ICallPathDual {
     public:
     RenameType type{};
     int olddirfd{AT_FDCWD};
@@ -177,7 +177,7 @@ __attribute__((unused)) static int chmodtype_is_at(ChmodType type) {
     return type == CHMODTYPE_AT;
 }
 
-class CallChmod final : public ICallPathF, virtual public ICallBase {
+class CallChmod final : public ICallPathF {
     public:
     ChmodType type{};
     int fd{};
@@ -234,7 +234,7 @@ class CallChmod final : public ICallPathF, virtual public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallTruncate final : public ICallPathF, virtual public ICallBase {
+class CallTruncate final : public ICallPathF {
     public:
     int f{};
     int fd{};
@@ -280,7 +280,7 @@ class CallTruncate final : public ICallPathF, virtual public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallMkdir final : public ICallPath, virtual public ICallBase {
+class CallMkdir final : public ICallPath {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -312,7 +312,7 @@ class CallMkdir final : public ICallPath, virtual public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallMknod final : public ICallPath, virtual public ICallBase {
+class CallMknod final : public ICallPath {
     public:
     int at{};
     int dirfd{AT_FDCWD};

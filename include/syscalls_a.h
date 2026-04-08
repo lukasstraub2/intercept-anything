@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-class CallOpen final : public ICallPathOpen, virtual public ICallBase {
+class CallOpen final : public ICallPathOpen {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -49,7 +49,7 @@ __attribute__((unused)) static int stattype_is_at(StatType type) {
     return type >= STATTYPE_AT;
 }
 
-class CallStat final : public ICallPathF, virtual public ICallBase {
+class CallStat final : public ICallPathF {
     public:
     StatType type{};
     int dirfd{};
@@ -115,7 +115,7 @@ class CallStat final : public ICallPathF, virtual public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallReadlink final : public ICallPath, virtual public ICallBase {
+class CallReadlink final : public ICallPath {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -148,7 +148,7 @@ class CallReadlink final : public ICallPath, virtual public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallAccess final : public ICallPath, virtual public ICallBase {
+class CallAccess final : public ICallPath {
     public:
     int at{};
     int dirfd{AT_FDCWD};
@@ -191,7 +191,7 @@ typedef enum XattrType XattrType;
 enum XattrType2 { XATTRTYPE_PLAIN, XATTRTYPE_L, XATTRTYPE_F };
 typedef enum XattrType2 XattrType2;
 
-class CallXattr final : public ICallPathF, virtual public ICallBase {
+class CallXattr final : public ICallPathF {
     public:
     XattrType type{};
     XattrType2 type2{};
@@ -269,7 +269,7 @@ class CallXattr final : public ICallPathF, virtual public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallChdir final : public ICallPathF, virtual public ICallBase {
+class CallChdir final : public ICallPathF {
     public:
     int f{};
     int fd{};

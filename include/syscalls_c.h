@@ -55,7 +55,7 @@ class CallAccept final : public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallConnect final : public ICallPathConnect, virtual public ICallBase {
+class CallConnect final : public ICallPathConnect {
     public:
     int is_bind{};
     int fd{};
@@ -102,7 +102,7 @@ class CallFanotifyMark final : public ICallPathFanotify,
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-class CallInotifyAddWatch final : public ICallPath, virtual public ICallBase {
+class CallInotifyAddWatch final : public ICallPath {
     public:
     int fd{};
     MyString path{};
