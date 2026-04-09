@@ -1,6 +1,9 @@
-CMAKE=cmake
-CTEST=ctest
-DIR=build
+export CC := clang
+export CXX := clang++
+
+CMAKE := cmake
+CTEST := ctest
+DIR := build
 
 .PHONY: clean check format lint
 
