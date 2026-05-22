@@ -53,7 +53,7 @@ void one_run() {
 
     for (int i = 0; i < NUM_THREADS; i++) {
         ret = pthread_create(threads + i, NULL, thread_start, tid_array + i);
-        if (ret < 0) {
+        if (ret > 0) {
             abort();
         }
     }
@@ -76,7 +76,7 @@ void one_run() {
 
     for (int i = 0; i < NUM_THREADS; i++) {
         ret = pthread_join(threads[i], NULL);
-        if (ret < 0) {
+        if (ret > 0) {
             abort();
         }
     }
