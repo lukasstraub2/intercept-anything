@@ -77,14 +77,14 @@ static int _mangle_path(char** out,
         return 0;
     }
 
-    ssize_t len = concat(nullptr, 0, PREFIX "/tmp/rootlink", path);
+    ssize_t len = concat(nullptr, 0, RUNTIME_PREFIX "/tmp/rootlink", path);
     if (len > SCRATCH_SIZE) {
         call->set_return(-ENAMETOOLONG);
         return -1;
     }
 
     *out = new char[len];
-    ssize_t ret = concat(*out, len, PREFIX "/tmp/rootlink", path);
+    ssize_t ret = concat(*out, len, RUNTIME_PREFIX "/tmp/rootlink", path);
     if (ret > len) {
         delete[] *out;
         call->set_return(-ENAMETOOLONG);

@@ -41,7 +41,7 @@ static void shim_unlink(Shim* shim) {
 static ssize_t handle_uptime(Shim* shim, ssize_t shim_len) {
     const char* content = "106315.82 92968.73\n";
     const int content_len = strlen(content);
-    char filename[] = PREFIX "/tmp/.rootshim-XXXXXX";
+    char filename[] = RUNTIME_PREFIX "/tmp/.rootshim-XXXXXX";
     const ssize_t filename_len = strlen(filename) + 1;
     const ssize_t len = sizeof(Shim) + filename_len;
     int ret;

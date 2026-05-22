@@ -9,10 +9,11 @@
 #include "util.h"
 
 CallHandler* main_init(CallHandler* const bottom, int recursing) {
-    tmpdir = PREFIX "/tmp";
+    tmpdir = RUNTIME_PREFIX "/tmp";
     CallHandler* const noxattrs = noxattrs_init(bottom);
-    CallHandler* const hardlinkshim = hardlinkshim_init(
-        noxattrs, bottom, recursing, PREFIX, PREFIX "/tmp/hardlinkshim/");
+    CallHandler* const hardlinkshim =
+        hardlinkshim_init(noxattrs, bottom, recursing, RUNTIME_PREFIX,
+                          RUNTIME_PREFIX "/tmp/hardlinkshim/");
     CallHandler* const rootlink = rootlink_init(hardlinkshim);
     CallHandler* const rootshim = rootshim_init(rootlink);
     CallHandler* const androidislinux = androidislinux_init(rootshim);

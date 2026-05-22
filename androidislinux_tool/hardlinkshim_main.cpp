@@ -4,10 +4,10 @@
 #include "util.h"
 
 CallHandler* main_init(CallHandler* const bottom, int recursing) {
-    tmpdir = PREFIX "/tmp";
+    tmpdir = RUNTIME_PREFIX "/tmp";
     const char *hardlink_prefix = getenv("HARDLINKSHIM_PREFIX");
     if (!hardlink_prefix) {
-        hardlink_prefix = PREFIX "/.hardlinkshim";
+        hardlink_prefix = RUNTIME_PREFIX "/.hardlinkshim";
     }
 
     const size_t hardlink_prefix_len = strlen(hardlink_prefix);

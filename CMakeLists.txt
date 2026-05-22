@@ -59,10 +59,10 @@ else()
     set(LIBSUPCXX -lc++abi)
 endif()
 
-set(INTERCEPT_PREFIX "/" CACHE STRING "target system prefix")
+set(RUNTIME_PREFIX "/" CACHE STRING "runtime system prefix")
 
 include_directories(include include/nolibc)
-add_compile_definitions(_GNU_SOURCE PREFIX="${INTERCEPT_PREFIX}")
+add_compile_definitions(_GNU_SOURCE RUNTIME_PREFIX="${RUNTIME_PREFIX}")
 add_compile_options(-g -O1 -pipe -fPIE -Wno-shift-op-parentheses -fno-exceptions)
 
 add_library(freestanding OBJECT
