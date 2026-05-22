@@ -32,7 +32,7 @@ int __set_thread_area(void* p);
 
 class SignalManager : public CallHandler {
     public:
-    SignalManager(CallHandler* next) : CallHandler(next){};
+    SignalManager(CallHandler* next) : CallHandler(next) {};
     void next(Context* ctx, const CallSigprocmask* call) override;
     void next(Context* ctx, const CallSigaction* call) override;
     void next(Context* ctx, const CallClone* call) override;

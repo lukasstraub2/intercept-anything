@@ -73,17 +73,17 @@ class MyBlob {
 class IReturn {
     public:
     virtual void set_return(int ret) const = 0;
-    virtual ~IReturn(){};
+    virtual ~IReturn() {};
 };
 
 class IDestroyCB {
     public:
-    virtual ~IDestroyCB(){};
+    virtual ~IDestroyCB() {};
 };
 
 class ICallBase : public virtual IReturn {
     public:
-    virtual ~ICallBase(){};
+    virtual ~ICallBase() {};
 };
 
 class ICallPathBase : public virtual ICallBase {
@@ -94,7 +94,7 @@ class ICallPathBase : public virtual ICallBase {
     virtual void set_dirfd(int dirfd) = 0;
     virtual void set_path(const char* path) = 0;
 
-    virtual ~ICallPathBase(){};
+    virtual ~ICallPathBase() {};
 };
 
 class ICallPath : public virtual ICallPathBase {
@@ -105,7 +105,7 @@ class ICallPath : public virtual ICallPathBase {
     virtual void clear_l() = 0;
     virtual void set_flags(int flags) = 0;
 
-    virtual ~ICallPath(){};
+    virtual ~ICallPath() {};
 };
 
 // Special case for openat, since the flags have different meanings
@@ -114,7 +114,7 @@ class ICallPathOpen : public virtual ICallPathBase {
     virtual int get_flags() const = 0;
     virtual void set_flags(int flags) = 0;
 
-    virtual ~ICallPathOpen(){};
+    virtual ~ICallPathOpen() {};
 };
 
 // Special case for fanotify_mark
@@ -130,7 +130,7 @@ class ICallPathFanotify : public virtual ICallBase {
     virtual void set_path(const char* path) = 0;
     virtual void set_flags(unsigned int flags) = 0;
 
-    virtual ~ICallPathFanotify(){};
+    virtual ~ICallPathFanotify() {};
 };
 
 // Special case for fstat, f<op>xattr and fchdir
@@ -143,7 +143,7 @@ class ICallPathF : public virtual ICallPathBase {
     virtual void clear_l() = 0;
     virtual void set_flags(int flags) = 0;
 
-    virtual ~ICallPathF(){};
+    virtual ~ICallPathF() {};
 };
 
 class ICallPathDual : public virtual ICallBase {
@@ -161,7 +161,7 @@ class ICallPathDual : public virtual ICallBase {
     virtual int get_flags() const = 0;
     virtual void set_flags(int flags) = 0;
 
-    virtual ~ICallPathDual(){};
+    virtual ~ICallPathDual() {};
 };
 
 class ICallPathSymlink : public virtual ICallBase {
@@ -177,7 +177,7 @@ class ICallPathSymlink : public virtual ICallBase {
     virtual int get_flags() const = 0;
     virtual void set_flags(int flags) = 0;
 
-    virtual ~ICallPathSymlink(){};
+    virtual ~ICallPathSymlink() {};
 };
 
 class ICallPathConnect : public virtual ICallBase {
@@ -187,5 +187,5 @@ class ICallPathConnect : public virtual ICallBase {
 
     virtual void set_addr(void* addr, size_t size) = 0;
 
-    virtual ~ICallPathConnect(){};
+    virtual ~ICallPathConnect() {};
 };

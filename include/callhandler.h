@@ -9,7 +9,7 @@
 
 class ICallHandler {
     public:
-    virtual ~ICallHandler(){};
+    virtual ~ICallHandler() {};
 
     virtual void next(Context* ctx, const CallOpen* call) = 0;
     virtual void next(Context* ctx, const CallStat* call) = 0;

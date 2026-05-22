@@ -15,7 +15,7 @@ class AutoFree {
 
 class ManglePaths : public CallHandler {
     protected:
-    ManglePaths(CallHandler* next) : CallHandler(next){};
+    ManglePaths(CallHandler* next) : CallHandler(next) {};
 
     virtual int mangle_path(Context* ctx,
                             ICallPath* copy,
