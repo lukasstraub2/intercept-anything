@@ -79,6 +79,7 @@ add_library(freestanding OBJECT
     util.cpp
     signalmanager.cpp
     workarounds.cpp
+    emulate_file_tmp.cpp
     execve_here.cpp
     syscall_trampo.cpp
     cxxcompat.c
