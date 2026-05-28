@@ -455,17 +455,17 @@ class SyscallLog final : public CallHandler {
                     log(syscall_name, "%lu, %p, %lu", call->fd,
                         call->iov->iov_base, call->iov->iov_len);
                     break;
-                case READWRITE_64:
+                case READWRITE_P64:
                     syscall_name = "pwrite64";
                     log(syscall_name, "%lu, %p, %lu, %lu", call->fd,
                         call->iov->iov_base, call->iov->iov_len, call->pos_l);
                     break;
-                case READWRITE_V:
+                case READWRITE_PV:
                     syscall_name = "pwritev";
                     log(syscall_name, "%lu, %p, %lu, %lu, %lu", call->fd,
                         call->iov, call->iovcnt, call->pos_l, call->pos_h);
                     break;
-                case READWRITE_V2:
+                case READWRITE_PV2:
                     syscall_name = "pwritev2";
                     log(syscall_name, "%lu, %p, %lu, %lu, %lu, %u", call->fd,
                         call->iov, call->iovcnt, call->pos_l, call->pos_h,
@@ -479,17 +479,17 @@ class SyscallLog final : public CallHandler {
                     log(syscall_name, "%lu, %p, %lu", call->fd,
                         call->iov->iov_base, call->iov->iov_len);
                     break;
-                case READWRITE_64:
+                case READWRITE_P64:
                     syscall_name = "pread64";
                     log(syscall_name, "%lu, %p, %lu, %lu", call->fd,
                         call->iov->iov_base, call->iov->iov_len, call->pos_l);
                     break;
-                case READWRITE_V:
+                case READWRITE_PV:
                     syscall_name = "preadv";
                     log(syscall_name, "%lu, %p, %lu, %lu, %lu", call->fd,
                         call->iov, call->iovcnt, call->pos_l, call->pos_h);
                     break;
-                case READWRITE_V2:
+                case READWRITE_PV2:
                     syscall_name = "preadv2";
                     log(syscall_name, "%lu, %p, %lu, %lu, %lu, %u", call->fd,
                         call->iov, call->iovcnt, call->pos_l, call->pos_h,

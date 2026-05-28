@@ -131,6 +131,8 @@ static int install_filter() {
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
         BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
                  (__u32)(offsetof(struct seccomp_data, nr))),
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_writev, 93, 0),
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readv, 92, 0),
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getsockopt, 91, 0),
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_setsockopt, 90, 0),
         BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_socketpair, 89, 0),

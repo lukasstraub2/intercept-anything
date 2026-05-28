@@ -216,7 +216,7 @@ enum CloneType {
     CLONETYPE_CLONE,
     CLONETYPE_CLONE3
 };
-typedef CloneType CloneType;
+typedef enum CloneType CloneType;
 
 class CallClone final : public ICallBase {
     public:
@@ -239,8 +239,14 @@ class CallClone final : public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
-enum ReadWriteType { READWRITE_PLAIN, READWRITE_64, READWRITE_V, READWRITE_V2 };
-typedef CloneType CloneType;
+enum ReadWriteType {
+    READWRITE_PLAIN,
+    READWRITE_V,
+    READWRITE_P64,
+    READWRITE_PV,
+    READWRITE_PV2
+};
+typedef enum ReadWriteType ReadWriteType;
 
 class CallReadWrite final : public ICallBase {
     public:
@@ -277,10 +283,12 @@ unsigned long handle_vfork(Context* ctx, SysArgs* args);
 unsigned long handle_clone(Context* ctx, SysArgs* args);
 unsigned long handle_clone3(Context* ctx, SysArgs* args);
 unsigned long handle_read(Context* ctx, SysArgs* args);
+unsigned long handle_readv(Context* ctx, SysArgs* args);
 unsigned long handle_pread64(Context* ctx, SysArgs* args);
 unsigned long handle_preadv(Context* ctx, SysArgs* args);
 unsigned long handle_preadv2(Context* ctx, SysArgs* args);
 unsigned long handle_write(Context* ctx, SysArgs* args);
+unsigned long handle_writev(Context* ctx, SysArgs* args);
 unsigned long handle_pwrite64(Context* ctx, SysArgs* args);
 unsigned long handle_pwritev(Context* ctx, SysArgs* args);
 unsigned long handle_pwritev2(Context* ctx, SysArgs* args);

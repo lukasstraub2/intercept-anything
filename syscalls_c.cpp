@@ -50,6 +50,26 @@ unsigned long handle_write(Context* ctx, SysArgs* args) {
     return ret;
 }
 
+unsigned long handle_writev(Context* ctx, SysArgs* args) {
+    unsigned long fd = args->arg1;
+    const struct iovec* iov = (const struct iovec*)args->arg2;
+    unsigned long iovcnt = args->arg3;
+    trace("writev(%lu)\n", fd);
+
+    ssize_t ret = {0};
+    CallReadWrite call;
+    call.type = READWRITE_V;
+    call.is_write = 1;
+    call.fd = fd;
+    call.iov = iov;
+    call.iovcnt = iovcnt;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
 unsigned long handle_pwrite64(Context* ctx, SysArgs* args) {
     unsigned int fd = args->arg1;
     const char* buf = (const char*)args->arg2;
@@ -61,7 +81,7 @@ unsigned long handle_pwrite64(Context* ctx, SysArgs* args) {
 
     ssize_t ret = {0};
     CallReadWrite call;
-    call.type = READWRITE_64;
+    call.type = READWRITE_P64;
     call.is_write = 1;
     call.fd = fd;
     call.iov = &iov;
@@ -84,7 +104,7 @@ unsigned long handle_pwritev(Context* ctx, SysArgs* args) {
 
     ssize_t ret = {0};
     CallReadWrite call;
-    call.type = READWRITE_V;
+    call.type = READWRITE_PV;
     call.is_write = 1;
     call.fd = fd;
     call.iov = iov;
@@ -109,7 +129,7 @@ unsigned long handle_pwritev2(Context* ctx, SysArgs* args) {
 
     ssize_t ret = {0};
     CallReadWrite call;
-    call.type = READWRITE_V2;
+    call.type = READWRITE_PV2;
     call.is_write = 1;
     call.fd = fd;
     call.iov = iov;
@@ -492,6 +512,25 @@ unsigned long handle_read(Context* ctx, SysArgs* args) {
     return ret;
 }
 
+unsigned long handle_readv(Context* ctx, SysArgs* args) {
+    unsigned long fd = args->arg1;
+    const struct iovec* iov = (const struct iovec*)args->arg2;
+    unsigned long iovcnt = args->arg3;
+    trace("readv(%lu)\n", fd);
+
+    ssize_t ret = {0};
+    CallReadWrite call;
+    call.type = READWRITE_V;
+    call.fd = fd;
+    call.iov = iov;
+    call.iovcnt = iovcnt;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
 unsigned long handle_pread64(Context* ctx, SysArgs* args) {
     unsigned int fd = args->arg1;
     char* buf = (char*)args->arg2;
@@ -503,7 +542,7 @@ unsigned long handle_pread64(Context* ctx, SysArgs* args) {
 
     ssize_t ret = {0};
     CallReadWrite call;
-    call.type = READWRITE_64;
+    call.type = READWRITE_P64;
     call.fd = fd;
     call.iov = &iov;
     call.iovcnt = 1;
@@ -525,7 +564,7 @@ unsigned long handle_preadv(Context* ctx, SysArgs* args) {
 
     ssize_t ret = {0};
     CallReadWrite call;
-    call.type = READWRITE_V;
+    call.type = READWRITE_PV;
     call.fd = fd;
     call.iov = iov;
     call.iovcnt = iovcnt;
@@ -549,7 +588,7 @@ unsigned long handle_preadv2(Context* ctx, SysArgs* args) {
 
     ssize_t ret = {0};
     CallReadWrite call;
-    call.type = READWRITE_V2;
+    call.type = READWRITE_PV2;
     call.fd = fd;
     call.iov = iov;
     call.iovcnt = iovcnt;
@@ -719,17 +758,21 @@ void BottomHandler::next(Context* ctx, const CallReadWrite* call) {
                                 call->iov->iov_len);
                 break;
 
-            case READWRITE_64:
+            case READWRITE_V:
+                ret = sys_writev(call->fd, call->iov, call->iovcnt);
+                break;
+
+            case READWRITE_P64:
                 ret = sys_pwrite64(call->fd, (const char*)call->iov->iov_base,
                                    call->iov->iov_len, call->pos_l);
                 break;
 
-            case READWRITE_V:
+            case READWRITE_PV:
                 ret = sys_pwritev(call->fd, call->iov, call->iovcnt,
                                   call->pos_l, call->pos_h);
                 break;
 
-            case READWRITE_V2:
+            case READWRITE_PV2:
                 ret = sys_pwritev2(call->fd, call->iov, call->iovcnt,
                                    call->pos_l, call->pos_h, call->flags);
                 break;
@@ -745,17 +788,21 @@ void BottomHandler::next(Context* ctx, const CallReadWrite* call) {
                     sys_read(call->fd, call->iov->iov_base, call->iov->iov_len);
                 break;
 
-            case READWRITE_64:
+            case READWRITE_V:
+                ret = sys_readv(call->fd, call->iov, call->iovcnt);
+                break;
+
+            case READWRITE_P64:
                 ret = sys_pread64(call->fd, (char*)call->iov->iov_base,
                                   call->iov->iov_len, call->pos_l);
                 break;
 
-            case READWRITE_V:
+            case READWRITE_PV:
                 ret = sys_preadv(call->fd, call->iov, call->iovcnt, call->pos_l,
                                  call->pos_h);
                 break;
 
-            case READWRITE_V2:
+            case READWRITE_PV2:
                 ret = sys_preadv2(call->fd, call->iov, call->iovcnt,
                                   call->pos_l, call->pos_h, call->flags);
                 break;

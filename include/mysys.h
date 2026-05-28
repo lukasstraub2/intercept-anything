@@ -395,6 +395,12 @@ static __attribute__((unused)) int sys_mprotect(void* addr,
     return my_syscall3(__NR_mprotect, addr, length, prot);
 }
 
+static __attribute__((unused)) ssize_t sys_readv(unsigned long fd,
+                                                 const struct iovec* iov,
+                                                 unsigned long iovcnt) {
+    return my_syscall3(__NR_readv, fd, iov, iovcnt);
+}
+
 static __attribute__((unused)) ssize_t sys_pread64(unsigned int fd,
                                                    char* buf,
                                                    size_t count,
@@ -417,6 +423,12 @@ static __attribute__((unused)) ssize_t sys_preadv2(unsigned long fd,
                                                    unsigned long pos_h,
                                                    int flags) {
     return my_syscall6(__NR_preadv2, fd, iov, iovcnt, pos_l, pos_h, flags);
+}
+
+static __attribute__((unused)) ssize_t sys_writev(unsigned long fd,
+                                                  const struct iovec* iov,
+                                                  unsigned long iovcnt) {
+    return my_syscall3(__NR_writev, fd, iov, iovcnt);
 }
 
 static __attribute__((unused)) ssize_t sys_pwrite64(unsigned int fd,

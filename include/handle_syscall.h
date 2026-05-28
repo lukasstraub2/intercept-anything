@@ -330,6 +330,10 @@ __attribute__((unused)) unsigned long handle_syscall(Context* ctx,
             ret = handle_read(ctx, args);
             break;
 
+        case __NR_readv:
+            ret = handle_readv(ctx, args);
+            break;
+
         case __NR_pread64:
             ret = handle_pread64(ctx, args);
             break;
@@ -344,6 +348,10 @@ __attribute__((unused)) unsigned long handle_syscall(Context* ctx,
 
         case __NR_write:
             ret = handle_write(ctx, args);
+            break;
+
+        case __NR_writev:
+            ret = handle_writev(ctx, args);
             break;
 
         case __NR_pwrite64:
