@@ -145,12 +145,12 @@ add_executable(emulate_swap
 target_link_libraries(emulate_swap PUBLIC ${STATIC_TOOLS_OBJS})
 
 add_executable(passthrough_bench passthrough_bench_tool/passthrough_bench_main.cpp)
-target_link_libraries(passthrough_bench PUBLIC ${STATIC_TOOLS_OBJS})
+target_link_libraries(passthrough_bench PUBLIC ${STATIC_TOOLS_OBJS} fastpath_module)
 
 add_executable(syscall_log
     syscall_log_tool/syscall_log.cpp
     syscall_log_tool/syscall_log_main.cpp)
-target_link_libraries(syscall_log PUBLIC ${STATIC_TOOLS_OBJS})
+target_link_libraries(syscall_log PUBLIC ${STATIC_TOOLS_OBJS} fastpath_module)
 
 add_executable(socket_timeout
     socket_timeout_tool/socket_timeout.cpp
