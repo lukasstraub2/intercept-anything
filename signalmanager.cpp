@@ -119,7 +119,7 @@ static void signotset(sigset_t* dest, const sigset_t* left) {
     }
 }
 
-static const sigset_t* full_mask() {
+const sigset_t* full_mask() {
     static sigset_t set;
     static int init = 0;
 
@@ -251,7 +251,7 @@ void signalmanager_skip_enable_signals(int skip) {
 }
 
 void signalmanager_disable_signals(Context* ctx) {
-    if (!ctx->ucontext || skip_enable_signals) {
+    if (!ctx->saved_mask || skip_enable_signals) {
         return;
     }
 
@@ -262,15 +262,11 @@ void signalmanager_disable_signals(Context* ctx) {
 }
 
 void signalmanager_enable_signals(Context* ctx) {
-    if (!ctx->ucontext || skip_enable_signals) {
+    if (!ctx->saved_mask || skip_enable_signals) {
         return;
     }
 
-    int ret;
-    struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
-    sigset_t* uctx_set = &uctx->uc_sigmask;
-
-    ret = sys_rt_sigprocmask(SIG_SETMASK, uctx_set, nullptr);
+    int ret = sys_rt_sigprocmask(SIG_SETMASK, ctx->saved_mask, nullptr);
     if (ret < 0) {
         exit_error("rt_sigprocmask(uctx_set): %d", ret);
     }
@@ -278,8 +274,7 @@ void signalmanager_enable_signals(Context* ctx) {
 
 void SignalManager::next(Context* ctx, const CallSigprocmask* call) {
     int* _ret = call->ret;
-    struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
-    sigset_t* uctx_set = &uctx->uc_sigmask;
+    sigset_t* uctx_set = ctx->saved_mask;
     sigset_t set = {};
 
     if (call->sigsetsize > _NSIG / 8) {
@@ -637,8 +632,7 @@ void SignalManager::next(Context* ctx, const CallClone* call) {
 
     assert(call->type == CLONETYPE_CLONE || call->type == CLONETYPE_CLONE3);
     struct clone_args* args = call->args;
-    struct ucontext* uctx = (struct ucontext*)ctx->ucontext;
-    sigset_t* uctx_set = &uctx->uc_sigmask;
+    sigset_t* uctx_set = ctx->saved_mask;
 
     if (args->flags & CLONE_SIGHAND && args->flags & CLONE_CLEAR_SIGHAND) {
         *_ret = -EINVAL;

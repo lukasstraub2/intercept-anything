@@ -44,7 +44,7 @@ const char* self_exe = _self_exe;
 static void start_text_init();
 
 __thread Tls _tls = {};
-static void handler(int sig, siginfo_t* info, void* ucontext) {
+static Tls* get_tls() {
     int reti = __external_thread_register_maybe();
     if (reti < 0) {
         abort();
@@ -57,7 +57,15 @@ static void handler(int sig, siginfo_t* info, void* ucontext) {
         tls->tid = gettid();
     }
 
-    Context ctx = {tls, ucontext, 0};
+    return tls;
+}
+
+static void handler(int sig, siginfo_t* info, void* ucontext) {
+    Tls* tls = get_tls();
+
+    struct ucontext* uctx = (struct ucontext*)ucontext;
+    sigset_t* uctx_set = &uctx->uc_sigmask;
+    Context ctx = {tls, uctx_set, ucontext, 0};
     ssize_t ret;
     SysArgs args;
 
@@ -75,6 +83,40 @@ static void handler(int sig, siginfo_t* info, void* ucontext) {
     }
 }
 
+unsigned long fastpath_entry(unsigned long num,
+                             unsigned long arg1,
+                             unsigned long arg2,
+                             unsigned long arg3,
+                             unsigned long arg4,
+                             unsigned long arg5,
+                             unsigned long arg6) {
+    sigset_t saved_mask;
+    ssize_t ret, ret2;
+
+    ret2 = sys_rt_sigprocmask(SIG_SETMASK, full_mask(), &saved_mask);
+    if (ret2 < 0) {
+        abort();
+    }
+    __asm volatile("" ::: "memory");
+
+    Tls* tls = get_tls();
+    SysArgs args = {num, arg1, arg2, arg3, arg4, arg5, arg6};
+    Context ctx = {tls, &saved_mask, nullptr, 0};
+
+    ret = handle_syscall(&ctx, &args);
+    if (ctx.trampo_armed) {
+        abort();
+    }
+
+    __asm volatile("" ::: "memory");
+    ret2 = sys_rt_sigprocmask(SIG_SETMASK, &saved_mask, nullptr);
+    if (ret2 < 0) {
+        abort();
+    }
+
+    return ret;
+}
+
 int loader_open(const char* path, int flags, mode_t mode) {
     Tls* tls = &_tls;
     if (!initialized) {
@@ -86,7 +128,7 @@ int loader_open(const char* path, int flags, mode_t mode) {
         tls->tid = gettid();
     }
 
-    Context ctx = {tls, nullptr, 0};
+    Context ctx = {tls, nullptr, nullptr, 0};
     SysArgs args = {};
     args.arg1 = AT_FDCWD;
     args.arg2 = (long)path;

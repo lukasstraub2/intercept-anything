@@ -9,6 +9,7 @@ typedef void (*myhandler_t)(int sig, siginfo_t* info, void* ucontext);
 
 void vfork_exit_callback();
 
+const sigset_t* full_mask();
 void signalmanager_clean_dead(Tls* tls);
 void signalmanager_install_sigsys(myhandler_t handler);
 void signalmanager_skip_enable_signals(int skip);
