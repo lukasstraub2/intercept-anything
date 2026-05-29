@@ -197,6 +197,8 @@ add_executable(tls_stresstest tls_stresstest.c)
 
 add_executable(tls_thread_join_test tls_thread_join_test.c)
 
+add_executable(preload_errno_test preload_errno_test.c)
+
 enable_testing()
 add_test(NAME mylock_test COMMAND mylock_test)
 add_test(NAME rwlock_test COMMAND rwlock_test)
@@ -205,6 +207,7 @@ add_test(NAME execve_thread_test COMMAND execve_thread_test)
 add_test(NAME signal_tests COMMAND emulate_swap signal_tests)
 add_test(NAME tls_stresstest COMMAND emulate_swap tls_stresstest)
 add_test(NAME tls_thread_join_test COMMAND emulate_swap tls_thread_join_test)
+add_test(NAME preload_errno_test COMMAND passthrough_bench preload_errno_test)
 
 add_test(NAME libc_tls_test COMMAND libc_tls_test)
 add_test(NAME libc_tls_stresstest COMMAND libc_tls_stresstest)
