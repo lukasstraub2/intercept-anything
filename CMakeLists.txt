@@ -121,6 +121,10 @@ set(STATIC_TOOLS_OBJS static_tools ${TOOLS_OBJS} loader_main)
 add_library(static_tools INTERFACE)
 target_link_libraries(static_tools INTERFACE ${TEXT_SEGMENT} tools)
 
+add_library(fastpath_module OBJECT fastpath/fastpath.cpp)
+target_link_libraries(fastpath_module PRIVATE ${TOOLS_OBJS})
+add_dependencies(fastpath_module generate_fastpath_preload)
+
 add_library(androidislinux_tool OBJECT
     androidislinux_tool/androidislinux.cpp
     androidislinux_tool/noxattrs.cpp
