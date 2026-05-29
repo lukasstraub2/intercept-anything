@@ -61,7 +61,30 @@ endif()
 
 set(RUNTIME_PREFIX "/" CACHE STRING "runtime system prefix")
 
-include_directories(include include/nolibc)
+set(GENERATED_H_DIR ${CMAKE_BINARY_DIR}/include)
+set(GENERATED_FASTPATH_PRELOAD_DATA_H ${GENERATED_H_DIR}/fastpath_preload_data.h)
+
+add_library(fastpath_preload SHARED fastpath/fastpath_preload.c)
+target_link_libraries(fastpath_preload PUBLIC -nostartfiles -nodefaultlibs -nostdlib)
+target_include_directories(fastpath_preload PUBLIC include)
+
+add_custom_command(
+    OUTPUT ${GENERATED_FASTPATH_PRELOAD_DATA_H}
+    DEPENDS fastpath_preload
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_H_DIR}
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DSOURCE_FILE=libfastpath_preload.so
+        -DHEADER_FILE=${GENERATED_FASTPATH_PRELOAD_DATA_H}
+        -DVARIABLE_NAME=fastpath_preload_data
+        -P ${CMAKE_SOURCE_DIR}/run_bin2h.cmake
+    VERBATIM
+    COMMENT "Generating ${GENERATED_FASTPATH_PRELOAD_DATA_H}"
+)
+
+add_custom_target(generate_fastpath_preload DEPENDS ${GENERATED_FASTPATH_PRELOAD_DATA_H})
+
+include_directories(include include/nolibc ${GENERATED_H_DIR})
 add_compile_definitions(_GNU_SOURCE RUNTIME_PREFIX="${RUNTIME_PREFIX}")
 add_compile_options(-g -O1 -pipe -fPIE -Wno-shift-op-parentheses -fno-exceptions)
 
