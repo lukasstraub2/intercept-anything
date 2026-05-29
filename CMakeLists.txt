@@ -65,7 +65,7 @@ set(GENERATED_H_DIR ${CMAKE_BINARY_DIR}/include)
 set(GENERATED_FASTPATH_PRELOAD_DATA_H ${GENERATED_H_DIR}/fastpath_preload_data.h)
 
 add_library(fastpath_preload SHARED fastpath/fastpath_preload.c)
-target_link_libraries(fastpath_preload PUBLIC -nostartfiles -nodefaultlibs -nostdlib)
+target_link_libraries(fastpath_preload PUBLIC -nostartfiles -nodefaultlibs -nostdlib -Wl,-z,noseparate-code,-z,now)
 target_include_directories(fastpath_preload PUBLIC include)
 
 add_custom_command(
