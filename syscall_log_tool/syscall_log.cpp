@@ -408,7 +408,7 @@ class SyscallLog final : public CallHandler {
     };
 
     void next(Context* ctx, const CallMisc* call) override {
-        log("misc", "%lu, %lu", call->args.num, call->args.arg1);
+        log("misc", "%lu, %p", call->args.num, (void*)call->args.arg1);
         return _next->next(ctx, call);
     };
 
@@ -460,6 +460,11 @@ class SyscallLog final : public CallHandler {
                     log(syscall_name, "%lu, %p, %lu", call->fd,
                         call->iov->iov_base, call->iov->iov_len);
                     break;
+                case READWRITE_V:
+                    syscall_name = "writev";
+                    log(syscall_name, "%lu, %p, %lu", call->fd, call->iov,
+                        call->iovcnt);
+                    break;
                 case READWRITE_P64:
                     syscall_name = "pwrite64";
                     log(syscall_name, "%lu, %p, %lu, %lu", call->fd,
@@ -484,6 +489,11 @@ class SyscallLog final : public CallHandler {
                     log(syscall_name, "%lu, %p, %lu", call->fd,
                         call->iov->iov_base, call->iov->iov_len);
                     break;
+                case READWRITE_V:
+                    syscall_name = "readv";
+                    log(syscall_name, "%lu, %p, %lu", call->fd, call->iov,
+                        call->iovcnt);
+                    break;
                 case READWRITE_P64:
                     syscall_name = "pread64";
                     log(syscall_name, "%lu, %p, %lu, %lu", call->fd,
@@ -504,6 +514,11 @@ class SyscallLog final : public CallHandler {
         }
         return _next->next(ctx, call);
     };
+
+    void next(Context* ctx, const CallSigreturn* call) override {
+        log("rt_sigreturn", "");
+        return _next->next(ctx, call);
+    }
 };
 
 CallHandler* syscall_log_init(CallHandler* next) {
