@@ -21,4 +21,5 @@ struct syscall_trampo_data {
 typedef struct syscall_trampo_data syscall_trampo_data;
 
 void syscall_trampo_arm(syscall_trampo_data* data, void* ucontext);
+void sigreturn_trampo_arm(syscall_trampo_data* data, void* ucontext);
 void clone_trampo_arm(syscall_trampo_data* data, void* ucontext);

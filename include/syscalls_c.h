@@ -30,6 +30,8 @@ class CallSigaction final : public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
+class CallSigreturn final {};
+
 class CallAccept final : public ICallBase {
     public:
     int is4{};
@@ -265,6 +267,7 @@ class CallReadWrite final : public ICallBase {
 
 unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args);
 unsigned long handle_rt_sigaction(Context* ctx, SysArgs* args);
+unsigned long handle_rt_sigreturn(Context* ctx, SysArgs* args);
 unsigned long handle_accept(Context* ctx, SysArgs* args);
 unsigned long handle_accept4(Context* ctx, SysArgs* args);
 unsigned long handle_bind(Context* ctx, SysArgs* args);

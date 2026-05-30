@@ -326,6 +326,9 @@ const long syscall_process[] = {
     __NR_exit_group,
     __NR_rt_sigprocmask,
     __NR_rt_sigaction,
+    // Don't intercept __NR_rt_sigreturn by default, it can be intercepted
+    // with FILTER_ALL
+    //__NR_rt_sigreturn,
 };
 // clang-format on
 

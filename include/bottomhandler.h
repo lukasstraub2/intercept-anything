@@ -51,5 +51,6 @@ class BottomHandler : public CallHandler, public ICallHandler {
     void next(Context* ctx, const CallSockName* call) override;
     void next(Context* ctx, const CallSocketpair* call) override;
     void next(Context* ctx, const CallSockOpt* call) override;
+    void next(Context* ctx, const CallSigreturn* call) override;
 };
 #pragma GCC diagnostic pop

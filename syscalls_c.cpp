@@ -28,6 +28,15 @@ unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args) {
     return ret;
 }
 
+unsigned long handle_rt_sigreturn(Context* ctx, SysArgs* args) {
+    trace("rt_sigreturn\n");
+
+    CallSigreturn call;
+    intercept_entrypoint->next(ctx, &call);
+
+    return 0;
+}
+
 unsigned long handle_write(Context* ctx, SysArgs* args) {
     unsigned int fd = args->arg1;
     const char* buf = (const char*)args->arg2;
@@ -618,6 +627,10 @@ void BottomHandler::next(Context* ctx, const CallSigprocmask* call) {
     ret = sys_rt_sigprocmask(call->how, call->set, call->oldset,
                              call->sigsetsize);
     signalmanager_disable_signals(ctx);
+}
+
+void BottomHandler::next(Context* ctx, const CallSigreturn* call) {
+    abort();
 }
 
 void BottomHandler::next(Context* ctx, const CallAccept* call) {

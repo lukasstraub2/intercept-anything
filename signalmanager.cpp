@@ -36,6 +36,7 @@ class SignalManager : public CallHandler {
     int get_filter_flags() override;
     void next(Context* ctx, const CallSigprocmask* call) override;
     void next(Context* ctx, const CallSigaction* call) override;
+    void next(Context* ctx, const CallSigreturn* call) override;
     void next(Context* ctx, const CallClone* call) override;
 };
 
@@ -599,6 +600,11 @@ static int handle_clone_fork(const CallClone* call) {
     }
 
     return ret;
+}
+
+void SignalManager::next(Context* ctx, const CallSigreturn* call) {
+    sigreturn_trampo_arm(&data.trampo, ctx->ucontext);
+    ctx->trampo_armed = 1;
 }
 
 void SignalManager::next(Context* ctx, const CallClone* call) {

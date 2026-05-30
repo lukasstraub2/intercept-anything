@@ -47,6 +47,10 @@ void syscall_trampo_arm(syscall_trampo_data* data, void* ucontext) {
     arm(data, ucontext, (unsigned long)syscall_trampo_start, 1, 0);
 }
 
+void sigreturn_trampo_arm(syscall_trampo_data* data, void* ucontext) {
+    arm(data, ucontext, (unsigned long)syscall_trampo_start, 0, 0);
+}
+
 void clone_trampo_arm(syscall_trampo_data* data, void* ucontext) {
     arm(data, ucontext, (unsigned long)clone_trampo_start, 1, 1);
 }

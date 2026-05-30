@@ -422,6 +422,10 @@ __attribute__((unused)) unsigned long handle_syscall(Context* ctx,
             ret = handle_getsockopt(ctx, args);
             break;
 
+        case __NR_rt_sigreturn:
+            ret = handle_rt_sigreturn(ctx, args);
+            break;
+
         default:
             ret = handle_misc(ctx, args);
             break;
