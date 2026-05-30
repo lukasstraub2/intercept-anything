@@ -26,7 +26,7 @@ class SyscallLog final : public CallHandler {
     SyscallLog(CallHandler* next) : CallHandler(next) {}
 
     int get_filter_flags() override {
-        return _next->get_filter_flags() | FILTER_ALL;
+        return _next->get_filter_flags() | FILTER_ALL | FILTER_VDSO;
     }
 
     void next(Context* ctx, const CallOpen* call) override {

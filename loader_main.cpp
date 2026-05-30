@@ -61,7 +61,7 @@ int main(int argc, char** argv, char** envp) {
         exe = argv[1];
     }
 
-    intercept_init(recursing, exe);
+    intercept_init(recursing, exe, auxv);
 
     load_file(&info, exe);
 

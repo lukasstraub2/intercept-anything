@@ -13,6 +13,7 @@ const int FILTER_READWRITE = 8;
 const int FILTER_SOCKET = 16;
 const int FILTER_SENDRECV = 32;
 const int FILTER_ALL = 64;
+const int FILTER_VDSO = 128;
 
 struct Context {
     Tls* tls;
@@ -25,7 +26,7 @@ extern const char* self_exe;
 extern __thread Tls _tls;
 extern CallHandler* intercept_entrypoint;
 
-void intercept_init(int recursing, const char* exe);
+void intercept_init(int recursing, const char* exe, unsigned long* auxv);
 CallHandler* main_init(CallHandler* const bottom, int recursing);
 void thread_exit(Tls* tls);
 void thread_exit_exec(Tls* tls);

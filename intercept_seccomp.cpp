@@ -518,7 +518,25 @@ static int handle_exit_group(Context* ctx, SysArgs* args) {
     return 0;
 }
 
-void intercept_init(int recursing, const char* exe) {
+static void auxv_remove_entry(unsigned long* auxv, unsigned long entry) {
+    unsigned long* ptr = auxv;
+    while (ptr[0] != AT_NULL) {
+        if (ptr[0] == entry) {
+            // Remove this entry
+            // Fill with rest of the list
+            while (ptr[0] != AT_NULL) {
+                ptr[0] = ptr[2];
+                ptr[1] = ptr[3];
+                ptr += 2;
+            }
+            break;
+        }
+
+        ptr += 2;
+    }
+}
+
+void intercept_init(int recursing, const char* exe, unsigned long* auxv) {
     size_t exe_len = strlen(exe) + 1;
 
     if (initialized) {
@@ -548,5 +566,10 @@ void intercept_init(int recursing, const char* exe) {
 
     if (!recursing) {
         install_filter(intercept_entrypoint->get_filter_flags());
+    }
+
+    if (intercept_entrypoint->get_filter_flags() & FILTER_VDSO) {
+        auxv_remove_entry(auxv, AT_SYSINFO);
+        auxv_remove_entry(auxv, AT_SYSINFO_EHDR);
     }
 }
