@@ -725,9 +725,13 @@ void BottomHandler::next(Context* ctx, const CallKill* call) {
 }
 
 void BottomHandler::next(Context* ctx, const CallMisc* call) {
-    debug("Unhandled syscall no. %lu\n", call->args.num);
+    const SysArgs* args = &call->args;
+    signalmanager_enable_signals(ctx);
 
-    *call->ret = -ENOSYS;
+    *call->ret = my_syscall6(args->num, args->arg1, args->arg2, args->arg3,
+                             args->arg4, args->arg5, args->arg6);
+
+    signalmanager_disable_signals(ctx);
 }
 
 void BottomHandler::next(Context* ctx, const CallMmap* call) {
