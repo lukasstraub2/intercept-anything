@@ -423,6 +423,174 @@ unsigned long handle_mmap(Context* ctx, SysArgs* args) {
     return ret;
 }
 
+unsigned long handle_mremap(Context* ctx, SysArgs* args) {
+    unsigned long addr = args->arg1;
+    unsigned long old_len = args->arg2;
+    unsigned long new_len = args->arg3;
+    unsigned long flags = args->arg4;
+    unsigned long new_addr = args->arg5;
+    trace("mremap()\n");
+
+    unsigned long ret = {0};
+    CallMremap call;
+    call.addr = addr;
+    call.old_len = old_len;
+    call.new_len = new_len;
+    call.flags = flags;
+    call.new_addr = new_addr;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_munmap(Context* ctx, SysArgs* args) {
+    unsigned long addr = args->arg1;
+    size_t len = args->arg2;
+    trace("munmap()\n");
+
+    long ret = {0};
+    CallMemop call;
+    call.type = MEMOP_UNMAP;
+    call.addr = addr;
+    call.len = len;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_madvise(Context* ctx, SysArgs* args) {
+    unsigned long addr = args->arg1;
+    size_t len = args->arg2;
+    unsigned long flags = args->arg3;
+    trace("madvise()\n");
+
+    long ret = {0};
+    CallMemop call;
+    call.type = MEMOP_ADVISE;
+    call.addr = addr;
+    call.len = len;
+    call.flags = flags;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_mprotect(Context* ctx, SysArgs* args) {
+    unsigned long addr = args->arg1;
+    size_t len = args->arg2;
+    unsigned long flags = args->arg3;
+    trace("mprotect()\n");
+
+    long ret = {0};
+    CallMemop call;
+    call.type = MEMOP_PROTECT;
+    call.addr = addr;
+    call.len = len;
+    call.flags = flags;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_msync(Context* ctx, SysArgs* args) {
+    unsigned long addr = args->arg1;
+    size_t len = args->arg2;
+    unsigned long flags = args->arg3;
+    trace("msync()\n");
+
+    long ret = {0};
+    CallMemop call;
+    call.type = MEMOP_SYNC;
+    call.addr = addr;
+    call.len = len;
+    call.flags = flags;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_mlock(Context* ctx, SysArgs* args) {
+    unsigned long addr = args->arg1;
+    size_t len = args->arg2;
+    trace("mlock()\n");
+
+    long ret = {0};
+    CallMemop call;
+    call.type = MEMOP_LOCK;
+    call.addr = addr;
+    call.len = len;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_munlock(Context* ctx, SysArgs* args) {
+    unsigned long addr = args->arg1;
+    size_t len = args->arg2;
+    trace("munlock()\n");
+
+    long ret = {0};
+    CallMemop call;
+    call.type = MEMOP_UNLOCK;
+    call.addr = addr;
+    call.len = len;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_mlock2(Context* ctx, SysArgs* args) {
+    unsigned long addr = args->arg1;
+    size_t len = args->arg2;
+    unsigned long flags = args->arg3;
+    trace("mlock2()\n");
+
+    long ret = {0};
+    CallMemop call;
+    call.type = MEMOP_LOCK2;
+    call.addr = addr;
+    call.len = len;
+    call.flags = flags;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_mseal(Context* ctx, SysArgs* args) {
+    unsigned long addr = args->arg1;
+    size_t len = args->arg2;
+    unsigned long flags = args->arg3;
+    trace("mseal()\n");
+
+    long ret = {0};
+    CallMemop call;
+    call.type = MEMOP_SEAL;
+    call.addr = addr;
+    call.len = len;
+    call.flags = flags;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
 unsigned long handle_fork(Context* ctx, SysArgs* args) {
     trace("fork()\n");
 
@@ -754,6 +922,66 @@ void BottomHandler::next(Context* ctx, const CallMmap* call) {
     signalmanager_enable_signals(ctx);
     ret = (unsigned long)sys_mmap((void*)call->addr, call->len, call->prot,
                                   call->flags, call->fd, call->off);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallMremap* call) {
+    unsigned long ret;
+    unsigned long* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = (unsigned long)sys_mremap((void*)call->addr, call->old_len,
+                                    call->new_len, call->flags,
+                                    (void*)call->new_addr);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallMemop* call) {
+    long ret;
+    long* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    switch (call->type) {
+        case MEMOP_UNMAP:
+            ret = sys_munmap((void*)call->addr, call->len);
+            break;
+
+        case MEMOP_ADVISE:
+            ret = sys_madvise((void*)call->addr, call->len, call->flags);
+            break;
+
+        case MEMOP_PROTECT:
+            ret = sys_mprotect((void*)call->addr, call->len, call->flags);
+            break;
+
+        case MEMOP_SYNC:
+            ret = sys_msync((void*)call->addr, call->len, call->flags);
+            break;
+
+        case MEMOP_LOCK:
+            ret = sys_mlock((void*)call->addr, call->len);
+            break;
+
+        case MEMOP_UNLOCK:
+            ret = sys_munlock((void*)call->addr, call->len);
+            break;
+
+        case MEMOP_LOCK2:
+            ret = sys_mlock2((void*)call->addr, call->len, call->flags);
+            break;
+
+        case MEMOP_SEAL:
+            ret = sys_mseal((void*)call->addr, call->len, call->flags);
+            break;
+
+        default:
+            abort();
+            break;
+    }
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;

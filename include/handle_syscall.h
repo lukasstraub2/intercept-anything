@@ -306,6 +306,44 @@ __attribute__((unused)) unsigned long handle_syscall(Context* ctx,
             ret = handle_mmap(ctx, args);
             break;
 
+        case __NR_mremap:
+            ret = handle_mremap(ctx, args);
+            break;
+
+        case __NR_munmap:
+            ret = handle_munmap(ctx, args);
+            break;
+
+        case __NR_madvise:
+            ret = handle_madvise(ctx, args);
+            break;
+
+        case __NR_mprotect:
+            ret = handle_mprotect(ctx, args);
+            break;
+
+        case __NR_msync:
+            ret = handle_msync(ctx, args);
+            break;
+
+        case __NR_mlock:
+            ret = handle_mlock(ctx, args);
+            break;
+
+        case __NR_munlock:
+            ret = handle_munlock(ctx, args);
+            break;
+
+        case __NR_mlock2:
+            ret = handle_mlock2(ctx, args);
+            break;
+
+#ifdef __NR_mseal
+        case __NR_mseal:
+            ret = handle_mseal(ctx, args);
+            break;
+#endif
+
 #ifdef __NR_fork
         case __NR_fork:
             ret = handle_fork(ctx, args);

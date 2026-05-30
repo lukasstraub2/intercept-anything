@@ -51,6 +51,8 @@ class ICallHandler {
     virtual void next(Context* ctx, const CallSocketpair* call) = 0;
     virtual void next(Context* ctx, const CallSockOpt* call) = 0;
     virtual void next(Context* ctx, const CallSigreturn* call) = 0;
+    virtual void next(Context* ctx, const CallMremap* call) = 0;
+    virtual void next(Context* ctx, const CallMemop* call) = 0;
 };
 
 class CallHandler : virtual public ICallHandler {
@@ -175,6 +177,12 @@ class CallHandler : virtual public ICallHandler {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
     void next(Context* ctx, const CallSigreturn* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallMremap* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallMemop* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
 };

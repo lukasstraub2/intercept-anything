@@ -558,3 +558,42 @@ static __attribute__((unused)) int sys_getsockopt(int fd,
                                                   int* optlen) {
     return my_syscall5(__NR_getsockopt, fd, level, optname, optval, optlen);
 }
+
+static __attribute__((unused)) void* sys_mremap(void* addr,
+                                                unsigned long old_len,
+                                                unsigned long new_len,
+                                                unsigned long flags,
+                                                void* new_addr) {
+    return (void*)my_syscall5(__NR_mremap, addr, old_len, new_len, flags,
+                              new_addr);
+}
+
+static __attribute__((unused)) long sys_msync(void* addr,
+                                              size_t len,
+                                              unsigned long flags) {
+    return my_syscall3(__NR_msync, addr, len, flags);
+}
+
+static __attribute__((unused)) long sys_mlock(void* addr, size_t len) {
+    return my_syscall2(__NR_mlock, addr, len);
+}
+
+static __attribute__((unused)) long sys_munlock(void* addr, size_t len) {
+    return my_syscall2(__NR_munlock, addr, len);
+}
+
+static __attribute__((unused)) long sys_mlock2(void* addr,
+                                               size_t len,
+                                               unsigned long flags) {
+    return my_syscall3(__NR_mlock2, addr, len, flags);
+}
+
+static __attribute__((unused)) long sys_mseal(void* addr,
+                                              size_t len,
+                                              unsigned long flags) {
+#ifdef __NR_mseal
+    return my_syscall3(__NR_mseal, addr, len, flags);
+#else
+    return __nolibc_enosys(__func__, addr, len, flags);
+#endif
+}

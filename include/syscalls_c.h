@@ -212,6 +212,41 @@ class CallMmap final : public ICallBase {
     void set_return(int ret) const override { *this->ret = (long)ret; }
 };
 
+class CallMremap final : public ICallBase {
+    public:
+    unsigned long addr{};
+    unsigned long old_len{};
+    unsigned long new_len{};
+    unsigned long flags{};
+    unsigned long new_addr{};
+    unsigned long* ret{};
+
+    void set_return(int ret) const override { *this->ret = (long)ret; }
+};
+
+enum MemopType {
+    MEMOP_UNMAP,
+    MEMOP_ADVISE,
+    MEMOP_PROTECT,
+    MEMOP_SYNC,
+    MEMOP_LOCK,
+    MEMOP_UNLOCK,
+    MEMOP_LOCK2,
+    MEMOP_SEAL
+};
+typedef enum MemopType MemopType;
+
+class CallMemop final : public ICallBase {
+    public:
+    MemopType type{};
+    unsigned long addr{};
+    size_t len{};
+    unsigned long flags{};
+    long* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
 enum CloneType {
     CLONETYPE_FORK,
     CLONETYPE_VFORK,
@@ -281,6 +316,15 @@ unsigned long handle_ptrace(Context* ctx, SysArgs* args);
 unsigned long handle_kill(Context* ctx, SysArgs* args);
 unsigned long handle_misc(Context* ctx, SysArgs* args);
 unsigned long handle_mmap(Context* ctx, SysArgs* args);
+unsigned long handle_mremap(Context* ctx, SysArgs* args);
+unsigned long handle_munmap(Context* ctx, SysArgs* args);
+unsigned long handle_madvise(Context* ctx, SysArgs* args);
+unsigned long handle_mprotect(Context* ctx, SysArgs* args);
+unsigned long handle_msync(Context* ctx, SysArgs* args);
+unsigned long handle_mlock(Context* ctx, SysArgs* args);
+unsigned long handle_munlock(Context* ctx, SysArgs* args);
+unsigned long handle_mlock2(Context* ctx, SysArgs* args);
+unsigned long handle_mseal(Context* ctx, SysArgs* args);
 unsigned long handle_fork(Context* ctx, SysArgs* args);
 unsigned long handle_vfork(Context* ctx, SysArgs* args);
 unsigned long handle_clone(Context* ctx, SysArgs* args);

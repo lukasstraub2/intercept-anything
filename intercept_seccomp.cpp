@@ -306,6 +306,17 @@ const long syscall_file[] = {
 
 const long syscall_mem[] = {
     __NR_mmap,
+    __NR_mremap,
+    __NR_munmap,
+    __NR_madvise,
+    __NR_mprotect,
+    __NR_msync,
+    __NR_mlock,
+    __NR_munlock,
+    __NR_mlock2,
+#ifdef __NR_mseal
+    __NR_mseal,
+#endif
 };
 
 const long syscall_process[] = {
