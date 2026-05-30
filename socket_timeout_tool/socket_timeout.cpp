@@ -3,6 +3,7 @@
 #include "netinet/tcp.h"
 #include "mysys.h"
 #include "socket_timeout.h"
+#include "intercept.h"
 
 class SocketTimeout final : public CallHandler {
     private:
@@ -51,6 +52,10 @@ class SocketTimeout final : public CallHandler {
 
     public:
     SocketTimeout(CallHandler* next) : CallHandler(next) {}
+
+    int get_filter_flags() override {
+        return _next->get_filter_flags() | FILTER_SOCKET;
+    }
 
     void next(Context* ctx, const CallSocket* call) override {
         _next->next(ctx, call);

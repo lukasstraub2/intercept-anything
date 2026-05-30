@@ -33,10 +33,15 @@ int __set_thread_area(void* p);
 class SignalManager : public CallHandler {
     public:
     SignalManager(CallHandler* next) : CallHandler(next) {};
+    int get_filter_flags() override;
     void next(Context* ctx, const CallSigprocmask* call) override;
     void next(Context* ctx, const CallSigaction* call) override;
     void next(Context* ctx, const CallClone* call) override;
 };
+
+int SignalManager::get_filter_flags() {
+    return _next->get_filter_flags() | FILTER_PROCESS;
+}
 
 #define mysignal_size (64)
 struct MySignal {

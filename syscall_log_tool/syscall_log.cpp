@@ -3,6 +3,7 @@
 #include "linux/sched.h"
 #include "util.h"
 #include "syscall_log.h"
+#include "intercept.h"
 
 #include <stdarg.h>
 
@@ -23,6 +24,10 @@ class SyscallLog final : public CallHandler {
 
     public:
     SyscallLog(CallHandler* next) : CallHandler(next) {}
+
+    int get_filter_flags() override {
+        return _next->get_filter_flags() | FILTER_ALL;
+    }
 
     void next(Context* ctx, const CallOpen* call) override {
         if (call->at) {

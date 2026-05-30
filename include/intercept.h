@@ -5,6 +5,15 @@
 
 #include <sys/types.h>
 
+const int FILTER_NONE = 0;
+const int FILTER_PROCESS = 1;
+const int FILTER_MEM = 2;
+const int FILTER_FILE = 4;
+const int FILTER_READWRITE = 8;
+const int FILTER_SOCKET = 16;
+const int FILTER_SENDRECV = 32;
+const int FILTER_ALL = 64;
+
 struct Context {
     Tls* tls;
     sigset_t* saved_mask;

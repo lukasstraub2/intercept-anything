@@ -8,9 +8,14 @@
 class AndroidIsLinux : public CallHandler {
     public:
     AndroidIsLinux(CallHandler* next) : CallHandler(next) {}
+    int get_filter_flags() override;
     void next(Context* ctx, const CallAccept* call) override;
     void next(Context* ctx, const CallMisc* call) override;
 };
+
+int AndroidIsLinux::get_filter_flags() {
+    return _next->get_filter_flags() | FILTER_SOCKET;
+}
 
 void AndroidIsLinux::next(Context* ctx, const CallAccept* call) {
     CallAccept _call = *call;

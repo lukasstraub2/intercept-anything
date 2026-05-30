@@ -55,6 +55,7 @@ class HardlinkShim final : public CallHandler {
                  int recursing,
                  const char* prefix,
                  const char* hardlink_prefix);
+    int get_filter_flags() override;
     void next(Context* ctx, const CallOpen* call) override;
     void next(Context* ctx, const CallStat* call) override;
     void next(Context* ctx, const CallReadlink* call) override;
@@ -69,6 +70,10 @@ class HardlinkShim final : public CallHandler {
 
     ~HardlinkShim();
 };
+
+int HardlinkShim::get_filter_flags() {
+    return _next->get_filter_flags() | FILTER_FILE;
+}
 
 void HardlinkShim::lock_read(Tls* tls) {
     rwlock_lock_read(tls, this->mapped_rwlock);

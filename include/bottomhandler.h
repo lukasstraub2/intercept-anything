@@ -1,6 +1,7 @@
 #pragma once
 
 #include "callhandler.h"
+#include "intercept.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Winaccessible-base"
@@ -8,6 +9,10 @@ class BottomHandler : public CallHandler, public ICallHandler {
     public:
     BottomHandler() : CallHandler(nullptr) {}
 
+    int get_filter_flags() override {
+        // For execve
+        return FILTER_FILE;
+    };
     void next(Context* ctx, const CallOpen* call) override;
     void next(Context* ctx, const CallStat* call) override;
     void next(Context* ctx, const CallReadlink* call) override;

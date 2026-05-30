@@ -11,8 +11,13 @@
 class EmulateSwap : public CallHandler {
     public:
     EmulateSwap(CallHandler* next) : CallHandler(next) {}
+    int get_filter_flags() override;
     void next(Context* ctx, const CallMmap* call) override;
 };
+
+int EmulateSwap::get_filter_flags() {
+    return _next->get_filter_flags() | FILTER_MEM;
+}
 
 static int mktemp(unsigned long size) {
     char filename[] = "/var/tmp/.swap-XXXXXX";

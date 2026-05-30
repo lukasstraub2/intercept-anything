@@ -11,6 +11,7 @@ class ICallHandler {
     public:
     virtual ~ICallHandler() {};
 
+    virtual int get_filter_flags() = 0;
     virtual void next(Context* ctx, const CallOpen* call) = 0;
     virtual void next(Context* ctx, const CallStat* call) = 0;
     virtual void next(Context* ctx, const CallReadlink* call) = 0;

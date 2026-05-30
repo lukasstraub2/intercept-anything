@@ -10,10 +10,15 @@
 struct Workarounds : public CallHandler {
     public:
     Workarounds(CallHandler* next) : CallHandler(next) {}
+    int get_filter_flags() override;
     void next(Context* ctx, const CallExec* call) override;
     void next(Context* ctx, const CallPtrace* call) override;
     void next(Context* ctx, const CallKill* call) override;
 };
+
+int Workarounds::get_filter_flags() {
+    return _next->get_filter_flags() | FILTER_PROCESS | FILTER_FILE;
+}
 
 static void rectify_traceme(Tls* tls) {
     long ret = sys_ptrace(PTRACE_TRACEME, 0, 0, 0);

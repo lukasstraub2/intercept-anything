@@ -18,5 +18,6 @@ CallHandler* main_init(CallHandler* const bottom, int recursing) {
     CallHandler* const rootshim = rootshim_init(rootlink);
     CallHandler* const androidislinux = androidislinux_init(rootshim);
     CallHandler* const workarounds = workarounds_init(androidislinux);
+    assert(!(workarounds->get_filter_flags() & FILTER_ALL));
     return workarounds;
 }

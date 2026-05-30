@@ -164,14 +164,6 @@ int pc_in_our_code(void* ucontext) {
 }
 
 // clang-format off
-const int FILTER_NONE = 0;
-const int FILTER_PROCESS = 1;
-const int FILTER_MEM = 2;
-const int FILTER_FILE = 4;
-const int FILTER_READWRITE = 8;
-const int FILTER_SOCKET = 16;
-const int FILTER_SENDRECV = 32;
-const int FILTER_ALL = 64;
 
 const struct sock_filter filter_head[] = {
     BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
@@ -452,10 +444,8 @@ static void build_filter_all(struct sock_fprog* prog, int flags) {
     prog->filter = filter;
 }
 
-static int install_filter() {
+static int install_filter(int flags) {
     int ret;
-    int flags = FILTER_PROCESS | FILTER_MEM | FILTER_FILE | FILTER_READWRITE |
-                FILTER_SOCKET | FILTER_SENDRECV;
     struct sock_fprog prog{};
 
     if (flags & FILTER_ALL) {
@@ -554,6 +544,6 @@ void intercept_init(int recursing, const char* exe) {
     signalmanager_install_sigsys(handler);
 
     if (!recursing) {
-        install_filter();
+        install_filter(intercept_entrypoint->get_filter_flags());
     }
 }

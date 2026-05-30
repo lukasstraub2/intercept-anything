@@ -1,6 +1,7 @@
 #pragma once
 
 #include "callhandler.h"
+#include "intercept.h"
 
 class AutoFree {
     public:
@@ -45,6 +46,10 @@ class ManglePaths : public CallHandler {
                             ICallPathConnect* copy,
                             const ICallPathConnect* call,
                             IDestroyCB** cb) = 0;
+
+    int get_filter_flags() override {
+        return _next->get_filter_flags() | FILTER_FILE | FILTER_SOCKET;
+    }
 
     void next(Context* ctx, const CallOpen* call) override {
         AutoFree cb;
