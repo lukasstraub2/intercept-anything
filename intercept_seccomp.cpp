@@ -163,209 +163,329 @@ int pc_in_our_code(void* ucontext) {
     return pc >= start_text && pc < &__etext;
 }
 
-static int install_filter() {
-    int ret;
+// clang-format off
+const int FILTER_NONE = 0;
+const int FILTER_PROCESS = 1;
+const int FILTER_MEM = 2;
+const int FILTER_FILE = 4;
+const int FILTER_READWRITE = 8;
+const int FILTER_SOCKET = 16;
+const int FILTER_SENDRECV = 32;
+const int FILTER_ALL = 64;
 
-    struct sock_filter filter[] = {
-        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
-                 (__u32)(offsetof(struct seccomp_data, arch))),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
-        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
-                 (__u32)(offsetof(struct seccomp_data, nr))),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_writev, 93, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readv, 92, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getsockopt, 91, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_setsockopt, 90, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_socketpair, 89, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getpeername, 88, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getsockname, 87, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_listen, 86, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_shutdown, 85, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_recvmmsg, 84, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_sendmmsg, 83, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_recvmsg, 82, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_sendmsg, 81, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_recvfrom, 80, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_sendto, 79, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_socket, 78, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_write, 77, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_pwrite64, 76, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_pwritev, 75, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_pwritev2, 74, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_read, 73, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_pread64, 72, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_preadv, 71, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_preadv2, 70, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_clone3, 69, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_clone, 68, 0),
+const struct sock_filter filter_head[] = {
+    BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+             (__u32)(offsetof(struct seccomp_data, arch))),
+    BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_CURRENT, 1, 0),
+    BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP | (1 & SECCOMP_RET_DATA)),
+};
+
+const struct sock_filter filter_tail[] = {
+    BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+             (__u32)(offsetof(struct seccomp_data, instruction_pointer) + 4)),
+    BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K,
+             (__u32)(((unsigned long)start_text) >> 32), 0, 3),
+    BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+             (__u32)(offsetof(struct seccomp_data, instruction_pointer))),
+    BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (__u32)(uintptr_t)start_text, 0, 1),
+    BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (__u32)(uintptr_t)&__etext, 0, 1),
+    BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
+    BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
+};
+
+const long syscall_sendrecv[] = {
+    __NR_recvmmsg,
+    __NR_sendmmsg,
+    __NR_recvmsg,
+    __NR_sendmsg,
+    __NR_recvfrom,
+    __NR_sendto,
+};
+
+const long syscall_socket[] = {
+    __NR_getsockopt,
+    __NR_setsockopt,
+    __NR_socketpair,
+    __NR_getpeername,
+    __NR_getsockname,
+    __NR_listen,
+    __NR_shutdown,
+    __NR_socket,
+    __NR_connect,
+    __NR_bind,
+    __NR_accept,
+    __NR_accept4,
+};
+
+const long syscall_readwrite[] = {
+    __NR_write,
+    __NR_writev,
+    __NR_pwrite64,
+    __NR_pwritev,
+    __NR_pwritev2,
+    __NR_read,
+    __NR_readv,
+    __NR_pread64,
+    __NR_preadv,
+    __NR_preadv2,
+};
+
+const long syscall_file[] = {
+#ifdef __NR_close_range
+    __NR_close_range,
+#endif
+    __NR_close,
+    __NR_fanotify_mark,
+    __NR_inotify_add_watch,
+#ifdef __NR_mknod
+    __NR_mknod,
+#endif
+    __NR_mknodat,
+#ifdef __NR_getdents
+    __NR_getdents,
+#endif
+    __NR_getdents64,
+#ifdef __NR_mkdir
+    __NR_mkdir,
+#endif
+    __NR_mkdirat,
+    __NR_truncate,
+    __NR_ftruncate,
+#ifdef __NR_chmod
+    __NR_chmod,
+#endif
+    __NR_fchmod,
+    __NR_fchmodat,
+    __NR_chdir,
+    __NR_fchdir,
+#ifdef __NR_open
+    __NR_open,
+#endif
+    __NR_openat,
+#ifdef __NR_stat
+    __NR_stat,
+#endif
+    __NR_fstat,
+#ifdef __NR_lstat
+    __NR_lstat,
+#endif
+    __NR_newfstatat,
+    __NR_statx,
+#ifdef __NR_readlink
+    __NR_readlink,
+#endif
+    __NR_readlinkat,
+#ifdef __NR_access
+    __NR_access,
+#endif
+    __NR_faccessat,
+    __NR_execve,
+    __NR_execveat,
+#ifdef __NR_link
+    __NR_link,
+#endif
+    __NR_linkat,
+#ifdef __NR_symlink
+    __NR_symlink,
+#endif
+    __NR_symlinkat,
+#ifdef __NR_unlink
+    __NR_unlink,
+#endif
+    __NR_unlinkat,
+    __NR_setxattr,
+    __NR_lsetxattr,
+    __NR_fsetxattr,
+    __NR_getxattr,
+    __NR_lgetxattr,
+    __NR_fgetxattr,
+    __NR_listxattr,
+    __NR_llistxattr,
+    __NR_flistxattr,
+    __NR_removexattr,
+    __NR_lremovexattr,
+    __NR_fremovexattr,
+#ifdef __NR_rename
+    __NR_rename,
+#endif
+    __NR_renameat,
+    __NR_renameat2,
+};
+
+const long syscall_mem[] = {
+    __NR_mmap,
+};
+
+const long syscall_process[] = {
+    __NR_clone3,
+    __NR_clone,
 #ifdef __NR_vfork
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_vfork, 67, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
+    __NR_vfork,
 #endif
 #ifdef __NR_fork
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fork, 66, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
+    __NR_fork,
 #endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mmap, 65, 0),
-#ifdef __NR_close_range
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_close_range, 64, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_close, 63, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_kill, 62, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_ptrace, 61, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getrlimit, 60, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_setrlimit, 59, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_prlimit64, 58, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fanotify_mark, 57, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_inotify_add_watch, 56, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_connect, 55, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_bind, 54, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_accept, 53, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_accept4, 52, 0),
-#ifdef __NR_mknod
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mknod, 51, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mknodat, 50, 0),
-#ifdef __NR_getdents
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getdents, 49, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getdents64, 48, 0),
-#ifdef __NR_mkdir
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mkdir, 47, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_mkdirat, 46, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_truncate, 45, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_ftruncate, 44, 0),
-#ifdef __NR_chmod
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_chmod, 43, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchmod, 42, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchmodat, 41, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_exit, 40, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_exit_group, 39, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_chdir, 38, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fchdir, 37, 0),
-#ifdef __NR_open
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_open, 36, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 35, 0),
-#ifdef __NR_stat
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 34, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fstat, 33, 0),
-#ifdef __NR_lstat
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lstat, 32, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 31, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_statx, 30, 0),
-#ifdef __NR_readlink
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlink, 29, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_readlinkat, 28, 0),
-#ifdef __NR_access
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_access, 27, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_faccessat, 26, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execve, 25, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_execveat, 24, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigprocmask, 23, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rt_sigaction, 22, 0),
-#ifdef __NR_link
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_link, 21, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_linkat, 20, 0),
-#ifdef __NR_symlink
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlink, 19, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_symlinkat, 18, 0),
-#ifdef __NR_unlink
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlink, 17, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_unlinkat, 16, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_setxattr, 15, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lsetxattr, 14, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fsetxattr, 13, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_getxattr, 12, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lgetxattr, 11, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fgetxattr, 10, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_listxattr, 9, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_llistxattr, 8, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_flistxattr, 7, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_removexattr, 6, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_lremovexattr, 5, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_fremovexattr, 4, 0),
-#ifdef __NR_rename
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_rename, 3, 0),
-#else
-        BPF_JUMP(BPF_JMP + BPF_JA, 0, 0, 0),
-#endif
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat, 2, 0),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_renameat2, 1, 0),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
-        BPF_STMT(
-            BPF_LD + BPF_W + BPF_ABS,
-            (__u32)(offsetof(struct seccomp_data, instruction_pointer) + 4)),
-        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K,
-                 (__u32)(((unsigned long)start_text) >> 32), 0, 3),
-        BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
-                 (__u32)(offsetof(struct seccomp_data, instruction_pointer))),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (__u32)(uintptr_t)start_text, 0, 1),
-        BPF_JUMP(BPF_JMP + BPF_JGE + BPF_K, (__u32)(uintptr_t)&__etext, 0, 1),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRAP),
-        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
-    };
-    struct sock_fprog prog = {
-        .len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
-        .filter = filter,
-    };
+    __NR_kill,
+    __NR_ptrace,
+    __NR_getrlimit,
+    __NR_setrlimit,
+    __NR_prlimit64,
+    __NR_exit,
+    __NR_exit_group,
+    __NR_rt_sigprocmask,
+    __NR_rt_sigaction,
+};
+// clang-format on
+
+const int filter_head_len = sizeof(filter_head) / sizeof(filter_head[0]);
+const int filter_tail_len = sizeof(filter_tail) / sizeof(filter_tail[0]);
+const int syscall_process_len = sizeof(syscall_process) / sizeof(long);
+const int syscall_mem_len = sizeof(syscall_mem) / sizeof(long);
+const int syscall_file_len = sizeof(syscall_file) / sizeof(long);
+const int syscall_readwrite_len = sizeof(syscall_readwrite) / sizeof(long);
+const int syscall_socket_len = sizeof(syscall_socket) / sizeof(long);
+const int syscall_sendrecv_len = sizeof(syscall_sendrecv) / sizeof(long);
+
+static struct sock_filter* fill_jump_cmp(struct sock_filter* ptr,
+                                         const long* list,
+                                         int len,
+                                         int* idx,
+                                         int syscall_len) {
+    assert(syscall_len < 128);
+    for (int i = 0; i < len; i++) {
+        __u8 jump = syscall_len - *idx;
+        (*idx)++;
+        struct sock_filter instr =
+            BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, (__u32)list[i], jump, 0);
+        memcpy(ptr, &instr, sizeof(instr));
+        ptr++;
+    }
+    return ptr;
+}
+
+static void build_filter_selective(struct sock_fprog* prog, int flags) {
+    int len = 0;
+    int idx = 0;
+
+    if (flags & FILTER_PROCESS) {
+        len += syscall_process_len;
+    }
+    if (flags & FILTER_MEM) {
+        len += syscall_mem_len;
+    }
+    if (flags & FILTER_FILE) {
+        len += syscall_file_len;
+    }
+    if (flags & FILTER_READWRITE) {
+        len += syscall_readwrite_len;
+    }
+    if (flags & FILTER_SOCKET) {
+        len += syscall_socket_len;
+    }
+    if (flags & FILTER_SENDRECV) {
+        len += syscall_sendrecv_len;
+    }
+
+    int syscall_len = len;
+    len += filter_head_len + 1 + 1 + filter_tail_len;
+
+    struct sock_filter* filter = new struct sock_filter[len];
+    struct sock_filter* ptr = filter;
+
+    memcpy(ptr, filter_head, filter_head_len * sizeof(struct sock_filter));
+    ptr += filter_head_len;
+
+    *ptr = BPF_STMT(BPF_LD + BPF_W + BPF_ABS,
+                    (__u32)(offsetof(struct seccomp_data, nr)));
+    ptr++;
+
+    if (flags & FILTER_PROCESS) {
+        ptr = fill_jump_cmp(ptr, syscall_process, syscall_process_len, &idx,
+                            syscall_len);
+    }
+    if (flags & FILTER_MEM) {
+        ptr =
+            fill_jump_cmp(ptr, syscall_mem, syscall_mem_len, &idx, syscall_len);
+    }
+    if (flags & FILTER_FILE) {
+        ptr = fill_jump_cmp(ptr, syscall_file, syscall_file_len, &idx,
+                            syscall_len);
+    }
+    if (flags & FILTER_READWRITE) {
+        ptr = fill_jump_cmp(ptr, syscall_readwrite, syscall_readwrite_len, &idx,
+                            syscall_len);
+    }
+    if (flags & FILTER_SOCKET) {
+        ptr = fill_jump_cmp(ptr, syscall_socket, syscall_socket_len, &idx,
+                            syscall_len);
+    }
+    if (flags & FILTER_SENDRECV) {
+        ptr = fill_jump_cmp(ptr, syscall_sendrecv, syscall_sendrecv_len, &idx,
+                            syscall_len);
+    }
+
+    *ptr = BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW);
+    ptr++;
+
+    memcpy(ptr, filter_tail, filter_tail_len * sizeof(struct sock_filter));
+    ptr += filter_tail_len;
+
+    assert(ptr == filter + len);
+
+    prog->len = len;
+    prog->filter = filter;
+}
+
+static void build_filter_all(struct sock_fprog* prog, int flags) {
+    int len = filter_head_len + filter_tail_len;
+    struct sock_filter* filter = new struct sock_filter[len];
+    struct sock_filter* ptr = filter;
+
+    memcpy(ptr, filter_head, filter_head_len * sizeof(struct sock_filter));
+    ptr += filter_head_len;
+    memcpy(ptr, filter_tail, filter_tail_len * sizeof(struct sock_filter));
+    ptr += filter_tail_len;
+
+    assert(ptr == filter + len);
+
+    prog->len = len;
+    prog->filter = filter;
+}
+
+static int install_filter() {
+    int ret;
+    int flags = FILTER_PROCESS | FILTER_MEM | FILTER_FILE | FILTER_READWRITE |
+                FILTER_SOCKET | FILTER_SENDRECV;
+    struct sock_fprog prog{};
+
+    if (flags & FILTER_ALL) {
+        build_filter_all(&prog, flags);
+    } else {
+        build_filter_selective(&prog, flags);
+    }
 
     /* First try without dropping privileges */
     ret = sys_prctl(PR_SET_SECCOMP, 2, (unsigned long)&prog, 0, 0);
     if (ret == 0) {
+        delete[] prog.filter;
         return 0;
     }
 
     ret = sys_prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
     if (ret < 0) {
+        delete[] prog.filter;
         exit_error("prctl(NO_NEW_PRIVS)");
         return 1;
     }
 
     ret = sys_prctl(PR_SET_SECCOMP, 2, (unsigned long)&prog, 0, 0);
     if (ret < 0) {
+        delete[] prog.filter;
         exit_error("prctl(PR_SET_SECCOMP)");
         return 1;
     }
 
+    delete[] prog.filter;
     return 0;
 }
 
