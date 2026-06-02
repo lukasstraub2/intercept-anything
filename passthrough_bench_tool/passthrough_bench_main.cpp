@@ -15,7 +15,9 @@ int PassthroughAll::get_filter_flags() {
 }
 
 CallHandler* main_init(CallHandler* const bottom, int recursing) {
-    signalmanager_skip_enable_signals(1);
+    if (getenv("LOADER_BLOCKING_SYSCALLS")) {
+        signalmanager_skip_enable_signals(1);
+    }
     CallHandler* passthrough = new PassthroughAll(bottom);
     CallHandler* fastpath = fastpath_init(passthrough);
     return workarounds_init(fastpath);
