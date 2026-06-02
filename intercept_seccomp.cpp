@@ -441,12 +441,12 @@ static void build_filter_selective(struct sock_fprog* prog, int flags) {
 }
 
 static void build_filter_all(struct sock_fprog* prog, int flags) {
-    int len = filter_head_len + filter_tail_len;
+    int len = filter_tail_len;
     struct sock_filter* filter = new struct sock_filter[len];
     struct sock_filter* ptr = filter;
 
-    memcpy(ptr, filter_head, filter_head_len * sizeof(struct sock_filter));
-    ptr += filter_head_len;
+    // Filter head is only required if we actually match system calls
+    // Here we intercept all system calls anyway, so we exclude it
     memcpy(ptr, filter_tail, filter_tail_len * sizeof(struct sock_filter));
     ptr += filter_tail_len;
 
