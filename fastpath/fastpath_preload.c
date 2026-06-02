@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/uio.h>
 #include <sys/socket.h>
+#include <signal.h>
 
 #ifdef _FILE_OFFSET_BITS
 #undef _FILE_OFFSET_BITS
@@ -300,6 +301,20 @@ int msync(void* addr, size_t len, int flags) {
     maybe_init();
 
     ret = entry(__NR_msync, (unsigned long)addr, len, flags, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+int kill(pid_t pid, int sig) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_kill, pid, sig, 0, 0, 0, 0);
     if (ret < 0) {
         errno = -ret;
         return -1;
