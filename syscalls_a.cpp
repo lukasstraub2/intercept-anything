@@ -3,15 +3,13 @@
 #include "util.h"
 #include "signalmanager.h"
 #include "bottomhandler.h"
-
-#define DEBUG_ENV "DEBUG_INTERCEPT"
-#include "debug.h"
+#include "errno.h"
+#include "mysys.h"
 
 unsigned long handle_open(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     int flags = args->arg2;
     mode_t mode = args->arg3;
-    trace("open(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -35,7 +33,6 @@ unsigned long handle_openat(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg2;
     int flags = args->arg3;
     mode_t mode = args->arg4;
-    trace("openat(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -58,7 +55,6 @@ unsigned long handle_openat(Context* ctx, SysArgs* args) {
 unsigned long handle_stat(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     void* statbuf = (void*)args->arg2;
-    trace("stat(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -79,7 +75,6 @@ unsigned long handle_stat(Context* ctx, SysArgs* args) {
 unsigned long handle_fstat(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
     void* statbuf = (void*)args->arg2;
-    trace("fstat()\n");
 
     int ret = {0};
     CallStat call;
@@ -96,7 +91,6 @@ unsigned long handle_fstat(Context* ctx, SysArgs* args) {
 unsigned long handle_lstat(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     void* statbuf = (void*)args->arg2;
-    trace("lstat(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -119,7 +113,6 @@ unsigned long handle_newfstatat(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg2;
     void* statbuf = (void*)args->arg3;
     int flags = args->arg4;
-    trace("newfstatat(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -145,7 +138,6 @@ unsigned long handle_statx(Context* ctx, SysArgs* args) {
     int flags = args->arg3;
     unsigned int mask = args->arg4;
     void* statbuf = (void*)args->arg5;
-    trace("statx(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -170,7 +162,6 @@ unsigned long handle_readlink(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     char* buf = (char*)args->arg2;
     size_t bufsiz = args->arg3;
-    trace("readlink(%s)\n", or_null(path));
 
     if (!bufsiz) {
         return -EINVAL;
@@ -198,7 +189,6 @@ unsigned long handle_readlinkat(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg2;
     char* buf = (char*)args->arg3;
     size_t bufsiz = args->arg4;
-    trace("readlinkat(%s)\n", or_null(path));
 
     if (!bufsiz) {
         return -EINVAL;
@@ -223,7 +213,6 @@ unsigned long handle_readlinkat(Context* ctx, SysArgs* args) {
 unsigned long handle_access(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     int mode = args->arg2;
-    trace("access(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -245,7 +234,6 @@ unsigned long handle_faccessat(Context* ctx, SysArgs* args) {
     int dirfd = args->arg1;
     const char* path = (const char*)args->arg2;
     int mode = args->arg3;
-    trace("accessat(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -270,7 +258,6 @@ unsigned long handle_setxattr(Context* ctx, SysArgs* args) {
     const void* value = (const void*)args->arg3;
     size_t size = args->arg4;
     int flags = args->arg5;
-    trace("setxattr(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -298,7 +285,6 @@ unsigned long handle_lsetxattr(Context* ctx, SysArgs* args) {
     const void* value = (const void*)args->arg3;
     size_t size = args->arg4;
     int flags = args->arg5;
-    trace("lsetxattr(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -326,7 +312,6 @@ unsigned long handle_fsetxattr(Context* ctx, SysArgs* args) {
     const void* value = (const void*)args->arg3;
     size_t size = args->arg4;
     int flags = args->arg5;
-    trace("fsetxattr(%d)\n", fd);
 
     ssize_t ret = {0};
     CallXattr call;
@@ -349,7 +334,6 @@ unsigned long handle_getxattr(Context* ctx, SysArgs* args) {
     const char* name = (const char*)args->arg2;
     void* value = (void*)args->arg3;
     size_t size = args->arg4;
-    trace("getxattr(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -375,7 +359,6 @@ unsigned long handle_lgetxattr(Context* ctx, SysArgs* args) {
     const char* name = (const char*)args->arg2;
     void* value = (void*)args->arg3;
     size_t size = args->arg4;
-    trace("lgetxattr(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -401,7 +384,6 @@ unsigned long handle_fgetxattr(Context* ctx, SysArgs* args) {
     const char* name = (const char*)args->arg2;
     void* value = (void*)args->arg3;
     size_t size = args->arg4;
-    trace("fgetxattr(%d)\n", fd);
 
     ssize_t ret = {0};
     CallXattr call;
@@ -422,7 +404,6 @@ unsigned long handle_listxattr(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     char* list = (char*)args->arg2;
     size_t size = args->arg3;
-    trace("listxattr(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -446,7 +427,6 @@ unsigned long handle_llistxattr(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     char* list = (char*)args->arg2;
     size_t size = args->arg3;
-    trace("llistxattr(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -470,7 +450,6 @@ unsigned long handle_flistxattr(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
     char* list = (char*)args->arg2;
     size_t size = args->arg3;
-    trace("flistxattr(%d)\n", fd);
 
     ssize_t ret = {0};
     CallXattr call;
@@ -489,7 +468,6 @@ unsigned long handle_flistxattr(Context* ctx, SysArgs* args) {
 unsigned long handle_removexattr(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     const char* name = (const char*)args->arg2;
-    trace("removexattr(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -511,7 +489,6 @@ unsigned long handle_removexattr(Context* ctx, SysArgs* args) {
 unsigned long handle_lremovexattr(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     const char* name = (const char*)args->arg2;
-    trace("lremovexattr(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -533,7 +510,6 @@ unsigned long handle_lremovexattr(Context* ctx, SysArgs* args) {
 unsigned long handle_fremovexattr(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
     const char* name = (const char*)args->arg2;
-    trace("fremovexattr(%d)\n", fd);
 
     ssize_t ret = {0};
     CallXattr call;
@@ -550,7 +526,6 @@ unsigned long handle_fremovexattr(Context* ctx, SysArgs* args) {
 
 unsigned long handle_fchdir(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
-    trace("fchdir(%d)\n", fd);
 
     int ret = {0};
     CallChdir call;
@@ -567,7 +542,6 @@ unsigned long handle_getdents(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
     void* dirp = (void*)args->arg2;
     size_t count = args->arg3;
-    trace("getdents(%d)\n", fd);
 
     ssize_t ret = {0};
     CallGetdents call;
@@ -586,7 +560,6 @@ unsigned long handle_getdents64(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
     void* dirp = (void*)args->arg2;
     size_t count = args->arg3;
-    trace("getdents64(%d)\n", fd);
 
     ssize_t ret = {0};
     CallGetdents call;
@@ -603,7 +576,6 @@ unsigned long handle_getdents64(Context* ctx, SysArgs* args) {
 
 unsigned long handle_close(Context* ctx, SysArgs* args) {
     unsigned int fd = args->arg1;
-    trace("close(%u)\n", fd);
 
     int ret = {0};
     CallClose call;
@@ -620,7 +592,6 @@ unsigned long handle_close_range(Context* ctx, SysArgs* args) {
     unsigned int first = args->arg1;
     unsigned int last = args->arg2;
     unsigned int flags = args->arg3;
-    trace("close_range(%u, %u)\n", first, last);
 
     int ret = {0};
     CallClose call;

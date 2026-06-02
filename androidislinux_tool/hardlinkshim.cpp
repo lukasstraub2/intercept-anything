@@ -3,8 +3,6 @@
 #include "mylock.h"
 #include "signalmanager.h"
 #include "callhandler.h"
-
-#define DEBUG_ENV "HARDLINK_DEBUG"
 #include "debug.h"
 #include "config.h"
 #include "util.h"

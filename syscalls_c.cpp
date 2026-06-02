@@ -4,16 +4,14 @@
 #include "linux/sched.h"
 #include "signalmanager.h"
 #include "bottomhandler.h"
-
-#define DEBUG_ENV "DEBUG_INTERCEPT"
-#include "debug.h"
+#include "errno.h"
+#include "mysys.h"
 
 unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args) {
     int how = args->arg1;
     const sigset_t* set = (const sigset_t*)args->arg2;
     sigset_t* oldset = (sigset_t*)args->arg3;
     size_t sigsetsize = args->arg4;
-    trace("rt_sigprocmask()\n");
 
     int ret = {0};
     CallSigprocmask call;
@@ -29,7 +27,6 @@ unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_rt_sigreturn(Context* ctx, SysArgs* args) {
-    trace("rt_sigreturn\n");
 
     CallSigreturn call;
     intercept_entrypoint->next(ctx, &call);
@@ -41,7 +38,6 @@ unsigned long handle_write(Context* ctx, SysArgs* args) {
     unsigned int fd = args->arg1;
     const char* buf = (const char*)args->arg2;
     size_t count = args->arg3;
-    trace("write(%d)\n", fd);
 
     struct iovec iov = {(void*)buf, count};
 
@@ -63,7 +59,6 @@ unsigned long handle_writev(Context* ctx, SysArgs* args) {
     unsigned long fd = args->arg1;
     const struct iovec* iov = (const struct iovec*)args->arg2;
     unsigned long iovcnt = args->arg3;
-    trace("writev(%lu)\n", fd);
 
     ssize_t ret = {0};
     CallReadWrite call;
@@ -84,7 +79,6 @@ unsigned long handle_pwrite64(Context* ctx, SysArgs* args) {
     const char* buf = (const char*)args->arg2;
     size_t count = args->arg3;
     loff_t pos = args->arg4;
-    trace("pwrite64(%d, %lu)\n", fd, pos);
 
     struct iovec iov = {(void*)buf, count};
 
@@ -109,7 +103,6 @@ unsigned long handle_pwritev(Context* ctx, SysArgs* args) {
     unsigned long iovcnt = args->arg3;
     unsigned long pos_l = args->arg4;
     unsigned long pos_h = args->arg5;
-    trace("pwritev(%lu)\n", fd);
 
     ssize_t ret = {0};
     CallReadWrite call;
@@ -134,7 +127,6 @@ unsigned long handle_pwritev2(Context* ctx, SysArgs* args) {
     unsigned long pos_l = args->arg4;
     unsigned long pos_h = args->arg5;
     int flags = args->arg6;
-    trace("pwritev2(%lu)\n", fd);
 
     ssize_t ret = {0};
     CallReadWrite call;
@@ -158,7 +150,6 @@ unsigned long handle_rt_sigaction(Context* ctx, SysArgs* args) {
     const struct k_sigaction* act = (const struct k_sigaction*)args->arg2;
     struct k_sigaction* oldact = (struct k_sigaction*)args->arg3;
     size_t sigsetsize = args->arg4;
-    trace("rt_sigaction(%d)\n", signum);
 
     int ret = {0};
     CallSigaction call;
@@ -177,7 +168,6 @@ unsigned long handle_accept(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
     void* addr = (void*)args->arg2;
     int* addrlen = (int*)args->arg3;
-    trace("accept()\n");
 
     int ret = {0};
     CallAccept call;
@@ -197,7 +187,6 @@ unsigned long handle_accept4(Context* ctx, SysArgs* args) {
     void* addr = (void*)args->arg2;
     int* addrlen = (int*)args->arg3;
     int flags = args->arg4;
-    trace("accept4()\n");
 
     int ret = {0};
     CallAccept call;
@@ -217,7 +206,6 @@ unsigned long handle_bind(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
     void* addr = (void*)args->arg2;
     int addrlen = args->arg3;
-    trace("bind()\n");
 
     int ret = {0};
     CallConnect call;
@@ -236,7 +224,6 @@ unsigned long handle_connect(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
     void* addr = (void*)args->arg2;
     int addrlen = args->arg3;
-    trace("connect()\n");
 
     int ret = {0};
     CallConnect call;
@@ -257,7 +244,6 @@ unsigned long handle_fanotify_mark(Context* ctx, SysArgs* args) {
     uint64_t mask = args->arg3;
     int dfd = args->arg4;
     const char* pathname = (const char*)args->arg5;
-    trace("fanotify_mark(%s)\n", or_null(pathname));
 
     int ret = {0};
     CallFanotifyMark call;
@@ -277,7 +263,6 @@ unsigned long handle_inotify_add_watch(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
     const char* pathname = (const char*)args->arg2;
     uint64_t mask = args->arg3;
-    trace("inotify_add_watch(%s)\n", or_null(pathname));
 
     if (!pathname) {
         return -EFAULT;
@@ -298,7 +283,6 @@ unsigned long handle_inotify_add_watch(Context* ctx, SysArgs* args) {
 unsigned long handle_getrlimit(Context* ctx, SysArgs* args) {
     unsigned int resource = args->arg1;
     void* old_rlim = (void*)args->arg2;
-    trace("getrlimit()\n");
 
     int ret = {0};
     CallRlimit call;
@@ -315,7 +299,6 @@ unsigned long handle_getrlimit(Context* ctx, SysArgs* args) {
 unsigned long handle_setrlimit(Context* ctx, SysArgs* args) {
     unsigned int resource = args->arg1;
     const void* new_rlim = (const void*)args->arg2;
-    trace("setrlimit()\n");
 
     int ret = {0};
     CallRlimit call;
@@ -334,7 +317,6 @@ unsigned long handle_prlimit64(Context* ctx, SysArgs* args) {
     unsigned int resource = args->arg2;
     const void* new_rlim = (const void*)args->arg3;
     void* old_rlim = (void*)args->arg4;
-    trace("prlimit64()\n");
 
     int ret = {0};
     CallRlimit call;
@@ -355,7 +337,6 @@ unsigned long handle_ptrace(Context* ctx, SysArgs* args) {
     long pid = args->arg2;
     void* addr = (void*)args->arg3;
     void* data = (void*)args->arg4;
-    trace("ptrace()\n");
 
     long ret = {0};
     CallPtrace call;
@@ -373,7 +354,6 @@ unsigned long handle_ptrace(Context* ctx, SysArgs* args) {
 unsigned long handle_kill(Context* ctx, SysArgs* args) {
     pid_t pid = args->arg1;
     int sig = args->arg2;
-    trace("kill()\n");
 
     int ret = {0};
     CallKill call;
@@ -387,7 +367,6 @@ unsigned long handle_kill(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_misc(Context* ctx, SysArgs* args) {
-    trace("misc(%lu)\n", args->num);
 
     unsigned long ret = {0};
     CallMisc call;
@@ -406,7 +385,6 @@ unsigned long handle_mmap(Context* ctx, SysArgs* args) {
     unsigned long flags = args->arg4;
     unsigned long fd = args->arg5;
     unsigned long off = args->arg6;
-    trace("mmap()\n");
 
     unsigned long ret = {0};
     CallMmap call;
@@ -429,7 +407,6 @@ unsigned long handle_mremap(Context* ctx, SysArgs* args) {
     unsigned long new_len = args->arg3;
     unsigned long flags = args->arg4;
     unsigned long new_addr = args->arg5;
-    trace("mremap()\n");
 
     unsigned long ret = {0};
     CallMremap call;
@@ -448,7 +425,6 @@ unsigned long handle_mremap(Context* ctx, SysArgs* args) {
 unsigned long handle_munmap(Context* ctx, SysArgs* args) {
     unsigned long addr = args->arg1;
     size_t len = args->arg2;
-    trace("munmap()\n");
 
     long ret = {0};
     CallMemop call;
@@ -466,7 +442,6 @@ unsigned long handle_madvise(Context* ctx, SysArgs* args) {
     unsigned long addr = args->arg1;
     size_t len = args->arg2;
     unsigned long flags = args->arg3;
-    trace("madvise()\n");
 
     long ret = {0};
     CallMemop call;
@@ -485,7 +460,6 @@ unsigned long handle_mprotect(Context* ctx, SysArgs* args) {
     unsigned long addr = args->arg1;
     size_t len = args->arg2;
     unsigned long flags = args->arg3;
-    trace("mprotect()\n");
 
     long ret = {0};
     CallMemop call;
@@ -504,7 +478,6 @@ unsigned long handle_msync(Context* ctx, SysArgs* args) {
     unsigned long addr = args->arg1;
     size_t len = args->arg2;
     unsigned long flags = args->arg3;
-    trace("msync()\n");
 
     long ret = {0};
     CallMemop call;
@@ -522,7 +495,6 @@ unsigned long handle_msync(Context* ctx, SysArgs* args) {
 unsigned long handle_mlock(Context* ctx, SysArgs* args) {
     unsigned long addr = args->arg1;
     size_t len = args->arg2;
-    trace("mlock()\n");
 
     long ret = {0};
     CallMemop call;
@@ -539,7 +511,6 @@ unsigned long handle_mlock(Context* ctx, SysArgs* args) {
 unsigned long handle_munlock(Context* ctx, SysArgs* args) {
     unsigned long addr = args->arg1;
     size_t len = args->arg2;
-    trace("munlock()\n");
 
     long ret = {0};
     CallMemop call;
@@ -557,7 +528,6 @@ unsigned long handle_mlock2(Context* ctx, SysArgs* args) {
     unsigned long addr = args->arg1;
     size_t len = args->arg2;
     unsigned long flags = args->arg3;
-    trace("mlock2()\n");
 
     long ret = {0};
     CallMemop call;
@@ -576,7 +546,6 @@ unsigned long handle_mseal(Context* ctx, SysArgs* args) {
     unsigned long addr = args->arg1;
     size_t len = args->arg2;
     unsigned long flags = args->arg3;
-    trace("mseal()\n");
 
     long ret = {0};
     CallMemop call;
@@ -592,7 +561,6 @@ unsigned long handle_mseal(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_fork(Context* ctx, SysArgs* args) {
-    trace("fork()\n");
 
     int ret = 0;
     CallClone call;
@@ -605,7 +573,6 @@ unsigned long handle_fork(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_vfork(Context* ctx, SysArgs* args) {
-    trace("vfork()\n");
 
     int ret = 0;
     CallClone call;
@@ -630,7 +597,6 @@ unsigned long handle_clone(Context* ctx, SysArgs* args) {
     int* child_tidptr = (int*)args->arg5;
 #endif
 
-    trace("clone()\n");
 
     struct clone_args cargs = {};
     cargs.flags = clone_flags;
@@ -654,7 +620,6 @@ unsigned long handle_clone(Context* ctx, SysArgs* args) {
 unsigned long handle_clone3(Context* ctx, SysArgs* args) {
     struct clone_args* uargs = (struct clone_args*)args->arg1;
     size_t size = args->arg2;
-    trace("clone3()\n");
 
     int ret = 0;
     CallClone call;
@@ -672,7 +637,6 @@ unsigned long handle_read(Context* ctx, SysArgs* args) {
     unsigned int fd = args->arg1;
     char* buf = (char*)args->arg2;
     size_t count = args->arg3;
-    trace("read(%d)\n", fd);
 
     struct iovec iov = {buf, count};
 
@@ -693,7 +657,6 @@ unsigned long handle_readv(Context* ctx, SysArgs* args) {
     unsigned long fd = args->arg1;
     const struct iovec* iov = (const struct iovec*)args->arg2;
     unsigned long iovcnt = args->arg3;
-    trace("readv(%lu)\n", fd);
 
     ssize_t ret = {0};
     CallReadWrite call;
@@ -713,7 +676,6 @@ unsigned long handle_pread64(Context* ctx, SysArgs* args) {
     char* buf = (char*)args->arg2;
     size_t count = args->arg3;
     loff_t pos = args->arg4;
-    trace("pread64(%d, %lu)\n", fd, pos);
 
     struct iovec iov = {buf, count};
 
@@ -737,7 +699,6 @@ unsigned long handle_preadv(Context* ctx, SysArgs* args) {
     unsigned long iovcnt = args->arg3;
     unsigned long pos_l = args->arg4;
     unsigned long pos_h = args->arg5;
-    trace("preadv(%lu)\n", fd);
 
     ssize_t ret = {0};
     CallReadWrite call;
@@ -761,7 +722,6 @@ unsigned long handle_preadv2(Context* ctx, SysArgs* args) {
     unsigned long pos_l = args->arg4;
     unsigned long pos_h = args->arg5;
     int flags = args->arg6;
-    trace("preadv2(%lu)\n", fd);
 
     ssize_t ret = {0};
     CallReadWrite call;

@@ -28,8 +28,6 @@
 #include "loader.h"
 #include "myelf.h"
 #include "pagesize.h"
-
-#define DEBUG_ENV "DEBUG_LOADER"
 #include "debug.h"
 
 #include <sys/mman.h>

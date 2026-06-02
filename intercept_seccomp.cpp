@@ -11,8 +11,6 @@
 #include "syscall_trampo.h"
 #include "handle_syscall.h"
 #include "bottomhandler.h"
-
-#define DEBUG_ENV "DEBUG_INTERCEPT"
 #include "debug.h"
 
 #include "linux/audit.h"

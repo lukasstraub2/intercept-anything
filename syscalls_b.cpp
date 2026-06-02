@@ -3,14 +3,12 @@
 #include "util.h"
 #include "signalmanager.h"
 #include "bottomhandler.h"
-
-#define DEBUG_ENV "DEBUG_INTERCEPT"
-#include "debug.h"
+#include "errno.h"
+#include "mysys.h"
 
 unsigned long handle_link(Context* ctx, SysArgs* args) {
     const char* oldpath = (const char*)args->arg1;
     const char* newpath = (const char*)args->arg2;
-    trace("link(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
         return -EFAULT;
@@ -34,7 +32,6 @@ unsigned long handle_linkat(Context* ctx, SysArgs* args) {
     int newdirfd = args->arg3;
     const char* newpath = (const char*)args->arg4;
     int flags = args->arg5;
-    trace("linkat(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
         return -EFAULT;
@@ -58,7 +55,6 @@ unsigned long handle_linkat(Context* ctx, SysArgs* args) {
 unsigned long handle_symlink(Context* ctx, SysArgs* args) {
     const char* oldpath = (const char*)args->arg1;
     const char* newpath = (const char*)args->arg2;
-    trace("symlink(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
         return -EFAULT;
@@ -80,7 +76,6 @@ unsigned long handle_symlinkat(Context* ctx, SysArgs* args) {
     const char* oldpath = (const char*)args->arg1;
     int newdirfd = args->arg2;
     const char* newpath = (const char*)args->arg3;
-    trace("symlinkat(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
         return -EFAULT;
@@ -101,7 +96,6 @@ unsigned long handle_symlinkat(Context* ctx, SysArgs* args) {
 
 unsigned long handle_unlink(Context* ctx, SysArgs* args) {
     const char* pathname = (const char*)args->arg1;
-    trace("unlink(%s)\n", or_null(pathname));
 
     if (!pathname) {
         return -EFAULT;
@@ -122,7 +116,6 @@ unsigned long handle_unlinkat(Context* ctx, SysArgs* args) {
     int dirfd = args->arg1;
     const char* pathname = (const char*)args->arg2;
     int flags = args->arg3;
-    trace("unlinkat(%s)\n", or_null(pathname));
 
     if (!pathname) {
         return -EFAULT;
@@ -144,7 +137,6 @@ unsigned long handle_unlinkat(Context* ctx, SysArgs* args) {
 unsigned long handle_rename(Context* ctx, SysArgs* args) {
     const char* oldpath = (const char*)args->arg1;
     const char* newpath = (const char*)args->arg2;
-    trace("rename(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
         return -EFAULT;
@@ -167,7 +159,6 @@ unsigned long handle_renameat(Context* ctx, SysArgs* args) {
     const char* oldpath = (const char*)args->arg2;
     int newdirfd = args->arg3;
     const char* newpath = (const char*)args->arg4;
-    trace("renameat(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
         return -EFAULT;
@@ -193,7 +184,6 @@ unsigned long handle_renameat2(Context* ctx, SysArgs* args) {
     int newdirfd = args->arg3;
     const char* newpath = (const char*)args->arg4;
     unsigned int flags = args->arg5;
-    trace("renameat2(%s, %s)\n", or_null(oldpath), or_null(newpath));
 
     if (!oldpath || !newpath) {
         return -EFAULT;
@@ -216,7 +206,6 @@ unsigned long handle_renameat2(Context* ctx, SysArgs* args) {
 
 unsigned long handle_chdir(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
-    trace("chdir(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -236,7 +225,6 @@ unsigned long handle_chdir(Context* ctx, SysArgs* args) {
 unsigned long handle_chmod(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     mode_t mode = args->arg2;
-    trace("chmod(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -257,7 +245,6 @@ unsigned long handle_chmod(Context* ctx, SysArgs* args) {
 unsigned long handle_fchmod(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
     mode_t mode = args->arg2;
-    trace("fchmod(%d)\n", fd);
 
     int ret = {0};
     CallChmod call;
@@ -275,7 +262,6 @@ unsigned long handle_fchmodat(Context* ctx, SysArgs* args) {
     int dirfd = args->arg1;
     const char* path = (const char*)args->arg2;
     mode_t mode = args->arg3;
-    trace("fchmodat(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -297,7 +283,6 @@ unsigned long handle_fchmodat(Context* ctx, SysArgs* args) {
 unsigned long handle_truncate(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     off_t length = args->arg2;
-    trace("truncate(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -318,7 +303,6 @@ unsigned long handle_truncate(Context* ctx, SysArgs* args) {
 unsigned long handle_ftruncate(Context* ctx, SysArgs* args) {
     int fd = args->arg1;
     off_t length = args->arg2;
-    trace("ftruncate(%d)\n", fd);
 
     int ret = {0};
     CallTruncate call;
@@ -335,7 +319,6 @@ unsigned long handle_ftruncate(Context* ctx, SysArgs* args) {
 unsigned long handle_mkdir(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     mode_t mode = args->arg2;
-    trace("mkdir(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -357,7 +340,6 @@ unsigned long handle_mkdirat(Context* ctx, SysArgs* args) {
     int dirfd = args->arg1;
     const char* path = (const char*)args->arg2;
     mode_t mode = args->arg3;
-    trace("mkdirat(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -380,7 +362,6 @@ unsigned long handle_mknod(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg1;
     mode_t mode = args->arg2;
     unsigned int dev = args->arg3;
-    trace("mknod(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;
@@ -404,7 +385,6 @@ unsigned long handle_mknodat(Context* ctx, SysArgs* args) {
     const char* path = (const char*)args->arg2;
     mode_t mode = args->arg3;
     unsigned int dev = args->arg4;
-    trace("mknodat(%s)\n", or_null(path));
 
     if (!path) {
         return -EFAULT;

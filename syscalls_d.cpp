@@ -3,12 +3,10 @@
 #include "util.h"
 #include "signalmanager.h"
 #include "bottomhandler.h"
-
-#define DEBUG_ENV "DEBUG_INTERCEPT"
-#include "debug.h"
+#include "errno.h"
+#include "mysys.h"
 
 unsigned long handle_socket(Context* ctx, SysArgs* args) {
-    trace("socket()\n");
     int ret = 0;
     CallSocket call;
     call.family = (int)args->arg1;
@@ -21,7 +19,6 @@ unsigned long handle_socket(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_sendto(Context* ctx, SysArgs* args) {
-    trace("sendto(%ld)\n", args->arg1);
     int ret = 0;
     int len = (int)args->arg6;
     CallSendRecv call;
@@ -39,7 +36,6 @@ unsigned long handle_sendto(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_recvfrom(Context* ctx, SysArgs* args) {
-    trace("recvfrom(%ld)\n", args->arg1);
     int ret = 0;
     CallSendRecv call;
     call.type = SENDRECV_RECVFROM;
@@ -56,7 +52,6 @@ unsigned long handle_recvfrom(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_sendmsg(Context* ctx, SysArgs* args) {
-    trace("sendmsg(%ld)\n", args->arg1);
     long ret = 0;
     CallMsg call;
     call.type = MSG_SEND;
@@ -70,7 +65,6 @@ unsigned long handle_sendmsg(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_recvmsg(Context* ctx, SysArgs* args) {
-    trace("recvmsg(%ld)\n", args->arg1);
     long ret = 0;
     CallMsg call;
     call.type = MSG_RECV;
@@ -84,7 +78,6 @@ unsigned long handle_recvmsg(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_sendmmsg(Context* ctx, SysArgs* args) {
-    trace("sendmmsg(%ld)\n", args->arg1);
     long ret = 0;
     CallMsg call;
     call.type = MSG_SENDM;
@@ -99,7 +92,6 @@ unsigned long handle_sendmmsg(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_recvmmsg(Context* ctx, SysArgs* args) {
-    trace("recvmmsg(%ld)\n", args->arg1);
     long ret = 0;
     CallMsg call;
     call.type = MSG_RECVM;
@@ -115,7 +107,6 @@ unsigned long handle_recvmmsg(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_shutdown(Context* ctx, SysArgs* args) {
-    trace("shutdown(%ld)\n", args->arg1);
     int ret = 0;
     CallShutdown call;
     call.fd = (int)args->arg1;
@@ -127,7 +118,6 @@ unsigned long handle_shutdown(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_listen(Context* ctx, SysArgs* args) {
-    trace("listen(%ld)\n", args->arg1);
     int ret = 0;
     CallListen call;
     call.fd = (int)args->arg1;
@@ -139,7 +129,6 @@ unsigned long handle_listen(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_getsockname(Context* ctx, SysArgs* args) {
-    trace("getsockname(%ld)\n", args->arg1);
     int ret = 0;
     CallSockName call;
     call.type = SOCKNAME_GET;
@@ -153,7 +142,6 @@ unsigned long handle_getsockname(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_getpeername(Context* ctx, SysArgs* args) {
-    trace("getpeername(%ld)\n", args->arg1);
     int ret = 0;
     CallSockName call;
     call.type = SOCKNAME_PEER;
@@ -167,7 +155,6 @@ unsigned long handle_getpeername(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_socketpair(Context* ctx, SysArgs* args) {
-    trace("socketpair()\n");
     int ret = 0;
     CallSocketpair call;
     call.family = (int)args->arg1;
@@ -181,7 +168,6 @@ unsigned long handle_socketpair(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_setsockopt(Context* ctx, SysArgs* args) {
-    trace("setsockopt(%ld)\n", args->arg1);
     int ret = 0;
     int len = (int)args->arg5;
     ;
@@ -199,7 +185,6 @@ unsigned long handle_setsockopt(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_getsockopt(Context* ctx, SysArgs* args) {
-    trace("getsockopt(%ld)\n", args->arg1);
     int ret = 0;
     CallSockOpt call;
     call.type = SOCKOPT_GET;

@@ -30,8 +30,6 @@
 #include "features.h"
 #include "../libs/musl/src/include/features.h"
 #include "../libs/musl/src/internal/libc.h"
-
-#define DEBUG_ENV "DEBUG_LOADER"
 #include "debug.h"
 
 #include <string.h>

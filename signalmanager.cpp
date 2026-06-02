@@ -15,8 +15,6 @@
 #include "mylist.h"
 #include "linux/sched.h"
 #include "callhandler.h"
-
-#define DEBUG_ENV "DEBUG_SIGNAL"
 #include "debug.h"
 
 #include <signal.h>
@@ -220,13 +218,13 @@ static void generic_handler(int signum, siginfo_t* info, void* ucontext) {
     const myhandler_t _handler = (myhandler_t)handler;
 
     if (handler == SIG_DFL) {
-        trace_plus("signal %d: SIG_DFL\n", signum);
+        trace("signal %d: SIG_DFL\n", signum);
         handle_default(signum);
     } else if (handler == SIG_IGN) {
-        trace_plus("signal %d: SIG_IGN\n", signum);
+        trace("signal %d: SIG_IGN\n", signum);
         // noop
     } else {
-        trace_plus("signal %d: registered handler\n");
+        trace("signal %d: registered handler\n", signum);
         sigset_t sa_mask = {};
         memcpy(&sa_mask, copy.mask, _NSIG / 8);
         if (!(copy.flags & SA_NODEFER)) {

@@ -5,8 +5,8 @@
 #include "loader.h"
 #include "signalmanager.h"
 #include "bottomhandler.h"
-
-#define DEBUG_ENV "DEBUG_INTERCEPT"
+#include "errno.h"
+#include "mysys.h"
 #include "debug.h"
 
 #include <string.h>
