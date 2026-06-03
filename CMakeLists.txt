@@ -87,7 +87,7 @@ add_custom_target(generate_fastpath_preload DEPENDS ${GENERATED_FASTPATH_PRELOAD
 
 include_directories(include include/nolibc ${GENERATED_H_DIR})
 add_compile_definitions(_GNU_SOURCE RUNTIME_PREFIX="${RUNTIME_PREFIX}")
-add_compile_options(-g -O1 -pipe -fPIE -Wno-shift-op-parentheses -fno-exceptions)
+add_compile_options(-g -O1 -pipe -fPIE -Wno-shift-op-parentheses -fno-exceptions -fno-stack-protector)
 
 add_library(freestanding OBJECT
     loader.cpp
