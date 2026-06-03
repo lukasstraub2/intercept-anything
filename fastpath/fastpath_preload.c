@@ -1,3 +1,4 @@
+#undef _FORTIFY_SOURCE
 
 #include "fastpath_preload.h"
 #include "sys.h"
