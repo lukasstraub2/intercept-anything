@@ -28,7 +28,7 @@ static __attribute__((noreturn)) void myabort() {
 static void maybe_init() {
     ssize_t ret;
 
-    if (__builtin_expect(!!entry, 0)) {
+    if (__builtin_expect(!!entry, 1)) {
         return;
     }
 
