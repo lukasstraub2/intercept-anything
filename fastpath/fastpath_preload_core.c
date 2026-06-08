@@ -4,7 +4,7 @@
 
 __attribute__((visibility("hidden"))) fastpath_entry_t entry = NULL;
 
-static __attribute__((noreturn)) void myabort() {
+__attribute__((visibility("hidden"), noreturn)) void myabort() {
     sys_kill(sys_getpid(), SIGABRT);
     for (;;)
         ;

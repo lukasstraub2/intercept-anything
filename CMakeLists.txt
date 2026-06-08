@@ -65,7 +65,7 @@ set(GENERATED_H_DIR ${CMAKE_BINARY_DIR}/include)
 set(GENERATED_FASTPATH_PRELOAD_DATA_H ${GENERATED_H_DIR}/fastpath_preload_data.h)
 set(GENERATED_FASTPATH_PRELOAD_VDSO_DATA_H ${GENERATED_H_DIR}/fastpath_preload_vdso_data.h)
 
-add_library(fastpath_preload SHARED fastpath/fastpath_preload.c fastpath/fastpath_preload_core.c)
+add_library(fastpath_preload SHARED fastpath/fastpath_preload.c fastpath/fastpath_preload_fortify.c fastpath/fastpath_preload_core.c)
 target_link_libraries(fastpath_preload PUBLIC -nostartfiles -nodefaultlibs -nostdlib -Wl,-z,noseparate-code,-z,now)
 target_include_directories(fastpath_preload PUBLIC include)
 target_compile_options(fastpath_preload PUBLIC -O1 -pipe)

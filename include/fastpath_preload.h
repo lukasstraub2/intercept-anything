@@ -12,4 +12,5 @@ typedef unsigned long (*fastpath_entry_t)(unsigned long num,
 
 extern fastpath_entry_t entry;
 
+__attribute__((noreturn)) void myabort();
 void maybe_init();
