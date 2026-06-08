@@ -1,10 +1,12 @@
 #include "intercept.h"
 #include "syscalls_d.h"
+#include "sched.h"
 #include "util.h"
 #include "signalmanager.h"
 #include "bottomhandler.h"
 #include "errno.h"
 #include "mysys.h"
+#include "time.h"
 
 unsigned long handle_socket(Context* ctx, SysArgs* args) {
     int ret = 0;
@@ -199,6 +201,54 @@ unsigned long handle_getsockopt(Context* ctx, SysArgs* args) {
     return ret;
 }
 
+unsigned long handle_clock_gettime(Context* ctx, SysArgs* args) {
+    long ret = 0;
+    CallClockTimeOps call;
+    call.type = CLOCKTIME_GETTIME;
+    call.clockid = (clockid_t)args->arg1;
+    call.spec = (struct timespec*)args->arg2;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
+unsigned long handle_clock_settime(Context* ctx, SysArgs* args) {
+    long ret = 0;
+    CallClockTimeOps call;
+    call.type = CLOCKTIME_SETTIME;
+    call.clockid = (clockid_t)args->arg1;
+    call.spec = (struct timespec*)args->arg2;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
+unsigned long handle_clock_getres(Context* ctx, SysArgs* args) {
+    long ret = 0;
+    CallClockTimeOps call;
+    call.type = CLOCKTIME_GETRES;
+    call.clockid = (clockid_t)args->arg1;
+    call.spec = (struct timespec*)args->arg2;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
+unsigned long handle_getcpu(Context* ctx, SysArgs* args) {
+    long ret = 0;
+    CallGetcpu call;
+    call.cpu = (unsigned int*)args->arg1;
+    call.node = (unsigned int*)args->arg2;
+    call.unused = (void*)args->arg3;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
 void BottomHandler::next(Context* ctx, const CallSocket* call) {
     signalmanager_enable_signals(ctx);
     *call->ret = sys_socket(call->family, call->type, call->protocol);
@@ -289,4 +339,33 @@ void BottomHandler::next(Context* ctx, const CallSockOpt* call) {
     }
     signalmanager_disable_signals(ctx);
     *call->ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallClockTimeOps* call) {
+    long ret;
+    switch (call->type) {
+        case CLOCKTIME_GETTIME:
+            // Note: This is not sys_clock_gettime, but the vdso fastpath
+            ret = clock_gettime(call->clockid, call->spec);
+            break;
+        case CLOCKTIME_SETTIME:
+            ret = sys_clock_settime(call->clockid, call->spec);
+            break;
+        case CLOCKTIME_GETRES:
+            ret = sys_clock_getres(call->clockid, call->spec);
+            break;
+        default:
+            abort();
+    }
+    *call->ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallGetcpu* call) {
+    if (!call->node && !call->unused) {
+        *call->cpu = sched_getcpu();
+        *call->ret = 0;
+        return;
+    }
+
+    *call->ret = sys_getcpu(call->cpu, call->node, call->unused);
 }

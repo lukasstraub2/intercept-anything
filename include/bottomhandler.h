@@ -54,5 +54,7 @@ class BottomHandler : public CallHandler, public ICallHandler {
     void next(Context* ctx, const CallSigreturn* call) override;
     void next(Context* ctx, const CallMremap* call) override;
     void next(Context* ctx, const CallMemop* call) override;
+    void next(Context* ctx, const CallClockTimeOps* call) override;
+    void next(Context* ctx, const CallGetcpu* call) override;
 };
 #pragma GCC diagnostic pop

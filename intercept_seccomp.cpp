@@ -349,10 +349,23 @@ const long syscall_process[] = {
     // with FILTER_ALL
     //__NR_rt_sigreturn,
 };
+
+const long syscall_vdso[] = {
+// TODO: 32bit time compat
+// Note there are also __NR_clock_gettime AND __NR_clock_gettime64
+    __NR_clock_gettime,
+    __NR_clock_settime,
+    __NR_clock_getres,
+    __NR_getcpu,
+#ifdef __NR_riscv_flush_icache
+    __NR_riscv_flush_icache
+#endif
+};
 // clang-format on
 
 const int filter_head_len = sizeof(filter_head) / sizeof(filter_head[0]);
 const int filter_tail_len = sizeof(filter_tail) / sizeof(filter_tail[0]);
+const int syscall_vdso_len = sizeof(syscall_process) / sizeof(long);
 const int syscall_process_len = sizeof(syscall_process) / sizeof(long);
 const int syscall_mem_len = sizeof(syscall_mem) / sizeof(long);
 const int syscall_file_len = sizeof(syscall_file) / sizeof(long);
@@ -381,6 +394,9 @@ static void build_filter_selective(struct sock_fprog* prog, int flags) {
     int len = 0;
     int idx = 0;
 
+    if (flags & FILTER_VDSO) {
+        len += syscall_vdso_len;
+    }
     if (flags & FILTER_PROCESS) {
         len += syscall_process_len;
     }
@@ -413,6 +429,10 @@ static void build_filter_selective(struct sock_fprog* prog, int flags) {
                     (__u32)(offsetof(struct seccomp_data, nr)));
     ptr++;
 
+    if (flags & FILTER_VDSO) {
+        ptr = fill_jump_cmp(ptr, syscall_vdso, syscall_vdso_len, &idx,
+                            syscall_len);
+    }
     if (flags & FILTER_PROCESS) {
         ptr = fill_jump_cmp(ptr, syscall_process, syscall_process_len, &idx,
                             syscall_len);
@@ -588,6 +608,15 @@ void intercept_init(int recursing, const char* exe, unsigned long* auxv) {
     }
 
     if (intercept_entrypoint->get_filter_flags() & FILTER_VDSO) {
+        // Let musl libc initialize the vdso fastpaths before we remove it from
+        // auxv
+        struct timespec tmp;
+        clock_gettime(CLOCK_MONOTONIC, &tmp);
+        sched_getcpu();
+#ifdef SYS_riscv_flush_icache
+        riscv_flush_icache();
+#endif
+
         auxv_remove_entry(auxv, AT_SYSINFO);
         auxv_remove_entry(auxv, AT_SYSINFO_EHDR);
     }

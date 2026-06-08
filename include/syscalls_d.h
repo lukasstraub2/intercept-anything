@@ -106,6 +106,28 @@ class CallSockOpt final : public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
+enum ClockTimeType { CLOCKTIME_GETTIME, CLOCKTIME_SETTIME, CLOCKTIME_GETRES };
+
+class CallClockTimeOps final : public ICallBase {
+    public:
+    ClockTimeType type{};
+    clockid_t clockid{};
+    struct timespec* spec{};
+    long* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
+class CallGetcpu final : public ICallBase {
+    public:
+    unsigned int* cpu{};
+    unsigned int* node{};
+    void* unused{};
+    long* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
 unsigned long handle_socket(Context* ctx, SysArgs* args);
 unsigned long handle_sendto(Context* ctx, SysArgs* args);
 unsigned long handle_recvfrom(Context* ctx, SysArgs* args);
@@ -120,3 +142,7 @@ unsigned long handle_getpeername(Context* ctx, SysArgs* args);
 unsigned long handle_socketpair(Context* ctx, SysArgs* args);
 unsigned long handle_setsockopt(Context* ctx, SysArgs* args);
 unsigned long handle_getsockopt(Context* ctx, SysArgs* args);
+unsigned long handle_clock_gettime(Context* ctx, SysArgs* args);
+unsigned long handle_clock_settime(Context* ctx, SysArgs* args);
+unsigned long handle_clock_getres(Context* ctx, SysArgs* args);
+unsigned long handle_getcpu(Context* ctx, SysArgs* args);

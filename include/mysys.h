@@ -597,3 +597,27 @@ static __attribute__((unused)) long sys_mseal(void* addr,
     return __nolibc_enosys(__func__, addr, len, flags);
 #endif
 }
+
+// TODO: 32bit time compat
+// Note there are also __NR_clock_gettime AND __NR_clock_gettime64
+static __attribute__((unused)) long sys_clock_gettime(clockid_t clockid,
+                                                      struct timespec* spec) {
+    return my_syscall2(__NR_clock_gettime, clockid, spec);
+}
+
+static __attribute__((unused)) long sys_clock_settime(
+    clockid_t clockid,
+    const struct timespec* spec) {
+    return my_syscall2(__NR_clock_settime, clockid, spec);
+}
+
+static __attribute__((unused)) long sys_clock_getres(clockid_t clockid,
+                                                     struct timespec* spec) {
+    return my_syscall2(__NR_clock_getres, clockid, spec);
+}
+
+static __attribute__((unused)) long sys_getcpu(unsigned int* cpu,
+                                               unsigned int* node,
+                                               void* unused) {
+    return my_syscall3(__NR_getcpu, cpu, node, unused);
+}
