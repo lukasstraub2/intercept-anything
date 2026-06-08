@@ -27,7 +27,6 @@ unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_rt_sigreturn(Context* ctx, SysArgs* args) {
-
     CallSigreturn call;
     intercept_entrypoint->next(ctx, &call);
 
@@ -367,7 +366,6 @@ unsigned long handle_kill(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_misc(Context* ctx, SysArgs* args) {
-
     unsigned long ret = {0};
     CallMisc call;
     call.args = *args;
@@ -561,7 +559,6 @@ unsigned long handle_mseal(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_fork(Context* ctx, SysArgs* args) {
-
     int ret = 0;
     CallClone call;
     call.type = CLONETYPE_FORK;
@@ -573,7 +570,6 @@ unsigned long handle_fork(Context* ctx, SysArgs* args) {
 }
 
 unsigned long handle_vfork(Context* ctx, SysArgs* args) {
-
     int ret = 0;
     CallClone call;
     call.type = CLONETYPE_VFORK;
@@ -596,7 +592,6 @@ unsigned long handle_clone(Context* ctx, SysArgs* args) {
     unsigned long tls = args->arg4;
     int* child_tidptr = (int*)args->arg5;
 #endif
-
 
     struct clone_args cargs = {};
     cargs.flags = clone_flags;
