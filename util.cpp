@@ -358,3 +358,14 @@ ssize_t concatat(Cache* cache,
         return ret + path_len + 1;
     }
 }
+
+int env_is_true(const char* env) {
+    const char* value = getenv(env);
+    if (!value) {
+        return 0;
+    }
+    if (value[0] == '0' && value[1] == '\0') {
+        return 0;
+    }
+    return 1;
+}

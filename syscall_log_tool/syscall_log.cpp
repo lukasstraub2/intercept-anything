@@ -26,7 +26,14 @@ class SyscallLog final : public CallHandler {
     SyscallLog(CallHandler* next) : CallHandler(next) {}
 
     int get_filter_flags() override {
-        return _next->get_filter_flags() | FILTER_ALL | FILTER_VDSO;
+        int flags = _next->get_filter_flags();
+        if (!env_is_true("LOADER_SKIP_FILTER_ALL")) {
+            flags |= FILTER_ALL;
+        }
+        if (env_is_true("LOADER_ENABLE_VDSO")) {
+            flags |= FILTER_VDSO;
+        }
+        return flags;
     }
 
     void next(Context* ctx, const CallOpen* call) override {

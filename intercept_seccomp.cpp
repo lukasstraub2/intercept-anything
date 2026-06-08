@@ -81,6 +81,12 @@ static void handler(int sig, siginfo_t* info, void* ucontext) {
     }
 }
 
+static int unsafe_signal_handling = 0;
+
+void intercept_unsafe_signal_handling(int unsafe) {
+    unsafe_signal_handling = unsafe;
+}
+
 unsigned long fastpath_entry(unsigned long num,
                              unsigned long arg1,
                              unsigned long arg2,
@@ -89,11 +95,13 @@ unsigned long fastpath_entry(unsigned long num,
                              unsigned long arg5,
                              unsigned long arg6) {
     sigset_t saved_mask;
-    ssize_t ret, ret2;
+    ssize_t ret;
 
-    ret2 = sys_rt_sigprocmask(SIG_SETMASK, full_mask(), &saved_mask);
-    if (ret2 < 0) {
-        abort();
+    if (!unsafe_signal_handling) {
+        int ret2 = sys_rt_sigprocmask(SIG_SETMASK, full_mask(), &saved_mask);
+        if (ret2 < 0) {
+            abort();
+        }
     }
     __asm volatile("" ::: "memory");
 
@@ -107,9 +115,11 @@ unsigned long fastpath_entry(unsigned long num,
     }
 
     __asm volatile("" ::: "memory");
-    ret2 = sys_rt_sigprocmask(SIG_SETMASK, &saved_mask, nullptr);
-    if (ret2 < 0) {
-        abort();
+    if (!unsafe_signal_handling) {
+        int ret2 = sys_rt_sigprocmask(SIG_SETMASK, &saved_mask, nullptr);
+        if (ret2 < 0) {
+            abort();
+        }
     }
 
     return ret;

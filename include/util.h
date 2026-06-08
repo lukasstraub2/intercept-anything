@@ -59,3 +59,4 @@ ssize_t concatat(Cache* cache,
                  size_t out_len,
                  int dirfd,
                  const char* path);
+int env_is_true(const char* env);

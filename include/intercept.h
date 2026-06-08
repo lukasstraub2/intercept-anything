@@ -33,6 +33,7 @@ void thread_exit_exec(Tls* tls);
 
 int pc_in_our_code(void* ucontext);
 
+void intercept_unsafe_signal_handling(int unsafe);
 unsigned long fastpath_entry(unsigned long num,
                              unsigned long arg1,
                              unsigned long arg2,
