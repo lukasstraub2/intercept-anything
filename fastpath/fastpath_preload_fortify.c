@@ -51,7 +51,7 @@ ssize_t __pread64_chk(int fd,
         do_chk_fail();
     }
 
-    return pread(fd, data, len, off);
+    return pread64(fd, data, len, off);
 }
 
 #undef __recv_chk

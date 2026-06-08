@@ -32,6 +32,26 @@ ssize_t read(int fd, void* data, size_t len) {
     return ret;
 }
 
+#undef pread
+ssize_t pread(int fd, void* data, size_t len, off_t off) {
+    ssize_t ret;
+
+    maybe_init();
+
+    ret = entry(__NR_pread64, fd, (unsigned long)data, len, off, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef pread64
+ssize_t pread64(int fd, void* data, size_t len, off_t off) {
+    return pread(fd, data, len, off);
+}
+
 #undef readv
 ssize_t readv(int fd, const struct iovec* iov, int iovcnt) {
     ssize_t ret;
@@ -96,6 +116,26 @@ ssize_t write(int fd, const void* data, size_t len) {
     }
 
     return ret;
+}
+
+#undef pwrite
+ssize_t pwrite(int fd, const void* data, size_t len, off_t off) {
+    ssize_t ret;
+
+    maybe_init();
+
+    ret = entry(__NR_pwrite64, fd, (unsigned long)data, len, off, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef pwrite64
+ssize_t pwrite64(int fd, const void* data, size_t len, off_t off) {
+    return pwrite(fd, data, len, off);
 }
 
 #undef writev
