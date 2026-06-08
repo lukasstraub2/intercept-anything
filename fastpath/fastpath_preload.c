@@ -1,13 +1,13 @@
 #undef _FORTIFY_SOURCE
 
 #include "fastpath_preload.h"
-#include "sys.h"
 
 #include <errno.h>
 #include <unistd.h>
 #include <sys/uio.h>
 #include <sys/socket.h>
 #include <signal.h>
+#include <syscall.h>
 
 #ifdef _FILE_OFFSET_BITS
 #undef _FILE_OFFSET_BITS
@@ -16,35 +16,6 @@
 #ifndef _LARGEFILE64_SOURCE
 #define _LARGEFILE64_SOURCE 1
 #endif
-
-static fastpath_entry_t entry = NULL;
-
-static __attribute__((noreturn)) void myabort() {
-    sys_kill(sys_getpid(), SIGABRT);
-    for (;;)
-        ;
-}
-
-static void maybe_init() {
-    ssize_t ret;
-
-    if (__builtin_expect(!!entry, 1)) {
-        return;
-    }
-
-    ret = sys_open(PRELOAD_ENTRY_FILE, O_RDONLY, 0);
-    if (ret < 0) {
-        myabort();
-    }
-    int fd = ret;
-
-    ret = sys_read(fd, &entry, sizeof(entry));
-    sys_close(fd);
-
-    if (ret != sizeof(entry)) {
-        myabort();
-    }
-}
 
 #undef read
 ssize_t read(int fd, void* data, size_t len) {

@@ -63,8 +63,9 @@ set(RUNTIME_PREFIX "/" CACHE STRING "runtime system prefix")
 
 set(GENERATED_H_DIR ${CMAKE_BINARY_DIR}/include)
 set(GENERATED_FASTPATH_PRELOAD_DATA_H ${GENERATED_H_DIR}/fastpath_preload_data.h)
+set(GENERATED_FASTPATH_PRELOAD_VDSO_DATA_H ${GENERATED_H_DIR}/fastpath_preload_vdso_data.h)
 
-add_library(fastpath_preload SHARED fastpath/fastpath_preload.c)
+add_library(fastpath_preload SHARED fastpath/fastpath_preload.c fastpath/fastpath_preload_core.c)
 target_link_libraries(fastpath_preload PUBLIC -nostartfiles -nodefaultlibs -nostdlib -Wl,-z,noseparate-code,-z,now)
 target_include_directories(fastpath_preload PUBLIC include)
 target_compile_options(fastpath_preload PUBLIC -O1 -pipe)
@@ -83,7 +84,26 @@ add_custom_command(
     COMMENT "Generating ${GENERATED_FASTPATH_PRELOAD_DATA_H}"
 )
 
-add_custom_target(generate_fastpath_preload DEPENDS ${GENERATED_FASTPATH_PRELOAD_DATA_H})
+add_library(fastpath_preload_vdso SHARED fastpath/fastpath_preload_vdso.c fastpath/fastpath_preload_core.c)
+target_link_libraries(fastpath_preload_vdso PUBLIC -nostartfiles -nodefaultlibs -nostdlib -Wl,-z,noseparate-code,-z,now)
+target_include_directories(fastpath_preload_vdso PUBLIC include)
+target_compile_options(fastpath_preload_vdso PUBLIC -O1 -pipe)
+
+add_custom_command(
+    OUTPUT ${GENERATED_FASTPATH_PRELOAD_VDSO_DATA_H}
+    DEPENDS fastpath_preload_vdso
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_H_DIR}
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DSOURCE_FILE=libfastpath_preload_vdso.so
+        -DHEADER_FILE=${GENERATED_FASTPATH_PRELOAD_VDSO_DATA_H}
+        -DVARIABLE_NAME=fastpath_preload_vdso_data
+        -P ${CMAKE_SOURCE_DIR}/run_bin2h.cmake
+    VERBATIM
+    COMMENT "Generating ${GENERATED_FASTPATH_PRELOAD_VDSO_DATA_H}"
+)
+
+add_custom_target(generate_fastpath_preload DEPENDS ${GENERATED_FASTPATH_PRELOAD_DATA_H} ${GENERATED_FASTPATH_PRELOAD_VDSO_DATA_H})
 
 include_directories(include include/nolibc ${GENERATED_H_DIR})
 add_compile_definitions(_GNU_SOURCE RUNTIME_PREFIX="${RUNTIME_PREFIX}")

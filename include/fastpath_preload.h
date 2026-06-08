@@ -9,3 +9,7 @@ typedef unsigned long (*fastpath_entry_t)(unsigned long num,
                                           unsigned long arg4,
                                           unsigned long arg5,
                                           unsigned long arg6);
+
+extern fastpath_entry_t entry;
+
+void maybe_init();

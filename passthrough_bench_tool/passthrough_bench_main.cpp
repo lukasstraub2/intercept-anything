@@ -34,7 +34,8 @@ CallHandler* main_init(CallHandler* const bottom, int recursing) {
 
     CallHandler* fastpath = passthrough;
     if (!env_is_true("LOADER_SKIP_FASTPATH")) {
-        fastpath = fastpath_init(passthrough);
+        fastpath =
+            fastpath_init(passthrough, env_is_true("LOADER_ENABLE_VDSO"));
     }
     return workarounds_init(fastpath);
 }
