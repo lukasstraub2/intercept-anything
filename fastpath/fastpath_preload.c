@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <signal.h>
 #include <syscall.h>
+#include <sys/sendfile.h>
 
 #ifdef _FILE_OFFSET_BITS
 #undef _FILE_OFFSET_BITS
@@ -333,4 +334,25 @@ int kill(pid_t pid, int sig) {
     }
 
     return ret;
+}
+
+#undef sendfile
+ssize_t sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {
+    int ret;
+
+    maybe_init();
+
+    ret =
+        entry(__NR_sendfile, out_fd, in_fd, (unsigned long)offset, count, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef sendfile64
+ssize_t sendfile64(int out_fd, int in_fd, off_t* offset, size_t count) {
+    return sendfile(out_fd, in_fd, offset, count);
 }
