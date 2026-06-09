@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <syscall.h>
 #include <sys/sendfile.h>
+#include <fcntl.h>
 
 #ifdef _FILE_OFFSET_BITS
 #undef _FILE_OFFSET_BITS
@@ -338,7 +339,7 @@ int kill(pid_t pid, int sig) {
 
 #undef sendfile
 ssize_t sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {
-    int ret;
+    ssize_t ret;
 
     maybe_init();
 
@@ -355,4 +356,24 @@ ssize_t sendfile(int out_fd, int in_fd, off_t* offset, size_t count) {
 #undef sendfile64
 ssize_t sendfile64(int out_fd, int in_fd, off_t* offset, size_t count) {
     return sendfile(out_fd, in_fd, offset, count);
+}
+
+ssize_t splice(int in_fd,
+               off_t* in_off,
+               int out_fd,
+               off_t* out_off,
+               size_t len,
+               unsigned int flags) {
+    ssize_t ret;
+
+    maybe_init();
+
+    ret = entry(__NR_splice, in_fd, (unsigned long)in_off, out_fd,
+                (unsigned long)out_off, len, flags);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
 }
