@@ -21,6 +21,7 @@
 #include <stdarg.h>
 #include <sys/epoll.h>
 #include <sys/poll.h>
+#include <sys/stat.h>
 
 #ifndef _NSIG
 #define _NSIG 65
@@ -654,4 +655,164 @@ int open64(const char* pathname, int flags, ...) {
 #undef __open64_2
 int __open64_2(const char* pathname, int flags) {
     return open(pathname, flags, 0);
+}
+
+#undef shutdown
+int shutdown(int sockfd, int how) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_shutdown, sockfd, how, 0, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef getsockopt
+int getsockopt(int sockfd, int level, int optname, void* optval, socklen_t* optlen) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_getsockopt, sockfd, level, optname, (unsigned long)optval,
+                (unsigned long)optlen, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef setsockopt
+int setsockopt(int sockfd, int level, int optname, const void* optval, socklen_t optlen) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_setsockopt, sockfd, level, optname, (unsigned long)optval,
+                optlen, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef stat
+int stat(const char* pathname, struct stat* statbuf) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_stat, (unsigned long)pathname, (unsigned long)statbuf, 0, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef fstat
+int fstat(int fd, struct stat* statbuf) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_fstat, fd, (unsigned long)statbuf, 0, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef lstat
+int lstat(const char* pathname, struct stat* statbuf) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_lstat, (unsigned long)pathname, (unsigned long)statbuf, 0, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef fstatat
+int fstatat(int dirfd, const char* pathname, struct stat* statbuf, int flags) {
+    int ret;
+
+    maybe_init();
+
+#if defined(__NR_newfstatat)
+    ret = entry(__NR_newfstatat, dirfd, (unsigned long)pathname, (unsigned long)statbuf, flags, 0, 0);
+#else
+    ret = entry(__NR_fstatat64, dirfd, (unsigned long)pathname, (unsigned long)statbuf, flags, 0, 0);
+#endif
+
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef stat64
+int stat64(const char* pathname, struct stat64* statbuf) {
+    int ret;
+
+    maybe_init();
+
+#ifdef __NR_stat64
+    ret = entry(__NR_stat64, (unsigned long)pathname, (unsigned long)statbuf, 0, 0, 0, 0);
+#else
+    ret = entry(__NR_stat, (unsigned long)pathname, (unsigned long)statbuf, 0, 0, 0, 0);
+#endif
+
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef __xstat
+int __xstat(int ver, const char* pathname, struct stat* buf) {
+    /* glibc internals historically utilize the 'ver' parameter for ABI matching, 
+       but standard kernel wrappers intercepting the syscall can simply forward to stat */
+    return stat(pathname, buf);
+}
+
+#undef __xstat64
+int __xstat64(int ver, const char* pathname, struct stat64* buf) {
+    return stat64(pathname, buf);
+}
+
+#undef statx
+int statx(int dirfd, const char* pathname, int flags, unsigned int mask, struct statx* statxbuf) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_statx, dirfd, (unsigned long)pathname, flags, mask,
+                (unsigned long)statxbuf, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
 }
