@@ -1,5 +1,13 @@
 #undef _FORTIFY_SOURCE
 
+#ifdef _FILE_OFFSET_BITS
+#undef _FILE_OFFSET_BITS
+#endif
+
+#ifndef _LARGEFILE64_SOURCE
+#define _LARGEFILE64_SOURCE 1
+#endif
+
 #include "fastpath_preload.h"
 
 #include <errno.h>
@@ -10,13 +18,12 @@
 #include <syscall.h>
 #include <sys/sendfile.h>
 #include <fcntl.h>
+#include <stdarg.h>
+#include <sys/epoll.h>
+#include <sys/poll.h>
 
-#ifdef _FILE_OFFSET_BITS
-#undef _FILE_OFFSET_BITS
-#endif
-
-#ifndef _LARGEFILE64_SOURCE
-#define _LARGEFILE64_SOURCE 1
+#ifndef _NSIG
+#define _NSIG 65
 #endif
 
 #undef read
@@ -376,4 +383,275 @@ ssize_t splice(int in_fd,
     }
 
     return ret;
+}
+
+#undef epoll_wait
+int epoll_wait(int epfd, struct epoll_event* events, int maxevents, int timeout) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_epoll_wait, epfd, (unsigned long)events, maxevents, timeout, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef epoll_pwait
+int epoll_pwait(int epfd,
+                struct epoll_event* events,
+                int maxevents,
+                int timeout,
+                const sigset_t* sigmask) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_epoll_pwait, epfd, (unsigned long)events, maxevents,
+                timeout, (unsigned long)sigmask, _NSIG / 8);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef epoll_pwait2
+int epoll_pwait2(int epfd,
+                 struct epoll_event* events,
+                 int maxevents,
+                 const struct timespec* timeout,
+                 const sigset_t* sigmask) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_epoll_pwait2, epfd, (unsigned long)events, maxevents,
+                (unsigned long)timeout, (unsigned long)sigmask, _NSIG / 8);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef epoll_create
+int epoll_create(int size) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_epoll_create, size, 0, 0, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef epoll_create1
+int epoll_create1(int flags) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_epoll_create1, flags, 0, 0, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef epoll_ctl
+int epoll_ctl(int epfd, int op, int fd, struct epoll_event* event) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_epoll_ctl, epfd, op, fd, (unsigned long)event, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef poll
+int poll(struct pollfd* fds, nfds_t nfds, int timeout) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_poll, (unsigned long)fds, nfds, timeout, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef ppoll
+int ppoll(struct pollfd* fds,
+          nfds_t nfds,
+          const struct timespec* tmo_p,
+          const sigset_t* sigmask) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_ppoll, (unsigned long)fds, nfds, (unsigned long)tmo_p,
+                (unsigned long)sigmask, _NSIG / 8, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef accept
+int accept(int sockfd, struct sockaddr* addr, socklen_t* addrlen) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_accept, sockfd, (unsigned long)addr, (unsigned long)addrlen, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef accept4
+int accept4(int sockfd, struct sockaddr* addr, socklen_t* addrlen, int flags) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_accept4, sockfd, (unsigned long)addr, (unsigned long)addrlen, flags, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef open
+int open(const char* pathname, int flags, ...) {
+    int ret;
+    mode_t mode = 0;
+
+#ifdef O_TMPFILE
+    if (flags & (O_CREAT | O_TMPFILE)) {
+#else
+    if (flags & O_CREAT) {
+#endif
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, mode_t);
+        va_end(ap);
+    }
+
+    maybe_init();
+
+    ret = entry(__NR_open, (unsigned long)pathname, flags, mode, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef creat
+int creat(const char* pathname, mode_t mode) {
+    return open(pathname, O_CREAT | O_WRONLY | O_TRUNC, mode);
+}
+
+#undef openat
+int openat(int dirfd, const char* pathname, int flags, ...) {
+    int ret;
+    mode_t mode = 0;
+
+#ifdef O_TMPFILE
+    if (flags & (O_CREAT | O_TMPFILE)) {
+#else
+    if (flags & O_CREAT) {
+#endif
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, mode_t);
+        va_end(ap);
+    }
+
+    maybe_init();
+
+    ret = entry(__NR_openat, dirfd, (unsigned long)pathname, flags, mode, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef openat2
+int openat2(int dirfd,
+            const char* pathname,
+            const struct open_how* how,
+            size_t size) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_openat2, dirfd, (unsigned long)pathname,
+                (unsigned long)how, size, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef __open_2
+int __open_2(const char* pathname, int flags) {
+    /* Fortify wrappers intentionally omit the mode parameter. Forwarding to open handles this gracefully. */
+    return open(pathname, flags, 0);
+}
+
+#undef open64
+int open64(const char* pathname, int flags, ...) {
+    mode_t mode = 0;
+
+#ifdef O_TMPFILE
+    if (flags & (O_CREAT | O_TMPFILE)) {
+#else
+    if (flags & O_CREAT) {
+#endif
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, mode_t);
+        va_end(ap);
+    }
+
+    return open(pathname, flags, mode);
+}
+
+#undef __open64_2
+int __open64_2(const char* pathname, int flags) {
+    return open(pathname, flags, 0);
 }

@@ -1,9 +1,5 @@
 #define _FORTIFY_SOURCE 3
 
-#include "fastpath_preload.h"
-#include <unistd.h>
-#include <sys/socket.h>
-
 #ifdef _FILE_OFFSET_BITS
 #undef _FILE_OFFSET_BITS
 #endif
@@ -11,6 +7,11 @@
 #ifndef _LARGEFILE64_SOURCE
 #define _LARGEFILE64_SOURCE 1
 #endif
+
+#include "fastpath_preload.h"
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/epoll.h>
 
 // weak dynamic symbol, may be NULL if not provided by runtime
 extern void __chk_fail() __attribute__((weak));
