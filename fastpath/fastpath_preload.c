@@ -387,12 +387,16 @@ ssize_t splice(int in_fd,
 }
 
 #undef epoll_wait
-int epoll_wait(int epfd, struct epoll_event* events, int maxevents, int timeout) {
+int epoll_wait(int epfd,
+               struct epoll_event* events,
+               int maxevents,
+               int timeout) {
     int ret;
 
     maybe_init();
 
-    ret = entry(__NR_epoll_wait, epfd, (unsigned long)events, maxevents, timeout, 0, 0);
+    ret = entry(__NR_epoll_wait, epfd, (unsigned long)events, maxevents,
+                timeout, 0, 0);
     if (ret < 0) {
         errno = -ret;
         return -1;
@@ -526,7 +530,8 @@ int accept(int sockfd, struct sockaddr* addr, socklen_t* addrlen) {
 
     maybe_init();
 
-    ret = entry(__NR_accept, sockfd, (unsigned long)addr, (unsigned long)addrlen, 0, 0, 0);
+    ret = entry(__NR_accept, sockfd, (unsigned long)addr,
+                (unsigned long)addrlen, 0, 0, 0);
     if (ret < 0) {
         errno = -ret;
         return -1;
@@ -541,7 +546,8 @@ int accept4(int sockfd, struct sockaddr* addr, socklen_t* addrlen, int flags) {
 
     maybe_init();
 
-    ret = entry(__NR_accept4, sockfd, (unsigned long)addr, (unsigned long)addrlen, flags, 0, 0);
+    ret = entry(__NR_accept4, sockfd, (unsigned long)addr,
+                (unsigned long)addrlen, flags, 0, 0);
     if (ret < 0) {
         errno = -ret;
         return -1;
@@ -630,7 +636,8 @@ int openat2(int dirfd,
 
 #undef __open_2
 int __open_2(const char* pathname, int flags) {
-    /* Fortify wrappers intentionally omit the mode parameter. Forwarding to open handles this gracefully. */
+    /* Fortify wrappers intentionally omit the mode parameter. Forwarding to
+     * open handles this gracefully. */
     return open(pathname, flags, 0);
 }
 
@@ -673,7 +680,11 @@ int shutdown(int sockfd, int how) {
 }
 
 #undef getsockopt
-int getsockopt(int sockfd, int level, int optname, void* optval, socklen_t* optlen) {
+int getsockopt(int sockfd,
+               int level,
+               int optname,
+               void* optval,
+               socklen_t* optlen) {
     int ret;
 
     maybe_init();
@@ -689,7 +700,11 @@ int getsockopt(int sockfd, int level, int optname, void* optval, socklen_t* optl
 }
 
 #undef setsockopt
-int setsockopt(int sockfd, int level, int optname, const void* optval, socklen_t optlen) {
+int setsockopt(int sockfd,
+               int level,
+               int optname,
+               const void* optval,
+               socklen_t optlen) {
     int ret;
 
     maybe_init();
@@ -710,7 +725,8 @@ int stat(const char* pathname, struct stat* statbuf) {
 
     maybe_init();
 
-    ret = entry(__NR_stat, (unsigned long)pathname, (unsigned long)statbuf, 0, 0, 0, 0);
+    ret = entry(__NR_stat, (unsigned long)pathname, (unsigned long)statbuf, 0,
+                0, 0, 0);
     if (ret < 0) {
         errno = -ret;
         return -1;
@@ -740,7 +756,8 @@ int lstat(const char* pathname, struct stat* statbuf) {
 
     maybe_init();
 
-    ret = entry(__NR_lstat, (unsigned long)pathname, (unsigned long)statbuf, 0, 0, 0, 0);
+    ret = entry(__NR_lstat, (unsigned long)pathname, (unsigned long)statbuf, 0,
+                0, 0, 0);
     if (ret < 0) {
         errno = -ret;
         return -1;
@@ -756,9 +773,11 @@ int fstatat(int dirfd, const char* pathname, struct stat* statbuf, int flags) {
     maybe_init();
 
 #if defined(__NR_newfstatat)
-    ret = entry(__NR_newfstatat, dirfd, (unsigned long)pathname, (unsigned long)statbuf, flags, 0, 0);
+    ret = entry(__NR_newfstatat, dirfd, (unsigned long)pathname,
+                (unsigned long)statbuf, flags, 0, 0);
 #else
-    ret = entry(__NR_fstatat64, dirfd, (unsigned long)pathname, (unsigned long)statbuf, flags, 0, 0);
+    ret = entry(__NR_fstatat64, dirfd, (unsigned long)pathname,
+                (unsigned long)statbuf, flags, 0, 0);
 #endif
 
     if (ret < 0) {
@@ -776,9 +795,11 @@ int stat64(const char* pathname, struct stat64* statbuf) {
     maybe_init();
 
 #ifdef __NR_stat64
-    ret = entry(__NR_stat64, (unsigned long)pathname, (unsigned long)statbuf, 0, 0, 0, 0);
+    ret = entry(__NR_stat64, (unsigned long)pathname, (unsigned long)statbuf, 0,
+                0, 0, 0);
 #else
-    ret = entry(__NR_stat, (unsigned long)pathname, (unsigned long)statbuf, 0, 0, 0, 0);
+    ret = entry(__NR_stat, (unsigned long)pathname, (unsigned long)statbuf, 0,
+                0, 0, 0);
 #endif
 
     if (ret < 0) {
@@ -791,8 +812,9 @@ int stat64(const char* pathname, struct stat64* statbuf) {
 
 #undef __xstat
 int __xstat(int ver, const char* pathname, struct stat* buf) {
-    /* glibc internals historically utilize the 'ver' parameter for ABI matching, 
-       but standard kernel wrappers intercepting the syscall can simply forward to stat */
+    /* glibc internals historically utilize the 'ver' parameter for ABI
+       matching, but standard kernel wrappers intercepting the syscall can
+       simply forward to stat */
     return stat(pathname, buf);
 }
 
@@ -802,7 +824,11 @@ int __xstat64(int ver, const char* pathname, struct stat64* buf) {
 }
 
 #undef statx
-int statx(int dirfd, const char* pathname, int flags, unsigned int mask, struct statx* statxbuf) {
+int statx(int dirfd,
+          const char* pathname,
+          int flags,
+          unsigned int mask,
+          struct statx* statxbuf) {
     int ret;
 
     maybe_init();
