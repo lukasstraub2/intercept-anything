@@ -4,7 +4,6 @@
 #include "signalmanager.h"
 #include "callhandler.h"
 #include "debug.h"
-#include "config.h"
 #include "util.h"
 
 #include "hardlinkshim.h"
@@ -216,19 +215,15 @@ static int cnt_add(char* linkname, int add) {
 
 static int cnt_read_hardlink(Context* ctx, int dirfd, const char* path) {
     int ret;
+    char* target;
 
-    ret = readlink_cache(&ctx->tls->cache, nullptr, 0, dirfd, path);
+    ret = _readlinkat(ctx->tls->scratch, dirfd, path, &target);
     if (ret < 0) {
         return ret;
     }
 
-    char target[ret];
-    ret = readlink_cache(&ctx->tls->cache, target, ret, dirfd, path);
-    if (ret < 0) {
-        abort();
-    }
-
     ret = cnt_read(target);
+    delete[] target;
     if (ret < 0) {
         return ret;
     }
@@ -238,8 +233,9 @@ static int cnt_read_hardlink(Context* ctx, int dirfd, const char* path) {
 
 int HardlinkShim::is_hardlinkat(Context* ctx, int dirfd, const char* path) {
     ssize_t ret;
+    char* target;
 
-    ret = readlink_cache(&ctx->tls->cache, nullptr, 0, dirfd, path);
+    ret = _readlinkat(ctx->tls->scratch, dirfd, path, &target);
     if (ret < 0) {
         if (ret == -EINVAL || ret == -ENOENT) {
             return 0;
@@ -248,17 +244,10 @@ int HardlinkShim::is_hardlinkat(Context* ctx, int dirfd, const char* path) {
         }
     }
 
-    char target[ret];
-    ret = readlink_cache(&ctx->tls->cache, target, ret, dirfd, path);
-    if (ret < 0) {
-        abort();
-    }
+    int in_hardlink_prefx = !strcmp_prefix(target, this->hardlink_prefix);
+    delete[] target;
 
-    if (!strcmp_prefix(target, this->hardlink_prefix)) {
-        return 1;
-    }
-
-    return 0;
+    return in_hardlink_prefx;
 }
 
 int HardlinkShim::_is_inside_prefix(const char* component) {
@@ -350,23 +339,16 @@ int HardlinkShim::is_inside_prefixat(Context* ctx,
                                      int dirfd,
                                      const char* path) {
     ssize_t ret;
-    Cache* cache = &ctx->tls->cache;
+    char* fullpath;
 
-    ret = concatat(cache, nullptr, 0, dirfd, path);
+    ret = concatat(ctx->tls->scratch, dirfd, path, &fullpath);
     if (ret < 0) {
         return ret;
     }
-    if (ret > SCRATCH_SIZE) {
-        return -ENAMETOOLONG;
-    }
 
-    char fullpath[ret];
-    ret = concatat(cache, fullpath, ret, dirfd, path);
-    if (ret < 0) {
-        abort();
-    }
-
-    return is_inside_prefix(fullpath);
+    ret = is_inside_prefix(fullpath);
+    delete[] fullpath;
+    return ret;
 }
 
 int HardlinkShim::ab_inside_prefixat(Context* ctx,
@@ -405,19 +387,15 @@ static int _copy_symlink(Context* ctx,
                          int newdirfd,
                          const char* newpath) {
     ssize_t ret;
+    char* target;
 
-    ret = readlink_cache(&ctx->tls->cache, nullptr, 0, olddirfd, oldpath);
+    ret = _readlinkat(ctx->tls->scratch, olddirfd, oldpath, &target);
     if (ret < 0) {
         return ret;
     }
 
-    char target[ret];
-    ret = readlink_cache(&ctx->tls->cache, target, ret, olddirfd, oldpath);
-    if (ret < 0) {
-        abort();
-    }
-
     ret = sys_symlinkat(target, newdirfd, newpath);
+    delete[] target;
     if (ret < 0) {
         return ret;
     }
@@ -441,24 +419,21 @@ static int _add_hardlink(Context* ctx,
                          int newdirfd,
                          const char* newpath) {
     ssize_t ret;
+    char* target;
 
-    ret = readlink_cache(&ctx->tls->cache, nullptr, 0, olddirfd, oldpath);
+    ret = _readlinkat(ctx->tls->scratch, olddirfd, oldpath, &target);
     if (ret < 0) {
         return ret;
-    }
-
-    char target[ret];
-    ret = readlink_cache(&ctx->tls->cache, target, ret, olddirfd, oldpath);
-    if (ret < 0) {
-        abort();
     }
 
     ret = sys_symlinkat(target, newdirfd, newpath);
     if (ret < 0) {
+        delete[] target;
         return ret;
     }
 
     ret = cnt_add(target, 1);
+    delete[] target;
     if (ret < 0) {
         return ret;
     }
@@ -830,24 +805,20 @@ void HardlinkShim::next(Context* ctx, const CallUnlink* call) {
     }
 
     if (ret) {
-        ret = readlink_cache(&ctx->tls->cache, nullptr, 0, dirfd, call->path);
-        if (ret < 0) {
-            goto err;
-        }
-
-        char target[ret];
-        ret = readlink_cache(&ctx->tls->cache, target, ret, dirfd, call->path);
-        if (ret < 0) {
-            abort();
-        }
-
         _next->next(ctx, call);
         ret = *_ret;
         if (ret < 0) {
             goto err;
         }
 
+        char* target;
+        ret = _readlinkat(ctx->tls->scratch, dirfd, call->path, &target);
+        if (ret < 0) {
+            goto err;
+        }
+
         ret = del_hardlink(target);
+        delete[] target;
         if (ret < 0) {
             goto err;
         }
@@ -903,7 +874,6 @@ void HardlinkShim::next(Context* ctx, const CallRename* call) {
     int* _ret = call->ret;
     int olddirfd = (renametype_is_at(call->type) ? call->olddirfd : AT_FDCWD);
     int newdirfd = (renametype_is_at(call->type) ? call->newdirfd : AT_FDCWD);
-    Cache* cache = &ctx->tls->cache;
 
     ret = ab_inside_prefixat(ctx, olddirfd, call->oldpath, newdirfd,
                              call->newpath);
@@ -927,24 +897,20 @@ void HardlinkShim::next(Context* ctx, const CallRename* call) {
     }
 
     if (ret) {
-        ret = readlink_cache(cache, nullptr, 0, newdirfd, call->newpath);
-        if (ret < 0) {
-            goto err;
-        }
-
-        char target[ret];
-        ret = readlink_cache(cache, target, ret, newdirfd, call->newpath);
-        if (ret < 0) {
-            abort();
-        }
-
         bottom->next(ctx, call);
         ret = *_ret;
         if (ret < 0) {
             goto err;
         }
 
+        char* target;
+        ret = _readlinkat(ctx->tls->scratch, newdirfd, call->newpath, &target);
+        if (ret < 0) {
+            goto err;
+        }
+
         ret = del_hardlink(target);
+        delete[] target;
         if (ret < 0) {
             goto err;
         }

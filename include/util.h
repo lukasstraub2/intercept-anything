@@ -48,15 +48,14 @@ size_t concat3(char* out,
                const char* c);
 int strcmp_prefix(const char* a, const char* b);
 
-int getcwd_cache(Cache* cache, char* out, size_t out_len);
-ssize_t readlink_cache(Cache* cache,
-                       char* out,
-                       size_t out_len,
-                       int dirfd,
-                       const char* path);
-ssize_t concatat(Cache* cache,
-                 char* out,
-                 size_t out_len,
+ssize_t _getcwd(char scratch[SCRATCH_SIZE], char** out);
+ssize_t _readlinkat(char scratch[SCRATCH_SIZE],
+                    int dirfd,
+                    const char* path,
+                    char** out);
+ssize_t concatat(char scratch[SCRATCH_SIZE],
                  int dirfd,
-                 const char* path);
+                 const char* path,
+                 char** out);
+
 int env_is_true(const char* env);

@@ -3,7 +3,6 @@
 #include "mysys.h"
 #include "intercept.h"
 #include "loader.h"
-#include "config.h"
 #include "signalmanager.h"
 #include "tls.h"
 #include "util.h"
@@ -593,7 +592,6 @@ void intercept_init(int recursing, const char* exe, unsigned long* auxv) {
         abort();
     }
     prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
-    tls_init();
     mutex_init();
     start_text_init();
 

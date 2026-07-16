@@ -1,42 +1,23 @@
 #pragma once
 
 #include "base_types.h"
-#include "config.h"
 #include "mylock.h"
 
 #include <stdint.h>
 #include <sys/types.h>
+#include <limits.h>
 
-typedef volatile uint32_t TlsAtomic32 __attribute__((aligned(8)));
-static_assert(__atomic_always_lock_free(sizeof(TlsAtomic32), 0), "TlsAtomic32");
+#define SCRATCH_SIZE (64 * 1024)
+static_assert(SCRATCH_SIZE >= PATH_MAX, "SCRATCH_SIZE");
 
-#define TLS_READ(var) __atomic_load_n(&(var), __ATOMIC_RELAXED)
-#define TLS_WRITE(var, x) __atomic_store_n(&(var), (x), __ATOMIC_RELAXED)
-#define TLS_INC_FETCH(var) __atomic_add_fetch(&(var), 1, __ATOMIC_RELAXED)
-#define TLS_BARRIER() __asm volatile("" ::: "memory")
-
-enum CacheType { CACHETYPE_READLINK, CACHETYPE_GETCWD };
-typedef enum CacheType CacheType;
-
-struct Cache {
-    TlsAtomic32 reentrant_cnt;
-    CacheType type;
-    int in_dirfd;
-    size_t out_len;
-    char in_path[SCRATCH_SIZE];
-    char out[SCRATCH_SIZE];
-};
-
-#define TLS_LIST_ALLOC 11000
-#define jumpbuf_alloc (32)
 struct Tls {
     pid_t pid;
     pid_t tid;
-    Cache cache;
     RobustMutexList my_robust_mutex_list;
     RwLockList my_rwlock_list;
     void* jumpbuf[5];  // for lock tests
     int workarounds_traceme;
+    char scratch[SCRATCH_SIZE];
 };
 
 RMapEntry* tls_search_binary(uint32_t tid);

@@ -1,6 +1,5 @@
 
 #include "rootshim.h"
-#include "config.h"
 #include "emulate_file_tmp.h"
 
 class RootShim : public EmulateFileTmp {

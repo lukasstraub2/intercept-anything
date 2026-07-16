@@ -191,29 +191,28 @@ static int _bottom_exec(Context* ctx, CallExec* call) {
         i++;
     }
 
-    ret = concatat(&ctx->tls->cache, nullptr, 0, dirfd, call->path);
+    char* conc;
+    ret = concatat(ctx->tls->scratch, dirfd, call->path, &conc);
     if (ret < 0) {
         return ret;
     }
-    if (ret > SCRATCH_SIZE) {
-        return -ENAMETOOLONG;
-    }
+    const ssize_t conc_len = ret;
 
-    char fullpath[ret + env_prefix_len];
-    ret = concatat(&ctx->tls->cache, fullpath + env_prefix_len, ret, dirfd,
-                   call->path);
-    if (ret < 0) {
-        abort();
-    }
+    char fullpath[env_prefix_len + conc_len];
+    char* ptr = fullpath;
+
+    memcpy(ptr, env_prefix, env_prefix_len);
+    ptr += env_prefix_len;
+    memcpy(ptr, conc, conc_len);
+    ptr += conc_len;
 
     if (call->at && call->flags & AT_EMPTY_PATH) {
-        fullpath[ret - 2] = '\0';
+        *(ptr - 2) = '\0';
     }
+    delete[] conc;
 
-    memcpy(fullpath, env_prefix, env_prefix_len);
     new_envp[i] = fullpath;
     i++;
-
     new_envp[i] = nullptr;
 
     call->path = "/proc/self/exe";
@@ -291,18 +290,10 @@ static int open_fullpath_execveat(Context* ctx, const CallExec* call) {
     int flags = 0;
     int dirfd = (call->at ? call->dirfd : AT_FDCWD);
 
-    ret = concatat(&ctx->tls->cache, nullptr, 0, dirfd, call->path);
+    char* fullpath;
+    ret = concatat(ctx->tls->scratch, dirfd, call->path, &fullpath);
     if (ret < 0) {
         return ret;
-    }
-    if (ret > SCRATCH_SIZE) {
-        return -ENAMETOOLONG;
-    }
-
-    char fullpath[ret];
-    ret = concatat(&ctx->tls->cache, fullpath, ret, dirfd, call->path);
-    if (ret < 0) {
-        abort();
     }
 
     if (call->at && call->flags & AT_EMPTY_PATH) {
@@ -312,12 +303,14 @@ static int open_fullpath_execveat(Context* ctx, const CallExec* call) {
         flags |= O_NOFOLLOW;
     }
 
-    ret = sys_faccessat(dirfd, call->path, X_OK);
+    ret = sys_faccessat(AT_FDCWD, fullpath, X_OK);
     if (ret < 0) {
+        delete[] fullpath;
         return ret;
     }
 
-    ret = sys_openat(dirfd, call->path, flags | O_RDONLY | O_CLOEXEC, 0);
+    ret = sys_openat(AT_FDCWD, fullpath, flags | O_RDONLY | O_CLOEXEC, 0);
+    delete[] fullpath;
     if (ret < 0) {
         return ret;
     }

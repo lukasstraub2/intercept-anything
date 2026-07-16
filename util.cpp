@@ -149,214 +149,92 @@ int strcmp_prefix(const char* a, const char* b) {
     return strncmp(a, b, strlen(b));
 }
 
-static int getcwd_cache_hit(Cache* cache) {
-    return cache->type == CACHETYPE_GETCWD;
-}
-
-int getcwd_cache(Cache* cache, char* out, size_t out_len) {
-    // This function is reentrant as it accesses global thread data
-
-    if (out && !out_len) {
-        abort();
-    }
-
-    while (1) {
-        uint32_t cnt = TLS_INC_FETCH(cache->reentrant_cnt);
-        TLS_BARRIER();
-
-        if (out && getcwd_cache_hit(cache)) {
-            unsigned int ret = cache->out_len;
-
-            if (ret > out_len) {
-                return -ERANGE;
-            }
-
-            memcpy(out, cache->out, min(out_len, ret));
-
-            TLS_BARRIER();
-            if (cnt != TLS_READ(cache->reentrant_cnt)) {
-                continue;
-            }
-            return ret;
-        }
-
-        if (out) {
-            int ret = sys_getcwd(out, out_len);
-            if (ret < 0) {
-                return ret;
-            }
-            return ret;
-        } else {
-            cache->type = CACHETYPE_GETCWD;
-
-            int ret = sys_getcwd(cache->out, SCRATCH_SIZE);
-            if (ret < 0) {
-                return ret;
-            }
-
-            cache->out_len = ret;
-            TLS_BARRIER();
-            if (cnt != TLS_READ(cache->reentrant_cnt)) {
-                continue;
-            }
-            return ret;
-        }
-    }
-}
-
-static ssize_t _readlinkat(int dirfd,
-                           const char* path,
-                           char* out,
-                           size_t out_len) {
+ssize_t _readlinkat(char scratch[SCRATCH_SIZE],
+                    int dirfd,
+                    const char* path,
+                    char** out) {
     ssize_t ret;
 
-    ret = sys_readlinkat(dirfd, path, out, out_len);
+    ret = sys_readlinkat(dirfd, path, (char*)scratch, SCRATCH_SIZE);
     if (ret < 0) {
         return ret;
-    } else if ((size_t)ret == out_len) {
-        return -ERANGE;
+    } else if ((size_t)ret >= SCRATCH_SIZE) {
+        return -ELOOP;
     }
-    out[ret] = '\0';
+    *out = new char[ret + 1];
+    memcpy(*out, scratch, ret);
+    (*out)[ret] = '\0';
 
     return ret + 1;
 }
 
-static int readlink_cache_hit(Cache* cache, int dirfd, const char* path) {
-    return cache->type == CACHETYPE_READLINK && dirfd == cache->in_dirfd &&
-           !strcmp(path, cache->in_path);
-}
-
-ssize_t readlink_cache(Cache* cache,
-                       char* out,
-                       size_t out_len,
-                       int dirfd,
-                       const char* path) {
-    // This function is reentrant as it accesses global thread data
-
-    if (out && !out_len) {
-        abort();
-    }
-
-    while (1) {
-        uint32_t cnt = TLS_INC_FETCH(cache->reentrant_cnt);
-        TLS_BARRIER();
-
-        if (out && readlink_cache_hit(cache, dirfd, path)) {
-            size_t ret = cache->out_len;
-            memcpy(out, cache->out, min(out_len, ret));
-
-            if (ret > out_len) {
-                return -ERANGE;
-            }
-
-            TLS_BARRIER();
-            if (cnt != TLS_READ(cache->reentrant_cnt)) {
-                continue;
-            }
-            return ret;
-        }
-
-        if (out) {
-            ssize_t ret = _readlinkat(dirfd, path, out, out_len);
-            if (ret < 0) {
-                return ret;
-            }
-            return ret;
-        } else {
-            size_t path_len = strlen(path) + 1;
-            cache->type = CACHETYPE_READLINK;
-            cache->in_dirfd = dirfd;
-            memcpy(cache->in_path, path, path_len);
-
-            ssize_t ret = _readlinkat(dirfd, path, cache->out, SCRATCH_SIZE);
-            if (ret < 0) {
-                return ret;
-            }
-
-            cache->out_len = ret;
-            TLS_BARRIER();
-            if (cnt != TLS_READ(cache->reentrant_cnt)) {
-                continue;
-            }
-            return ret;
-        }
-    }
-}
-
-ssize_t concatat(Cache* cache,
-                 char* out,
-                 size_t out_len,
-                 int dirfd,
-                 const char* path) {
+ssize_t _getcwd(char scratch[SCRATCH_SIZE], char** out) {
     ssize_t ret;
-    const size_t path_len = strlen(path);
-    char dirfd_buf[21];
-    itoa_r(dirfd, dirfd_buf);
 
-    if (out && !out_len) {
-        abort();
+    ret = sys_getcwd((char*)scratch, SCRATCH_SIZE);
+    if (ret < 0) {
+        return ret;
     }
+    *out = new char[ret];
+    memcpy(*out, scratch, ret);
+
+    return ret;
+}
+
+ssize_t concatat(char scratch[SCRATCH_SIZE],
+                 int dirfd,
+                 const char* path,
+                 char** out) {
+    ssize_t ret;
+    char dirfd_buf[21];
+    const char* prefix = "/proc/self/fd/";
+    const ssize_t prefix_len = strlen(prefix);
+    const size_t path_len = strlen(path);
 
     if (path[0] == '/') {
-        if (!out) {
-            return path_len + 1;
-        } else {
-            if (path_len + 1 > out_len) {
-                return -ERANGE;
-            }
-
-            memcpy(out, path, path_len + 1);
-            return path_len + 1;
-        }
+        *out = new char[path_len + 1];
+        memcpy(*out, path, path_len + 1);
+        return path_len + 1;
     }
 
-    const char* prefix = "/proc/self/fd/";
-    const ssize_t prefix_len = strlen(prefix) + 1;
-    const ssize_t fd_path_len = prefix_len + 21;
-    char fd_path[fd_path_len];
-    ret = concat(fd_path, fd_path_len, prefix, dirfd_buf);
-    if (ret > fd_path_len) {
-        abort();
-    }
+    itoa_r(dirfd, dirfd_buf);
+    const ssize_t dirfd_buf_len = strlen(dirfd_buf);
 
-    if (!out) {
-        if (dirfd == AT_FDCWD) {
-            ret = getcwd_cache(cache, nullptr, 0);
-        } else {
-            ret = readlink_cache(cache, nullptr, 0, AT_FDCWD, fd_path);
-        }
-        if (ret < 0) {
-            if (ret == -ENOENT) {
-                ret = -EBADF;
-            }
-            return ret;
-        }
+    const ssize_t fd_path_len = prefix_len + 21 + 1;
+    char* fd_path = new char[fd_path_len];
 
-        return ret + path_len + 1;
+    char* ptr = fd_path;
+    memcpy(ptr, prefix, prefix_len);
+    ptr += prefix_len;
+    memcpy(ptr, dirfd_buf, dirfd_buf_len);
+    ptr += dirfd_buf_len;
+    *ptr = '\0';
+
+    char* dir;
+    if (dirfd == AT_FDCWD) {
+        ret = _getcwd(scratch, &dir);
     } else {
-        size_t fd_target_len = out_len - (path_len + 1);
-
-        if (dirfd == AT_FDCWD) {
-            ret = getcwd_cache(cache, out, fd_target_len);
-        } else {
-            ret = readlink_cache(cache, out, fd_target_len, AT_FDCWD, fd_path);
-        }
-        if (ret < 0) {
-            if (ret == -ENOENT) {
-                ret = -EBADF;
-            }
-            return ret;
-        }
-
-        if ((ret + path_len + 1) > out_len) {
-            return -ERANGE;
-        }
-
-        out[fd_target_len - 1] = '/';
-        memcpy(out + fd_target_len, path, path_len + 1);
-
-        return ret + path_len + 1;
+        ret = _readlinkat(scratch, AT_FDCWD, fd_path, &dir);
     }
+    delete[] fd_path;
+    if (ret < 0) {
+        if (ret == -ENOENT) {
+            ret = -EBADF;
+        }
+        return ret;
+    }
+
+    const ssize_t dir_len = ret - 1;
+    *out = new char[dir_len + 1 + path_len + 1];
+    ptr = *out;
+    memcpy(ptr, dir, dir_len);
+    ptr += dir_len;
+    *ptr = '/';
+    ptr++;
+    memcpy(ptr, path, path_len + 1);
+    delete[] dir;
+
+    return dir_len + 1 + path_len + 1;
 }
 
 int env_is_true(const char* env) {

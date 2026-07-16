@@ -112,8 +112,6 @@ add_compile_options(-g -O1 -pipe -fPIE -Wno-shift-op-parentheses -fno-exceptions
 add_library(freestanding OBJECT
     loader.cpp
     mylock.cpp
-    rmap.cpp
-    tls.cpp
     intercept_seccomp.cpp
     syscalls_a.cpp
     syscalls_b.cpp

@@ -2,7 +2,6 @@
 #include "sys.h"
 #include "itoa.h"
 #include "rootlink.h"
-#include "config.h"
 #include "intercept.h"
 #include "util.h"
 #include "manglepaths.h"
