@@ -40,11 +40,35 @@ static int sem[2];
 
 static int quit = 0;
 
-__attribute__((noinline)) static pid_t _thread_new(void (*fn)(), void* stack) {
+extern "C" {
+int __main_prepare_threaded();
+int __external_thread_register_maybe();
+}
+
+__thread Tls _tls = {};
+static Tls* get_tls() {
+    int reti = __external_thread_register_maybe();
+    if (reti < 0) {
+        abort();
+    }
+
+    __asm volatile("" ::: "memory");
+    Tls* tls = &_tls;
+    if (!tls->pid) {
+        tls->pid = getpid();
+        tls->tid = gettid();
+    }
+
+    return tls;
+}
+
+__attribute__((noinline)) static pid_t _thread_new(void (*fn)(),
+                                                   void* stack,
+                                                   void* fs_ptr) {
     pid_t tid = my_syscall5(__NR_clone,
                             CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND |
-                                CLONE_THREAD | CLONE_SYSVSEM,
-                            stack, 0, 0, 0);
+                                CLONE_THREAD | CLONE_SYSVSEM | CLONE_SETTLS,
+                            stack, 0, 0, fs_ptr);
 
     if (tid) {
         return tid;
@@ -60,6 +84,10 @@ static pid_t thread_new(void (*fn)()) {
         (char*)sys_mmap(nullptr, stack_size, PROT_READ | PROT_WRITE,
                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
     sys_mmap(nullptr, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    char** fs_ptr =
+        (char**)sys_mmap(nullptr, 4096, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    *fs_ptr = stack;
 #ifdef stack_grows_down
     stack += stack_size;
     // compilers call fn() with 8 byte stack alignement, but we need 16 byte
@@ -68,7 +96,7 @@ static pid_t thread_new(void (*fn)()) {
 #else
     stack += 8;
 #endif
-    pid_t tid = _thread_new(fn, stack);
+    pid_t tid = _thread_new(fn, stack, fs_ptr);
 
     return tid;
 }
@@ -179,7 +207,7 @@ static void do_work(Tls* tls) {
 }
 
 static void handler(int sig, siginfo_t* info, void* ucontext) {
-    Tls* tls = tls_get();
+    Tls* tls = get_tls();
 
     assert(sig == SIGSYS);
 
@@ -190,7 +218,7 @@ static void handler(int sig, siginfo_t* info, void* ucontext) {
 }
 
 __attribute__((noinline)) static void thread_loop() {
-    Tls* tls = tls_get();
+    Tls* tls = get_tls();
 
     while (1) {
         do_work(tls);
@@ -198,7 +226,7 @@ __attribute__((noinline)) static void thread_loop() {
 }
 
 static void thread() {
-    Tls* tls = tls_get();
+    Tls* tls = get_tls();
 
     if (!__builtin_setjmp((void**)tls->jumpbuf)) {
         const char tmp = 'c';
@@ -247,9 +275,12 @@ static void verifier_thread() {
 int main(int argc, char** argv) {
     int ret;
 
+    ret = __main_prepare_threaded();
+    if (ret != 0) {
+        abort();
+    }
     install_sighandler();
 
-    tls_init();
     mutex_init();
 
     ret = sys_pipe2(stage, O_CLOEXEC);
