@@ -391,6 +391,7 @@ int epoll_wait(int epfd,
                struct epoll_event* events,
                int maxevents,
                int timeout) {
+#ifdef __NR_epoll_wait
     int ret;
 
     maybe_init();
@@ -403,6 +404,9 @@ int epoll_wait(int epfd,
     }
 
     return ret;
+#else
+    return epoll_pwait(epfd, events, maxevents, timeout, NULL);
+#endif
 }
 
 #undef epoll_pwait
@@ -447,6 +451,7 @@ int epoll_pwait2(int epfd,
 
 #undef epoll_create
 int epoll_create(int size) {
+#ifdef __NR_epoll_create
     int ret;
 
     maybe_init();
@@ -458,6 +463,14 @@ int epoll_create(int size) {
     }
 
     return ret;
+#else
+    if (size <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return epoll_create1(0);
+#endif
 }
 
 #undef epoll_create1
@@ -492,6 +505,7 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event* event) {
 
 #undef poll
 int poll(struct pollfd* fds, nfds_t nfds, int timeout) {
+#ifdef __NR_poll
     int ret;
 
     maybe_init();
@@ -503,6 +517,18 @@ int poll(struct pollfd* fds, nfds_t nfds, int timeout) {
     }
 
     return ret;
+#else
+    struct timespec timeout_ts;
+    struct timespec* timeout_ts_p = NULL;
+
+    if (timeout >= 0) {
+        timeout_ts.tv_sec = timeout / 1000;
+        timeout_ts.tv_nsec = (timeout % 1000) * 1000000;
+        timeout_ts_p = &timeout_ts;
+    }
+
+    return ppoll(fds, nfds, timeout_ts_p, NULL);
+#endif
 }
 
 #undef ppoll
@@ -574,7 +600,8 @@ int open(const char* pathname, int flags, ...) {
 
     maybe_init();
 
-    ret = entry(__NR_open, (unsigned long)pathname, flags, mode, 0, 0, 0);
+    ret = entry(__NR_openat, AT_FDCWD, (unsigned long)pathname, flags, mode, 0,
+                0);
     if (ret < 0) {
         errno = -ret;
         return -1;
@@ -721,18 +748,7 @@ int setsockopt(int sockfd,
 
 #undef stat
 int stat(const char* pathname, struct stat* statbuf) {
-    int ret;
-
-    maybe_init();
-
-    ret = entry(__NR_stat, (unsigned long)pathname, (unsigned long)statbuf, 0,
-                0, 0, 0);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-
-    return ret;
+    return fstatat(AT_FDCWD, pathname, statbuf, 0);
 }
 
 #undef fstat
@@ -752,18 +768,7 @@ int fstat(int fd, struct stat* statbuf) {
 
 #undef lstat
 int lstat(const char* pathname, struct stat* statbuf) {
-    int ret;
-
-    maybe_init();
-
-    ret = entry(__NR_lstat, (unsigned long)pathname, (unsigned long)statbuf, 0,
-                0, 0, 0);
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-
-    return ret;
+    return fstatat(AT_FDCWD, pathname, statbuf, AT_SYMLINK_NOFOLLOW);
 }
 
 #undef fstatat
@@ -790,24 +795,7 @@ int fstatat(int dirfd, const char* pathname, struct stat* statbuf, int flags) {
 
 #undef stat64
 int stat64(const char* pathname, struct stat64* statbuf) {
-    int ret;
-
-    maybe_init();
-
-#ifdef __NR_stat64
-    ret = entry(__NR_stat64, (unsigned long)pathname, (unsigned long)statbuf, 0,
-                0, 0, 0);
-#else
-    ret = entry(__NR_stat, (unsigned long)pathname, (unsigned long)statbuf, 0,
-                0, 0, 0);
-#endif
-
-    if (ret < 0) {
-        errno = -ret;
-        return -1;
-    }
-
-    return ret;
+    return stat64(pathname, statbuf);
 }
 
 #undef __xstat
