@@ -240,10 +240,9 @@ static int line_size(char* buf, ssize_t size) {
     return -ENOEXEC;
 }
 
-static int read_header(char* out, size_t out_len, int fd) {
+static int read_header(Context* ctx, char* out, size_t out_len, int fd) {
     ssize_t ret;
-    const size_t scratch_size = (12 * 1024);
-    char scratch[scratch_size];
+    char* scratch = ctx->tls->scratch;
 
     if (out && !out_len) {
         abort();
@@ -263,7 +262,7 @@ static int read_header(char* out, size_t out_len, int fd) {
         out[ret - 1] = '\0';
         return ret;
     } else {
-        ret = read_full(fd, scratch, scratch_size);
+        ret = read_full(fd, scratch, SCRATCH_SIZE);
         if (ret < 0) {
             return ret;
         }
@@ -273,7 +272,7 @@ static int read_header(char* out, size_t out_len, int fd) {
         }
 
         if (scratch[0] == '#' && scratch[1] == '!') {
-            ret = line_size(scratch, scratch_size);
+            ret = line_size(scratch, SCRATCH_SIZE);
             if (ret < 0) {
                 return ret;
             }
@@ -343,7 +342,7 @@ void BottomHandler::next(Context* ctx, const CallExec* call) {
     }
     fd = ret;
 
-    ret = read_header(nullptr, 0, fd);
+    ret = read_header(ctx, nullptr, 0, fd);
     if (ret < 0) {
         *_ret = ret;
         sys_close(fd);
@@ -352,7 +351,7 @@ void BottomHandler::next(Context* ctx, const CallExec* call) {
     size = ret;
 
     char header[size];
-    ret = read_header(header, size, fd);
+    ret = read_header(ctx, header, size, fd);
     if (ret < 0) {
         *_ret = ret;
         sys_close(fd);
