@@ -805,15 +805,16 @@ void HardlinkShim::next(Context* ctx, const CallUnlink* call) {
     }
 
     if (ret) {
-        _next->next(ctx, call);
-        ret = *_ret;
+        char* target;
+        ret = _readlinkat(ctx->tls->scratch, dirfd, call->path, &target);
         if (ret < 0) {
             goto err;
         }
 
-        char* target;
-        ret = _readlinkat(ctx->tls->scratch, dirfd, call->path, &target);
+        _next->next(ctx, call);
+        ret = *_ret;
         if (ret < 0) {
+            delete[] target;
             goto err;
         }
 
@@ -897,15 +898,16 @@ void HardlinkShim::next(Context* ctx, const CallRename* call) {
     }
 
     if (ret) {
-        bottom->next(ctx, call);
-        ret = *_ret;
+        char* target;
+        ret = _readlinkat(ctx->tls->scratch, newdirfd, call->newpath, &target);
         if (ret < 0) {
             goto err;
         }
 
-        char* target;
-        ret = _readlinkat(ctx->tls->scratch, newdirfd, call->newpath, &target);
+        bottom->next(ctx, call);
+        ret = *_ret;
         if (ret < 0) {
+            delete[] target;
             goto err;
         }
 
