@@ -54,25 +54,24 @@ typedef struct MySignal MySignal;
 static MySignal global_mysignal = {.mutex = PTHREAD_MUTEX_INITIALIZER,
                                    .mysignal = {}};
 static __thread MySignal* _mysignal[VFORK_STACK_SIZE] = {&global_mysignal};
-static __thread int vfork_idx = 0;
 
-static MySignal* mysignal() {
-    return _mysignal[vfork_idx];
+static MySignal* mysignal(Tls* tls) {
+    return _mysignal[tls->vfork_idx];
 }
 
-static void set_mysignal(MySignal* mysignal) {
-    _mysignal[vfork_idx] = mysignal;
+static void set_mysignal(Tls* tls, MySignal* mysignal) {
+    _mysignal[tls->vfork_idx] = mysignal;
 }
 
-static void mysignal_lock() {
-    int ret = pthread_mutex_lock(&mysignal()->mutex);
+static void mysignal_lock(Tls* tls) {
+    int ret = pthread_mutex_lock(&mysignal(tls)->mutex);
     if (ret) {
         abort();
     }
 }
 
-static void mysignal_unlock() {
-    int ret = pthread_mutex_unlock(&mysignal()->mutex);
+static void mysignal_unlock(Tls* tls) {
+    int ret = pthread_mutex_unlock(&mysignal(tls)->mutex);
     if (ret) {
         abort();
     }
@@ -88,12 +87,13 @@ static MySignal* mysignal_new() {
     return signal;
 }
 
-static void vfork_stack_push(struct syscall_trampo_data* data,
+static void vfork_stack_push(Tls* tls,
+                             struct syscall_trampo_data* data,
                              MySignal* _mysignal) {
-    data->vfork_idx_addr = (uintptr_t)&vfork_idx;
-    vfork_idx++;
-    free(mysignal());
-    set_mysignal(_mysignal);
+    data->vfork_idx_addr = (uintptr_t)&tls->vfork_idx;
+    tls->vfork_idx++;
+    free(mysignal(tls));
+    set_mysignal(tls, _mysignal);
 }
 
 static void _sigemptyset(sigset_t* set) {
@@ -205,14 +205,14 @@ static void generic_handler(int signum, siginfo_t* info, void* ucontext) {
         return;
     }
 
-    mysignal_lock();
-    struct k_sigaction* ptr = mysignal()->mysignal + signum - 1;
+    mysignal_lock(tls);
+    struct k_sigaction* ptr = mysignal(tls)->mysignal + signum - 1;
     const struct k_sigaction copy = *ptr;
 
     if (ptr->flags & SA_RESETHAND) {
         ptr->handler = SIG_DFL;
     }
-    mysignal_unlock();
+    mysignal_unlock(tls);
 
     void (*const handler)(int) = copy.handler;
     const myhandler_t _handler = (myhandler_t)handler;
@@ -334,15 +334,15 @@ void SignalManager::next(Context* ctx, const CallSigaction* call) {
         goto out;
     }
 
-    mysignal_lock();
-    mysig = mysignal()->mysignal + call->signum - 1;
+    mysignal_lock(ctx->tls);
+    mysig = mysignal(ctx->tls)->mysignal + call->signum - 1;
 
     if (call->oldact) {
         *call->oldact = *mysig;
     }
 
     if (call->act) {
-        mysignal()->mysignal[call->signum - 1] = *call->act;
+        mysignal(ctx->tls)->mysignal[call->signum - 1] = *call->act;
     }
 
     if (call->signum == SIGSYS) {
@@ -357,7 +357,7 @@ void SignalManager::next(Context* ctx, const CallSigaction* call) {
     }
 
 out:
-    mysignal_unlock();
+    mysignal_unlock(ctx->tls);
 }
 
 static void fill_sigsys_act(struct k_sigaction* act, myhandler_t handler) {
@@ -458,7 +458,7 @@ void vfork_exit_callback() {
     }
 }
 
-static int handle_clone_fork(const CallClone* call) {
+static int handle_clone_fork(Context* ctx, const CallClone* call) {
     struct clone_args* args = call->args;
     unsigned int* shm;
     int ret;
@@ -538,16 +538,20 @@ static int handle_clone_fork(const CallClone* call) {
             *tidptr = (tid ? tid : sys_gettid());
         }
 
+        ctx->tls->pid = sys_getpid();
+        ctx->tls->tid = (tid ? tid : sys_gettid());
+
         if (call->type == CLONETYPE_CLONE3 &&
             (args->flags & CLONE_CLEAR_SIGHAND)) {
-            memset(mysignal()->mysignal, 0, sizeof(mysignal()->mysignal));
+            memset(mysignal(ctx->tls)->mysignal, 0,
+                   sizeof(mysignal(ctx->tls)->mysignal));
             for (int signum = 1; signum <= mysignal_size; signum++) {
                 if (signum == SIGKILL || signum == SIGSTOP) {
                     continue;
                 }
 
                 int ret = install_generic_handler(
-                    signum, mysignal()->mysignal + signum - 1);
+                    signum, mysignal(ctx->tls)->mysignal + signum - 1);
                 if (ret < 0) {
                     exit_error("rt_sigaction(): %d", ret);
                 }
@@ -610,11 +614,16 @@ void SignalManager::next(Context* ctx, const CallClone* call) {
 
     if (call->type == CLONETYPE_FORK) {
         *_ret = fork();
+        if (*_ret == 0) {
+            // Child
+            ctx->tls->pid = sys_getpid();
+            ctx->tls->tid = sys_gettid();
+        }
         return;
     }
 
     if (call->type == CLONETYPE_VFORK) {
-        if (vfork_idx + 1 >= VFORK_STACK_SIZE) {
+        if (ctx->tls->vfork_idx + 1 >= VFORK_STACK_SIZE) {
             *_ret = -ENOMEM;
             return;
         }
@@ -628,12 +637,12 @@ void SignalManager::next(Context* ctx, const CallClone* call) {
         clone_trampo_arm(&data.trampo, ctx->ucontext);
         ctx->trampo_armed = 1;
 
-        mysignal_lock();
-        memcpy(clone->mysignal, mysignal()->mysignal,
-               sizeof(mysignal()->mysignal));
-        mysignal_unlock();
+        mysignal_lock(ctx->tls);
+        memcpy(clone->mysignal, mysignal(ctx->tls)->mysignal,
+               sizeof(mysignal(ctx->tls)->mysignal));
+        mysignal_unlock(ctx->tls);
 
-        vfork_stack_push(&data.trampo, clone);
+        vfork_stack_push(ctx->tls, &data.trampo, clone);
 
         *_ret = 0;
         return;
@@ -649,7 +658,7 @@ void SignalManager::next(Context* ctx, const CallClone* call) {
     }
 
     if (!(args->flags & CLONE_VM)) {
-        *_ret = handle_clone_fork(call);
+        *_ret = handle_clone_fork(ctx, call);
         return;
     }
 
@@ -666,7 +675,7 @@ void SignalManager::next(Context* ctx, const CallClone* call) {
     }
 
     if (args->flags & CLONE_VFORK) {
-        if (vfork_idx + 1 >= VFORK_STACK_SIZE) {
+        if (ctx->tls->vfork_idx + 1 >= VFORK_STACK_SIZE) {
             *_ret = -ENOMEM;
             return;
         }
@@ -702,7 +711,8 @@ void SignalManager::next(Context* ctx, const CallClone* call) {
             if (!inherit_mysignal) {
                 abort();
             }
-            memset(inherit_mysignal->mysignal, 0, sizeof(mysignal()->mysignal));
+            memset(inherit_mysignal->mysignal, 0,
+                   sizeof(mysignal(ctx->tls)->mysignal));
 
         } else if (!(args->flags & CLONE_SIGHAND)) {
             inherit_mysignal = mysignal_new();
@@ -710,16 +720,16 @@ void SignalManager::next(Context* ctx, const CallClone* call) {
                 abort();
             }
 
-            mysignal_lock();
-            memcpy(inherit_mysignal->mysignal, mysignal()->mysignal,
-                   sizeof(mysignal()->mysignal));
-            mysignal_unlock();
+            mysignal_lock(ctx->tls);
+            memcpy(inherit_mysignal->mysignal, mysignal(ctx->tls)->mysignal,
+                   sizeof(mysignal(ctx->tls)->mysignal));
+            mysignal_unlock(ctx->tls);
 
         } else {
-            inherit_mysignal = mysignal();
+            inherit_mysignal = mysignal(ctx->tls);
         }
 
-        vfork_stack_push(&data.trampo, inherit_mysignal);
+        vfork_stack_push(ctx->tls, &data.trampo, inherit_mysignal);
     }
 
     *_ret = 0;
@@ -738,8 +748,8 @@ CallHandler* signalmanager_init(CallHandler* const next) {
             continue;
         }
 
-        int ret =
-            install_generic_handler(signum, mysignal()->mysignal + signum - 1);
+        int ret = install_generic_handler(
+            signum, mysignal(&_tls)->mysignal + signum - 1);
         if (ret < 0) {
             exit_error("rt_sigaction(): %d", ret);
         }

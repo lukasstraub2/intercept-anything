@@ -11,6 +11,7 @@
 static_assert(SCRATCH_SIZE >= PATH_MAX, "SCRATCH_SIZE");
 
 struct Tls {
+    int vfork_idx;
     pid_t pid;
     pid_t tid;
     RobustMutexList my_robust_mutex_list;

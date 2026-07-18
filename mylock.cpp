@@ -14,6 +14,14 @@ struct LocalMutexes {
     RobustMutex data[];
 };
 
+static pid_t mylock_tid(Tls* tls) {
+    if (tls->vfork_idx) {
+        return sys_gettid();
+    }
+
+    return tls->tid;
+}
+
 static LocalMutexes* local_mutexes = nullptr;
 
 void spinlock_lock(Spinlock* lock) {
@@ -112,7 +120,7 @@ int mutex_lock(Tls* tls, RobustMutex* mutex) {
 
     WRITE_ONCE(list->pending, mutex);
     __asm volatile("" ::: "memory");
-    int ownerdead = _mutex_lock(tls->tid, &mutex->mutex);
+    int ownerdead = _mutex_lock(mylock_tid(tls), &mutex->mutex);
     __asm volatile("" ::: "memory");
     RLIST_INSERT_HEAD(&list->head, mutex, next);
     __asm volatile("" ::: "memory");
@@ -140,7 +148,7 @@ void mutex_unlock(Tls* tls, RobustMutex* mutex) {
 int mutex_locked(Tls* tls, RobustMutex* mutex) {
     uint32_t val = __atomic_load_n(&mutex->mutex, __ATOMIC_RELAXED);
 
-    return val == (uint32_t)tls->tid;
+    return val == (uint32_t)mylock_tid(tls);
 }
 
 static void mutex_recover_pending(Tls* tls) {
@@ -166,7 +174,7 @@ static void mutex_recover_pending(Tls* tls) {
         RLIST_REMOVE(&list->head, mutex, next);
     }
     __asm volatile("" ::: "memory");
-    if (tls->tid == mutex_tid) {
+    if (mylock_tid(tls) == mutex_tid) {
         __mutex_unlock(&mutex->mutex, FUTEX_TID_MASK);
     }
     __asm volatile("" ::: "memory");
@@ -179,7 +187,7 @@ static void mutex_recover_one(Tls* tls, RobustMutex* mutex) {
     pid_t mutex_tid = __atomic_load_n(&mutex->mutex, __ATOMIC_RELAXED);
 
     assert(!list->pending);
-    assert(tls->tid == mutex_tid);
+    assert(mylock_tid(tls) == mutex_tid);
 
     WRITE_ONCE(list->pending, mutex);
     __asm volatile("" ::: "memory");
@@ -294,7 +302,7 @@ static void __rwlock_lock(Tls* tls,
     __asm volatile("" ::: "memory");
     WRITE_ONCE(list->pending, lock);
     __asm volatile("" ::: "memory");
-    WRITE_ONCE(*thelock, tls->tid);
+    WRITE_ONCE(*thelock, mylock_tid(tls));
     __asm volatile("" ::: "memory");
     RLIST_INSERT_HEAD(&list->head, entry, next);
     __asm volatile("" ::: "memory");
@@ -334,7 +342,7 @@ static void _rwlock_unlock_read(Tls* tls, RwLock* lock, int i) {
     uint32_t* reader = lock->reader + i;
     RwLockHolder* reader_entry = lock->reader_entry + i;
 
-    assert(*reader == (uint32_t)tls->tid);
+    assert(*reader == (uint32_t)mylock_tid(tls));
     lock->num_readers--;
 
     __rwlock_unlock(tls, lock, reader, reader_entry);
@@ -347,7 +355,7 @@ static void _rwlock_lock_write(Tls* tls, RwLock* lock) {
 }
 
 static void _rwlock_unlock_write(Tls* tls, RwLock* lock) {
-    assert(lock->writer == (uint32_t)tls->tid);
+    assert(lock->writer == (uint32_t)mylock_tid(tls));
 
     __rwlock_unlock(tls, lock, &lock->writer, &lock->writer_entry);
 }
@@ -396,7 +404,7 @@ void rwlock_unlock_read(Tls* tls, RwLock* lock) {
     }
 
     for (int i = 0; i < holders_alloc; i++) {
-        if (lock->reader[i] == (uint32_t)tls->tid) {
+        if (lock->reader[i] == (uint32_t)mylock_tid(tls)) {
             _rwlock_unlock_read(tls, lock, i);
 
             mutex_unlock(tls, &lock->mutex);
@@ -420,7 +428,7 @@ int rwlock_lock_write(Tls* tls, RwLock* lock) {
             int ownerdead = is_tid_dead(lock->writer);
             if (ownerdead) {
                 _rwlock_lock_write(tls, lock);
-                if (lock->writer_waiter == (uint32_t)tls->tid) {
+                if (lock->writer_waiter == (uint32_t)mylock_tid(tls)) {
                     WRITE_ONCE(lock->writer_waiter, 0);
                 }
 
@@ -432,7 +440,7 @@ int rwlock_lock_write(Tls* tls, RwLock* lock) {
         if (lock->writer || lock->num_readers) {
             int dead = rwlock_cleanup_dead(lock);
             if (!lock->writer_waiter) {
-                WRITE_ONCE(lock->writer_waiter, tls->tid);
+                WRITE_ONCE(lock->writer_waiter, mylock_tid(tls));
             }
             mutex_unlock(tls, &lock->mutex);
             if (!dead) {
@@ -442,7 +450,7 @@ int rwlock_lock_write(Tls* tls, RwLock* lock) {
         }
 
         _rwlock_lock_write(tls, lock);
-        if (lock->writer_waiter == (uint32_t)tls->tid) {
+        if (lock->writer_waiter == (uint32_t)mylock_tid(tls)) {
             WRITE_ONCE(lock->writer_waiter, 0);
         }
 
@@ -477,12 +485,12 @@ static void rwlock_recover_pending(Tls* tls) {
 
     uint32_t* thelock = nullptr;
     RwLockHolder* entry = nullptr;
-    if (lock->writer == (uint32_t)tls->tid) {
+    if (lock->writer == (uint32_t)mylock_tid(tls)) {
         thelock = &lock->writer;
         entry = &lock->writer_entry;
     }
     for (int i = 0; i < holders_alloc; i++) {
-        if (lock->reader[i] == (uint32_t)tls->tid) {
+        if (lock->reader[i] == (uint32_t)mylock_tid(tls)) {
             thelock = lock->reader + i;
             entry = lock->reader_entry + i;
         }
@@ -524,12 +532,12 @@ static void rwlock_recover_one(Tls* tls, RwLock* lock) {
 
     uint32_t* thelock = nullptr;
     RwLockHolder* entry = nullptr;
-    if (lock->writer == (uint32_t)tls->tid) {
+    if (lock->writer == (uint32_t)mylock_tid(tls)) {
         thelock = &lock->writer;
         entry = &lock->writer_entry;
     }
     for (int i = 0; i < holders_alloc; i++) {
-        if (lock->reader[i] == (uint32_t)tls->tid) {
+        if (lock->reader[i] == (uint32_t)mylock_tid(tls)) {
             thelock = lock->reader + i;
             entry = lock->reader_entry + i;
         }
