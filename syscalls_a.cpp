@@ -574,6 +574,70 @@ unsigned long handle_getdents64(Context* ctx, SysArgs* args) {
     return ret;
 }
 
+unsigned long handle_dup(Context* ctx, SysArgs* args) {
+    unsigned int fd = args->arg1;
+
+    int ret = {0};
+    CallDup call;
+    call.fd = fd;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_dup3(Context* ctx, SysArgs* args) {
+    unsigned int oldfd = args->arg1;
+    unsigned int newfd = args->arg2;
+    int flags = args->arg3;
+
+    int ret = {0};
+    CallDup3 call;
+    call.oldfd = oldfd;
+    call.newfd = newfd;
+    call.flags = flags;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_fcntl(Context* ctx, SysArgs* args) {
+    unsigned int fd = args->arg1;
+    unsigned int cmd = args->arg2;
+    unsigned long arg = args->arg3;
+
+    int ret = {0};
+    CallFcntl call;
+    call.fd = fd;
+    call.cmd = cmd;
+    call.arg = arg;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
+unsigned long handle_ioctl(Context* ctx, SysArgs* args) {
+    unsigned int fd = args->arg1;
+    unsigned int cmd = args->arg2;
+    unsigned long arg = args->arg3;
+
+    int ret = {0};
+    CallIoctl call;
+    call.fd = fd;
+    call.cmd = cmd;
+    call.arg = arg;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return ret;
+}
+
 unsigned long handle_close(Context* ctx, SysArgs* args) {
     unsigned int fd = args->arg1;
 
@@ -840,6 +904,50 @@ void BottomHandler::next(Context* ctx, const CallGetdents* call) {
     } else {
         ret = sys_getdents(call->fd, call->dirp, call->count);
     }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallDup* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = sys_dup(call->fd);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallDup3* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = sys_dup3(call->oldfd, call->newfd, call->flags);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallFcntl* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = sys_fcntl(call->fd, call->cmd, call->arg);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallIoctl* call) {
+    int ret;
+    int* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = sys_ioctl(call->fd, call->cmd, (void*)call->arg);
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;

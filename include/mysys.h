@@ -621,3 +621,9 @@ static __attribute__((unused)) long sys_getcpu(unsigned int* cpu,
                                                void* unused) {
     return my_syscall3(__NR_getcpu, cpu, node, unused);
 }
+
+static __attribute__((unused)) long sys_fcntl(unsigned int fd,
+                                              unsigned int cmd,
+                                              unsigned long arg) {
+    return my_syscall3(__NR_fcntl, fd, cmd, arg);
+}

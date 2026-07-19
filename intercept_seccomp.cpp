@@ -229,11 +229,18 @@ const long syscall_readwrite[] = {
     __NR_preadv2,
 };
 
-const long syscall_file[] = {
+const long syscall_fd[] = {
+    __NR_dup,
+    __NR_dup3,
+    __NR_fcntl,
+    __NR_ioctl,
+    __NR_close,
 #ifdef __NR_close_range
     __NR_close_range,
 #endif
-    __NR_close,
+};
+
+const long syscall_file[] = {
     __NR_fanotify_mark,
     __NR_inotify_add_watch,
 #ifdef __NR_mknod
@@ -367,6 +374,7 @@ const int filter_tail_len = sizeof(filter_tail) / sizeof(filter_tail[0]);
 const int syscall_vdso_len = sizeof(syscall_process) / sizeof(long);
 const int syscall_process_len = sizeof(syscall_process) / sizeof(long);
 const int syscall_mem_len = sizeof(syscall_mem) / sizeof(long);
+const int syscall_fd_len = sizeof(syscall_fd) / sizeof(long);
 const int syscall_file_len = sizeof(syscall_file) / sizeof(long);
 const int syscall_readwrite_len = sizeof(syscall_readwrite) / sizeof(long);
 const int syscall_socket_len = sizeof(syscall_socket) / sizeof(long);
@@ -401,6 +409,9 @@ static void build_filter_selective(struct sock_fprog* prog, int flags) {
     }
     if (flags & FILTER_MEM) {
         len += syscall_mem_len;
+    }
+    if (flags & FILTER_FD) {
+        len += syscall_fd_len;
     }
     if (flags & FILTER_FILE) {
         len += syscall_file_len;
@@ -439,6 +450,9 @@ static void build_filter_selective(struct sock_fprog* prog, int flags) {
     if (flags & FILTER_MEM) {
         ptr =
             fill_jump_cmp(ptr, syscall_mem, syscall_mem_len, &idx, syscall_len);
+    }
+    if (flags & FILTER_FD) {
+        ptr = fill_jump_cmp(ptr, syscall_fd, syscall_fd_len, &idx, syscall_len);
     }
     if (flags & FILTER_FILE) {
         ptr = fill_jump_cmp(ptr, syscall_file, syscall_file_len, &idx,

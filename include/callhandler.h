@@ -19,6 +19,10 @@ class ICallHandler {
     virtual void next(Context* ctx, const CallXattr* call) = 0;
     virtual void next(Context* ctx, const CallChdir* call) = 0;
     virtual void next(Context* ctx, const CallGetdents* call) = 0;
+    virtual void next(Context* ctx, const CallDup* call) = 0;
+    virtual void next(Context* ctx, const CallDup3* call) = 0;
+    virtual void next(Context* ctx, const CallFcntl* call) = 0;
+    virtual void next(Context* ctx, const CallIoctl* call) = 0;
     virtual void next(Context* ctx, const CallClose* call) = 0;
     virtual void next(Context* ctx, const CallLink* call) = 0;
     virtual void next(Context* ctx, const CallSymlink* call) = 0;
@@ -83,6 +87,18 @@ class CallHandler : virtual public ICallHandler {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
     void next(Context* ctx, const CallGetdents* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallDup* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallDup3* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallFcntl* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallIoctl* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
     void next(Context* ctx, const CallClose* call) override {

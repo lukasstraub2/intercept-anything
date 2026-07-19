@@ -324,6 +324,78 @@ class CallGetdents final : public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
+class CallDup final : public ICallBase {
+    public:
+    unsigned int fd;
+    int* ret;
+
+    CallDup() = default;
+
+    CallDup(const CallDup* call) {
+        this->fd = call->fd;
+        this->ret = call->ret;
+    }
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
+class CallDup3 final : public ICallBase {
+    public:
+    unsigned int oldfd;
+    unsigned int newfd;
+    int flags;
+    int* ret;
+
+    CallDup3() = default;
+
+    CallDup3(const CallDup3* call) {
+        this->oldfd = call->oldfd;
+        this->newfd = call->newfd;
+        this->flags = call->flags;
+        this->ret = call->ret;
+    }
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
+class CallFcntl final : public ICallBase {
+    public:
+    unsigned int fd;
+    unsigned int cmd;
+    unsigned long arg;
+    int* ret;
+
+    CallFcntl() = default;
+
+    CallFcntl(const CallFcntl* call) {
+        this->fd = call->fd;
+        this->cmd = call->cmd;
+        this->arg = call->arg;
+        this->ret = call->ret;
+    }
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
+class CallIoctl final : public ICallBase {
+    public:
+    unsigned int fd;
+    unsigned int cmd;
+    unsigned long arg;
+    int* ret;
+
+    CallIoctl() = default;
+
+    CallIoctl(const CallIoctl* call) {
+        this->fd = call->fd;
+        this->cmd = call->cmd;
+        this->arg = call->arg;
+        this->ret = call->ret;
+    }
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
 class CallClose final : public ICallBase {
     public:
     int is_range{};
@@ -374,5 +446,9 @@ unsigned long handle_chdir(Context* ctx, SysArgs* args);
 unsigned long handle_fchdir(Context* ctx, SysArgs* args);
 unsigned long handle_getdents(Context* ctx, SysArgs* args);
 unsigned long handle_getdents64(Context* ctx, SysArgs* args);
+unsigned long handle_dup(Context* ctx, SysArgs* args);
+unsigned long handle_dup3(Context* ctx, SysArgs* args);
+unsigned long handle_fcntl(Context* ctx, SysArgs* args);
+unsigned long handle_ioctl(Context* ctx, SysArgs* args);
 unsigned long handle_close(Context* ctx, SysArgs* args);
 unsigned long handle_close_range(Context* ctx, SysArgs* args);

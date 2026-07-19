@@ -20,6 +20,10 @@ class BottomHandler : public CallHandler, public ICallHandler {
     void next(Context* ctx, const CallXattr* call) override;
     void next(Context* ctx, const CallChdir* call) override;
     void next(Context* ctx, const CallGetdents* call) override;
+    void next(Context* ctx, const CallDup* call) override;
+    void next(Context* ctx, const CallDup3* call) override;
+    void next(Context* ctx, const CallFcntl* call) override;
+    void next(Context* ctx, const CallIoctl* call) override;
     void next(Context* ctx, const CallClose* call) override;
     void next(Context* ctx, const CallLink* call) override;
     void next(Context* ctx, const CallSymlink* call) override;

@@ -292,6 +292,22 @@ __attribute__((unused)) unsigned long handle_syscall(Context* ctx,
             ret = handle_kill(ctx, args);
             break;
 
+        case __NR_dup:
+            ret = handle_dup(ctx, args);
+            break;
+
+        case __NR_dup3:
+            ret = handle_dup3(ctx, args);
+            break;
+
+        case __NR_fcntl:
+            ret = handle_fcntl(ctx, args);
+            break;
+
+        case __NR_ioctl:
+            ret = handle_ioctl(ctx, args);
+            break;
+
         case __NR_close:
             ret = handle_close(ctx, args);
             break;
