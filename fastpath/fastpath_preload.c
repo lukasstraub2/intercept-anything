@@ -795,7 +795,7 @@ int fstatat(int dirfd, const char* pathname, struct stat* statbuf, int flags) {
 
 #undef stat64
 int stat64(const char* pathname, struct stat64* statbuf) {
-    return stat64(pathname, statbuf);
+    return stat(pathname, statbuf);
 }
 
 #undef __xstat
