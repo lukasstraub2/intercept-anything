@@ -59,7 +59,7 @@ else()
     set(LIBSUPCXX -lc++abi)
 endif()
 
-set(RUNTIME_PREFIX "/" CACHE STRING "runtime system prefix")
+set(RUNTIME_PREFIX "" CACHE STRING "runtime system prefix")
 
 set(GENERATED_H_DIR ${CMAKE_BINARY_DIR}/include)
 
@@ -163,7 +163,7 @@ add_library(androidislinux_tool OBJECT
 target_link_libraries(androidislinux_tool PRIVATE ${TOOLS_OBJS})
 
 add_executable(androidislinux androidislinux_tool/androidislinux_main.cpp)
-target_link_libraries(androidislinux PUBLIC androidislinux_tool ${STATIC_TOOLS_OBJS})
+target_link_libraries(androidislinux PUBLIC androidislinux_tool ${STATIC_TOOLS_OBJS} fastpath_module)
 
 add_executable(hardlinkshim androidislinux_tool/hardlinkshim_main.cpp)
 target_link_libraries(hardlinkshim PUBLIC androidislinux_tool ${STATIC_TOOLS_OBJS})

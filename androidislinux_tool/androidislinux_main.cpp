@@ -6,6 +6,7 @@
 #include "rootshim.h"
 #include "androidislinux.h"
 #include "workarounds.h"
+#include "fastpath.h"
 #include "util.h"
 
 CallHandler* main_init(CallHandler* const bottom, int recursing) {
@@ -17,7 +18,8 @@ CallHandler* main_init(CallHandler* const bottom, int recursing) {
     CallHandler* const rootlink = rootlink_init(hardlinkshim);
     CallHandler* const rootshim = rootshim_init(rootlink);
     CallHandler* const androidislinux = androidislinux_init(rootshim);
-    CallHandler* const workarounds = workarounds_init(androidislinux);
+    CallHandler* const fastpath = fastpath_init(androidislinux);
+    CallHandler* const workarounds = workarounds_init(fastpath);
     assert(!(workarounds->get_filter_flags() & FILTER_ALL));
     return workarounds;
 }

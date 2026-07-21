@@ -144,8 +144,8 @@ static FileAction* build_ld_so_preload(const char* path) {
 }
 
 FileAction* FastPath::_mangle_path(int dirfd, const char* path) {
-    if (!strcmp(path, "/etc/ld.so.preload") ||
-        !strcmp(path, "/etc/ld-nix.so.preload")) {
+    if (!strcmp(path, RUNTIME_PREFIX "/etc/ld.so.preload") ||
+        !strcmp(path, RUNTIME_PREFIX "/etc/ld-nix.so.preload")) {
         return build_ld_so_preload(path);
     } else if (!strcmp(path, PRELOAD_ENTRY_FILE)) {
         fastpath_entry_t content = fastpath_entry;
