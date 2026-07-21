@@ -13,4 +13,33 @@
 #include <errno.h>
 #include <syscall.h>
 #include <unistd.h>
-#include <sys/sendfile.h>
+
+#undef close
+int close(int fd) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_close, fd, 0, 0, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
+
+#undef close_range
+int close_range(unsigned int fd, unsigned int max_fd, int flags) {
+    int ret;
+
+    maybe_init();
+
+    ret = entry(__NR_close_range, fd, max_fd, flags, 0, 0, 0);
+    if (ret < 0) {
+        errno = -ret;
+        return -1;
+    }
+
+    return ret;
+}
