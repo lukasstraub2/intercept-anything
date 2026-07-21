@@ -326,8 +326,8 @@ class CallGetdents final : public ICallBase {
 
 class CallDup final : public ICallBase {
     public:
-    unsigned int fd;
-    int* ret;
+    unsigned int fd{};
+    int* ret{};
 
     CallDup() = default;
 
@@ -341,10 +341,10 @@ class CallDup final : public ICallBase {
 
 class CallDup3 final : public ICallBase {
     public:
-    unsigned int oldfd;
-    unsigned int newfd;
-    int flags;
-    int* ret;
+    unsigned int oldfd{};
+    unsigned int newfd{};
+    int flags{};
+    int* ret{};
 
     CallDup3() = default;
 
@@ -360,10 +360,10 @@ class CallDup3 final : public ICallBase {
 
 class CallFcntl final : public ICallBase {
     public:
-    unsigned int fd;
-    unsigned int cmd;
-    unsigned long arg;
-    int* ret;
+    unsigned int fd{};
+    unsigned int cmd{};
+    unsigned long arg{};
+    int* ret{};
 
     CallFcntl() = default;
 
@@ -379,10 +379,10 @@ class CallFcntl final : public ICallBase {
 
 class CallIoctl final : public ICallBase {
     public:
-    unsigned int fd;
-    unsigned int cmd;
-    unsigned long arg;
-    int* ret;
+    unsigned int fd{};
+    unsigned int cmd{};
+    unsigned long arg{};
+    int* ret{};
 
     CallIoctl() = default;
 
