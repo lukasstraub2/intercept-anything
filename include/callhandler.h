@@ -61,6 +61,10 @@ class ICallHandler {
     virtual void next(Context* ctx, const CallMemop* call) = 0;
     virtual void next(Context* ctx, const CallClockTimeOps* call) = 0;
     virtual void next(Context* ctx, const CallGetcpu* call) = 0;
+    virtual void next(Context* ctx, const CallPoll* call) = 0;
+    virtual void next(Context* ctx, const CallEpollCreate* call) = 0;
+    virtual void next(Context* ctx, const CallEpollWait* call) = 0;
+    virtual void next(Context* ctx, const CallEpollCtl* call) = 0;
 };
 
 class CallHandler : virtual public ICallHandler {
@@ -215,6 +219,18 @@ class CallHandler : virtual public ICallHandler {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
     void next(Context* ctx, const CallGetcpu* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallPoll* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallEpollCreate* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallEpollWait* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallEpollCtl* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
 };

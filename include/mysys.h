@@ -634,3 +634,62 @@ static __attribute__((unused)) long sys_sendfile(int out,
                                                  size_t count) {
     return my_syscall4(__NR_sendfile, out, in, offset, count);
 }
+
+static __attribute__((unused)) long sys_ppoll(struct pollfd* ufds,
+                                              unsigned int nfds,
+                                              struct __kernel_timespec* tsp,
+                                              const sigset_t* sigmask,
+                                              size_t sigsetsize) {
+    return my_syscall5(__NR_ppoll, ufds, nfds, tsp, sigmask, sigsetsize);
+}
+
+static __attribute__((unused)) int sys_epoll_create(int size) {
+#ifdef __NR_epoll_create
+    return my_syscall1(__NR_epoll_create, size);
+#else
+    return __nolibc_enosys(__func__, size);
+#endif
+}
+
+static __attribute__((unused)) int sys_epoll_create1(int flags) {
+    return my_syscall1(__NR_epoll_create1, flags);
+}
+
+static __attribute__((unused)) long sys_epoll_wait(int epfd,
+                                                   struct epoll_event* events,
+                                                   int maxevents,
+                                                   int timeout) {
+#ifdef __NR_epoll_wait
+    return my_syscall4(__NR_epoll_wait, epfd, events, maxevents, timeout);
+#else
+    return __nolibc_enosys(__func__, epfd, events, maxevents, timeout);
+#endif
+}
+
+static __attribute__((unused)) long sys_epoll_pwait(int epfd,
+                                                    struct epoll_event* events,
+                                                    int maxevents,
+                                                    int timeout,
+                                                    const sigset_t* sigmask,
+                                                    size_t sigsetsize) {
+    return my_syscall6(__NR_epoll_pwait, epfd, events, maxevents, timeout,
+                       sigmask, sigsetsize);
+}
+
+static __attribute__((unused)) long sys_epoll_pwait2(
+    int epfd,
+    struct epoll_event* events,
+    int maxevents,
+    const struct __kernel_timespec* timeout,
+    const sigset_t* sigmask,
+    size_t sigsetsize) {
+    return my_syscall6(__NR_epoll_pwait2, epfd, events, maxevents, timeout,
+                       sigmask, sigsetsize);
+}
+
+static __attribute__((unused)) int sys_epoll_ctl(int epfd,
+                                                 int op,
+                                                 int fd,
+                                                 struct epoll_event* event) {
+    return my_syscall4(__NR_epoll_ctl, epfd, op, fd, event);
+}

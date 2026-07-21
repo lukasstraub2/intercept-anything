@@ -249,6 +249,115 @@ unsigned long handle_getcpu(Context* ctx, SysArgs* args) {
     return ret;
 }
 
+unsigned long handle_poll(Context* ctx, SysArgs* args) {
+    long ret = 0;
+    CallPoll call;
+    call.type = POLL;
+    call.ufds = (struct pollfd*)args->arg1;
+    call.nfds = (unsigned int)args->arg2;
+    call.timeout_msecs = (int)args->arg3;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
+unsigned long handle_ppoll(Context* ctx, SysArgs* args) {
+    long ret = 0;
+    CallPoll call;
+    call.type = PPOLL;
+    call.ufds = (struct pollfd*)args->arg1;
+    call.nfds = (unsigned int)args->arg2;
+    call.tsp = (struct __kernel_timespec*)args->arg3;
+    call.sigmask = (const sigset_t*)args->arg4;
+    call.sigsetsize = (size_t)args->arg5;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
+unsigned long handle_epoll_create(Context* ctx, SysArgs* args) {
+    int ret = 0;
+    CallEpollCreate call;
+    call.type = EPOLL_CREATE;
+    call.size = (int)args->arg1;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
+unsigned long handle_epoll_create1(Context* ctx, SysArgs* args) {
+    int ret = 0;
+    CallEpollCreate call;
+    call.type = EPOLL_CREATE1;
+    call.flags = (int)args->arg1;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
+unsigned long handle_epoll_wait(Context* ctx, SysArgs* args) {
+    long ret = 0;
+    CallEpollWait call;
+    call.type = EPOLL_WAIT;
+    call.epfd = (int)args->arg1;
+    call.events = (struct epoll_event*)args->arg2;
+    call.maxevents = (int)args->arg3;
+    call.timeout = (int)args->arg4;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
+unsigned long handle_epoll_pwait(Context* ctx, SysArgs* args) {
+    long ret = 0;
+    CallEpollWait call;
+    call.type = EPOLL_PWAIT;
+    call.epfd = (int)args->arg1;
+    call.events = (struct epoll_event*)args->arg2;
+    call.maxevents = (int)args->arg3;
+    call.timeout = (int)args->arg4;
+    call.sigmask = (const sigset_t*)args->arg5;
+    call.sigsetsize = (size_t)args->arg6;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
+unsigned long handle_epoll_pwait2(Context* ctx, SysArgs* args) {
+    long ret = 0;
+    CallEpollWait call;
+    call.type = EPOLL_PWAIT2;
+    call.epfd = (int)args->arg1;
+    call.events = (struct epoll_event*)args->arg2;
+    call.maxevents = (int)args->arg3;
+    call.timeout2 = (const struct __kernel_timespec*)args->arg4;
+    call.sigmask = (const sigset_t*)args->arg5;
+    call.sigsetsize = (size_t)args->arg6;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
+unsigned long handle_epoll_ctl(Context* ctx, SysArgs* args) {
+    int ret = 0;
+    CallEpollCtl call;
+    call.epfd = (int)args->arg1;
+    call.op = (int)args->arg2;
+    call.fd = (int)args->arg3;
+    call.event = (struct epoll_event*)args->arg4;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+    return ret;
+}
+
 void BottomHandler::next(Context* ctx, const CallSocket* call) {
     signalmanager_enable_signals(ctx);
     *call->ret = sys_socket(call->family, call->type, call->protocol);
@@ -368,4 +477,58 @@ void BottomHandler::next(Context* ctx, const CallGetcpu* call) {
     }
 
     *call->ret = sys_getcpu(call->cpu, call->node, call->unused);
+}
+
+void BottomHandler::next(Context* ctx, const CallPoll* call) {
+    long ret;
+    signalmanager_enable_signals(ctx);
+    if (call->type == POLL) {
+        ret = sys_poll(call->ufds, call->nfds, call->timeout_msecs);
+    } else {
+        ret = sys_ppoll(call->ufds, call->nfds, call->tsp, call->sigmask,
+                        call->sigsetsize);
+    }
+    signalmanager_disable_signals(ctx);
+    *call->ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallEpollCreate* call) {
+    signalmanager_enable_signals(ctx);
+    if (call->type == EPOLL_CREATE) {
+        *call->ret = sys_epoll_create(call->size);
+    } else {
+        *call->ret = sys_epoll_create1(call->flags);
+    }
+    signalmanager_disable_signals(ctx);
+}
+
+void BottomHandler::next(Context* ctx, const CallEpollWait* call) {
+    long ret;
+    signalmanager_enable_signals(ctx);
+    switch (call->type) {
+        case EPOLL_WAIT:
+            ret = sys_epoll_wait(call->epfd, call->events, call->maxevents,
+                                 call->timeout);
+            break;
+        case EPOLL_PWAIT:
+            ret =
+                sys_epoll_pwait(call->epfd, call->events, call->maxevents,
+                                call->timeout, call->sigmask, call->sigsetsize);
+            break;
+        case EPOLL_PWAIT2:
+            ret = sys_epoll_pwait2(call->epfd, call->events, call->maxevents,
+                                   call->timeout2, call->sigmask,
+                                   call->sigsetsize);
+            break;
+        default:
+            abort();
+    }
+    signalmanager_disable_signals(ctx);
+    *call->ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallEpollCtl* call) {
+    signalmanager_enable_signals(ctx);
+    *call->ret = sys_epoll_ctl(call->epfd, call->op, call->fd, call->event);
+    signalmanager_disable_signals(ctx);
 }

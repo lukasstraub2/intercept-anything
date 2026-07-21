@@ -128,6 +128,62 @@ class CallGetcpu final : public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
+enum PollType { POLL, PPOLL };
+
+class CallPoll final : public ICallBase {
+    public:
+    PollType type{};
+    struct pollfd* ufds{};
+    unsigned int nfds{};
+    int timeout_msecs{};              // for poll
+    struct __kernel_timespec* tsp{};  // for ppoll
+    const sigset_t* sigmask{};        // for ppoll
+    size_t sigsetsize{};              // for ppoll
+    long* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
+enum EpollCreateType { EPOLL_CREATE, EPOLL_CREATE1 };
+
+class CallEpollCreate final : public ICallBase {
+    public:
+    EpollCreateType type{};
+    int size{};   // for epoll_create
+    int flags{};  // for epoll_create1
+    int* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
+enum EpollWaitType { EPOLL_WAIT, EPOLL_PWAIT, EPOLL_PWAIT2 };
+
+class CallEpollWait final : public ICallBase {
+    public:
+    EpollWaitType type{};
+    int epfd{};
+    struct epoll_event* events{};
+    int maxevents{};
+    int timeout{};  // for epoll_wait and epoll_pwait
+    const struct __kernel_timespec* timeout2{};  // for epoll_pwait2
+    const sigset_t* sigmask{};
+    size_t sigsetsize{};
+    long* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
+class CallEpollCtl final : public ICallBase {
+    public:
+    int epfd{};
+    int op{};
+    int fd{};
+    struct epoll_event* event{};
+    int* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
 unsigned long handle_socket(Context* ctx, SysArgs* args);
 unsigned long handle_sendto(Context* ctx, SysArgs* args);
 unsigned long handle_recvfrom(Context* ctx, SysArgs* args);
@@ -146,3 +202,11 @@ unsigned long handle_clock_gettime(Context* ctx, SysArgs* args);
 unsigned long handle_clock_settime(Context* ctx, SysArgs* args);
 unsigned long handle_clock_getres(Context* ctx, SysArgs* args);
 unsigned long handle_getcpu(Context* ctx, SysArgs* args);
+unsigned long handle_poll(Context* ctx, SysArgs* args);
+unsigned long handle_ppoll(Context* ctx, SysArgs* args);
+unsigned long handle_epoll_create(Context* ctx, SysArgs* args);
+unsigned long handle_epoll_create1(Context* ctx, SysArgs* args);
+unsigned long handle_epoll_wait(Context* ctx, SysArgs* args);
+unsigned long handle_epoll_pwait(Context* ctx, SysArgs* args);
+unsigned long handle_epoll_pwait2(Context* ctx, SysArgs* args);
+unsigned long handle_epoll_ctl(Context* ctx, SysArgs* args);

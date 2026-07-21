@@ -15,6 +15,7 @@ const int FILTER_SENDRECV = 32;
 const int FILTER_ALL = 64;
 const int FILTER_VDSO = 128;
 const int FILTER_FD = 256;
+const int FILTER_EVENT = 512;
 
 struct Context {
     Tls* tls;

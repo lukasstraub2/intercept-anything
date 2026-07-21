@@ -62,5 +62,9 @@ class BottomHandler : public CallHandler, public ICallHandler {
     void next(Context* ctx, const CallMemop* call) override;
     void next(Context* ctx, const CallClockTimeOps* call) override;
     void next(Context* ctx, const CallGetcpu* call) override;
+    void next(Context* ctx, const CallPoll* call) override;
+    void next(Context* ctx, const CallEpollCreate* call) override;
+    void next(Context* ctx, const CallEpollWait* call) override;
+    void next(Context* ctx, const CallEpollCtl* call) override;
 };
 #pragma GCC diagnostic pop

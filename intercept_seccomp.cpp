@@ -369,6 +369,23 @@ const long syscall_vdso[] = {
     __NR_riscv_flush_icache
 #endif
 };
+
+const long syscall_event[] = {
+#ifdef __NR_poll
+    __NR_poll,
+#endif
+    __NR_ppoll,
+#ifdef __NR_epoll_create
+    __NR_epoll_create,
+#endif
+    __NR_epoll_create1,
+#ifdef __NR_epoll_wait
+    __NR_epoll_wait,
+#endif
+    __NR_epoll_pwait,
+    __NR_epoll_pwait2,
+    __NR_epoll_ctl,
+};
 // clang-format on
 
 const int filter_head_len = sizeof(filter_head) / sizeof(filter_head[0]);
@@ -381,6 +398,7 @@ const int syscall_file_len = sizeof(syscall_file) / sizeof(long);
 const int syscall_readwrite_len = sizeof(syscall_readwrite) / sizeof(long);
 const int syscall_socket_len = sizeof(syscall_socket) / sizeof(long);
 const int syscall_sendrecv_len = sizeof(syscall_sendrecv) / sizeof(long);
+const int syscall_event_len = sizeof(syscall_event) / sizeof(long);
 
 static struct sock_filter* fill_jump_cmp(struct sock_filter* ptr,
                                          const long* list,
@@ -427,6 +445,9 @@ static void build_filter_selective(struct sock_fprog* prog, int flags) {
     if (flags & FILTER_SENDRECV) {
         len += syscall_sendrecv_len;
     }
+    if (flags & FILTER_EVENT) {
+        len += syscall_event_len;
+    }
 
     int syscall_len = len;
     len += filter_head_len + 1 + 1 + filter_tail_len;
@@ -470,6 +491,10 @@ static void build_filter_selective(struct sock_fprog* prog, int flags) {
     }
     if (flags & FILTER_SENDRECV) {
         ptr = fill_jump_cmp(ptr, syscall_sendrecv, syscall_sendrecv_len, &idx,
+                            syscall_len);
+    }
+    if (flags & FILTER_EVENT) {
+        ptr = fill_jump_cmp(ptr, syscall_event, syscall_event_len, &idx,
                             syscall_len);
     }
 
