@@ -734,6 +734,48 @@ unsigned long handle_preadv2(Context* ctx, SysArgs* args) {
     return ret;
 }
 
+unsigned long handle_sendfile(Context* ctx, SysArgs* args) {
+    int out_fd = args->arg1;
+    int in_fd = args->arg2;
+    loff_t* offset = (loff_t*)args->arg3;
+    size_t count = args->arg4;
+
+    ssize_t ret = 0;
+    CallSendfile call;
+    call.out_fd = out_fd;
+    call.in_fd = in_fd;
+    call.offset = offset;
+    call.count = count;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return (unsigned long)ret;
+}
+
+unsigned long handle_splice(Context* ctx, SysArgs* args) {
+    int fd_in = args->arg1;
+    loff_t* off_in = (loff_t*)args->arg2;
+    int fd_out = args->arg3;
+    loff_t* off_out = (loff_t*)args->arg4;
+    size_t len = args->arg5;
+    unsigned int flags = args->arg6;
+
+    ssize_t ret = 0;
+    CallSplice call;
+    call.fd_in = fd_in;
+    call.off_in = off_in;
+    call.fd_out = fd_out;
+    call.off_out = off_out;
+    call.len = len;
+    call.flags = flags;
+    call.ret = &ret;
+
+    intercept_entrypoint->next(ctx, &call);
+
+    return (unsigned long)ret;
+}
+
 void BottomHandler::next(Context* ctx, const CallSigaction* call) {
     int ret;
     int* _ret = call->ret;
@@ -1012,6 +1054,29 @@ void BottomHandler::next(Context* ctx, const CallReadWrite* call) {
                 break;
         }
     }
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallSendfile* call) {
+    ssize_t ret;
+    ssize_t* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = sys_sendfile(call->out_fd, call->in_fd, call->offset, call->count);
+    signalmanager_disable_signals(ctx);
+
+    *_ret = ret;
+}
+
+void BottomHandler::next(Context* ctx, const CallSplice* call) {
+    ssize_t ret;
+    ssize_t* _ret = call->ret;
+
+    signalmanager_enable_signals(ctx);
+    ret = sys_splice(call->fd_in, call->off_in, call->fd_out, call->off_out,
+                     call->len, call->flags);
     signalmanager_disable_signals(ctx);
 
     *_ret = ret;

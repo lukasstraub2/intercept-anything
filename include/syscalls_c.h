@@ -300,6 +300,30 @@ class CallReadWrite final : public ICallBase {
     void set_return(int ret) const override { *this->ret = ret; }
 };
 
+class CallSendfile final : public ICallBase {
+    public:
+    int out_fd{};
+    int in_fd{};
+    loff_t* offset{};
+    size_t count{};
+    ssize_t* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
+class CallSplice final : public ICallBase {
+    public:
+    int fd_in{};
+    loff_t* off_in{};
+    int fd_out{};
+    loff_t* off_out{};
+    size_t len{};
+    unsigned int flags{};
+    ssize_t* ret{};
+
+    void set_return(int ret) const override { *this->ret = ret; }
+};
+
 unsigned long handle_rt_sigprocmask(Context* ctx, SysArgs* args);
 unsigned long handle_rt_sigaction(Context* ctx, SysArgs* args);
 unsigned long handle_rt_sigreturn(Context* ctx, SysArgs* args);
@@ -339,3 +363,5 @@ unsigned long handle_writev(Context* ctx, SysArgs* args);
 unsigned long handle_pwrite64(Context* ctx, SysArgs* args);
 unsigned long handle_pwritev(Context* ctx, SysArgs* args);
 unsigned long handle_pwritev2(Context* ctx, SysArgs* args);
+unsigned long handle_sendfile(Context* ctx, SysArgs* args);
+unsigned long handle_splice(Context* ctx, SysArgs* args);

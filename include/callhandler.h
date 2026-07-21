@@ -46,6 +46,8 @@ class ICallHandler {
     virtual void next(Context* ctx, const CallClone* call) = 0;
     virtual void next(Context* ctx, const CallExec* call) = 0;
     virtual void next(Context* ctx, const CallReadWrite* call) = 0;
+    virtual void next(Context* ctx, const CallSendfile* call) = 0;
+    virtual void next(Context* ctx, const CallSplice* call) = 0;
     virtual void next(Context* ctx, const CallSocket* call) = 0;
     virtual void next(Context* ctx, const CallSendRecv* call) = 0;
     virtual void next(Context* ctx, const CallMsg* call) = 0;
@@ -168,6 +170,12 @@ class CallHandler : virtual public ICallHandler {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
     void next(Context* ctx, const CallReadWrite* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallSendfile* call) override {
+        __attribute__((musttail)) return _next->next(ctx, call);
+    };
+    void next(Context* ctx, const CallSplice* call) override {
         __attribute__((musttail)) return _next->next(ctx, call);
     };
     void next(Context* ctx, const CallSocket* call) override {

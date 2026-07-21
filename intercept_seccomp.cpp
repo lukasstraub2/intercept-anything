@@ -227,6 +227,8 @@ const long syscall_readwrite[] = {
     __NR_pread64,
     __NR_preadv,
     __NR_preadv2,
+    __NR_sendfile,
+    __NR_splice,
 };
 
 const long syscall_fd[] = {

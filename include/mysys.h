@@ -627,3 +627,10 @@ static __attribute__((unused)) long sys_fcntl(unsigned int fd,
                                               unsigned long arg) {
     return my_syscall3(__NR_fcntl, fd, cmd, arg);
 }
+
+static __attribute__((unused)) long sys_sendfile(int out,
+                                                 int in,
+                                                 loff_t* offset,
+                                                 size_t count) {
+    return my_syscall4(__NR_sendfile, out, in, offset, count);
+}

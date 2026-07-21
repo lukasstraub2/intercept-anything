@@ -47,6 +47,8 @@ class BottomHandler : public CallHandler, public ICallHandler {
     void next(Context* ctx, const CallClone* call) override;
     void next(Context* ctx, const CallExec* call) override;
     void next(Context* ctx, const CallReadWrite* call) override;
+    void next(Context* ctx, const CallSendfile* call) override;
+    void next(Context* ctx, const CallSplice* call) override;
     void next(Context* ctx, const CallSocket* call) override;
     void next(Context* ctx, const CallSendRecv* call) override;
     void next(Context* ctx, const CallMsg* call) override;
