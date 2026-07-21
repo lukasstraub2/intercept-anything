@@ -102,6 +102,15 @@ ssize_t preadv2(int fd,
     return ret;
 }
 
+#undef preadv64v2
+ssize_t preadv64v2(int fd,
+                   const struct iovec* iov,
+                   int iovcnt,
+                   off_t off,
+                   int flags) {
+    return preadv2(fd, iov, iovcnt, off, flags);
+}
+
 #undef write
 ssize_t write(int fd, const void* data, size_t len) {
     ssize_t ret;
@@ -186,6 +195,15 @@ ssize_t pwritev2(int fd,
     }
 
     return ret;
+}
+
+#undef pwritev64v2
+ssize_t pwritev64v2(int fd,
+                    const struct iovec* iov,
+                    int iovcnt,
+                    off_t off,
+                    int flags) {
+    return pwritev2(fd, iov, iovcnt, off, flags);
 }
 
 #undef sendfile
