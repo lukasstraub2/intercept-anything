@@ -9,9 +9,8 @@
 #endif
 
 #include "fastpath_preload.h"
+
 #include <unistd.h>
-#include <sys/socket.h>
-#include <sys/epoll.h>
 
 // weak dynamic symbol, may be NULL if not provided by runtime
 extern void __chk_fail() __attribute__((weak));
@@ -53,28 +52,4 @@ ssize_t __pread64_chk(int fd,
     }
 
     return pread64(fd, data, len, off);
-}
-
-#undef __recv_chk
-ssize_t __recv_chk(int fd, void* buf, size_t len, size_t buflen, int flags) {
-    if (len > buflen) {
-        do_chk_fail();
-    }
-
-    return recv(fd, buf, len, flags);
-}
-
-#undef __recvfrom_chk
-ssize_t __recvfrom_chk(int fd,
-                       void* buf,
-                       size_t len,
-                       size_t buflen,
-                       int flags,
-                       struct sockaddr* addr,
-                       socklen_t* addr_len) {
-    if (len > buflen) {
-        do_chk_fail();
-    }
-
-    return recvfrom(fd, buf, len, flags, addr, addr_len);
 }
