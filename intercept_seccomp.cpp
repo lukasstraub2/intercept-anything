@@ -38,7 +38,11 @@ CallHandler* intercept_entrypoint = nullptr;
 static char _self_exe[SCRATCH_SIZE];
 const char* self_exe = _self_exe;
 
-static void start_text_init();
+static int filter_flags;
+
+int intercept_filter_flags() {
+    return filter_flags;
+}
 
 __thread Tls _tls = {};
 static Tls* get_tls() {
@@ -639,11 +643,12 @@ void intercept_init(int recursing, const char* exe, unsigned long* auxv) {
     CallHandler* const bottom = new BottomHandler();
     CallHandler* const signalmanager = signalmanager_init(bottom);
     intercept_entrypoint = main_init(signalmanager, recursing);
+    filter_flags = intercept_entrypoint->get_filter_flags();
 
     signalmanager_install_sigsys(handler);
 
     if (!recursing) {
-        install_filter(intercept_entrypoint->get_filter_flags());
+        install_filter(filter_flags);
     }
 
     if (intercept_entrypoint->get_filter_flags() & FILTER_VDSO) {

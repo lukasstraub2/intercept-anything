@@ -15,7 +15,7 @@ CallHandler* main_init(CallHandler* const bottom, int recursing) {
     }
     CallHandler* fastpath = bottom;
     if (!env_is_true("LOADER_SKIP_FASTPATH")) {
-        fastpath = fastpath_init(bottom, env_is_true("LOADER_ENABLE_VDSO"));
+        fastpath = fastpath_init(bottom);
     }
     CallHandler* workarounds = workarounds_init(fastpath);
     CallHandler* logger = syscall_log_init(workarounds);

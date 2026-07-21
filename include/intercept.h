@@ -28,6 +28,7 @@ extern const char* self_exe;
 extern __thread Tls _tls;
 extern CallHandler* intercept_entrypoint;
 
+int intercept_filter_flags();
 void intercept_init(int recursing, const char* exe, unsigned long* auxv);
 CallHandler* main_init(CallHandler* const bottom, int recursing);
 void thread_exit(Tls* tls);

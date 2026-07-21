@@ -247,3 +247,25 @@ int env_is_true(const char* env) {
     }
     return 1;
 }
+
+ssize_t read_full(int fd, char* buf, size_t count) {
+    ssize_t ret = 0;
+    ssize_t total = 0;
+
+    while (count) {
+        ret = sys_read(fd, buf, count);
+        if (ret < 0) {
+            if (ret == -EINTR)
+                continue;
+            return ret;
+        } else if (ret == 0) {
+            break;
+        }
+
+        count -= ret;
+        buf += ret;
+        total += ret;
+    }
+
+    return total;
+}

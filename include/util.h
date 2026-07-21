@@ -59,3 +59,4 @@ ssize_t concatat(char scratch[SCRATCH_SIZE],
                  char** out);
 
 int env_is_true(const char* env);
+ssize_t read_full(int fd, char* buf, size_t count);

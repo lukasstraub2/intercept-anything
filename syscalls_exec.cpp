@@ -135,28 +135,6 @@ static void debug_exec(const char* pathname,
     trace("], envp)\n");
 }
 
-static ssize_t read_full(int fd, char* buf, size_t count) {
-    ssize_t ret = 0;
-    ssize_t total = 0;
-
-    while (count) {
-        ret = sys_read(fd, buf, count);
-        if (ret < 0) {
-            if (ret == -EINTR)
-                continue;
-            return ret;
-        } else if (ret == 0) {
-            break;
-        }
-
-        count -= ret;
-        buf += ret;
-        total += ret;
-    }
-
-    return total;
-}
-
 static int _bottom_exec(Context* ctx, CallExec* call) {
     ssize_t ret;
     int64_t envc;
